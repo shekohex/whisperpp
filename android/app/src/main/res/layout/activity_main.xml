@@ -155,7 +155,6 @@
                 style="@style/SettingsField"
                 android:hint="@string/settings_language_code_hint" />
 
-
             <!-- Auto Recording Start -->
             <TextView
                 android:id="@+id/label_auto_recording_start"
