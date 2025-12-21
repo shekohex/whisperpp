@@ -1,7 +1,7 @@
 /*
  * This file is part of Whisper To Input, see <https://github.com/j3soon/whisper-to-input>.
  *
- * Copyright (c) 2023-2024 Yan-Bin Diau, Johnson Sun
+ * Copyright (c) 2023-2025 Yan-Bin Diau, Johnson Sun
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
