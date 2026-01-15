@@ -2,12 +2,13 @@ package com.example.whispertoinput
 
 import android.content.Context
 import android.util.Log
-import androidx.datastore.preferences.core.Preferences
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
+import com.example.whispertoinput.data.ProviderType
+import com.example.whispertoinput.data.ServiceProvider
+import com.example.whispertoinput.data.ThinkingType
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.logging.HttpLoggingInterceptor
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -15,7 +16,17 @@ import java.util.concurrent.TimeUnit
 
 class SmartFixer(private val context: Context) {
     private val TAG = "SmartFixer"
+    
+    private val loggingInterceptor = HttpLoggingInterceptor { message ->
+        Log.d("HTTP_SmartFixer", message)
+    }.apply {
+        level = HttpLoggingInterceptor.Level.BODY
+        redactHeader("Authorization")
+        redactHeader("x-goog-api-key")
+    }
+
     private val client = OkHttpClient.Builder()
+        .addInterceptor(loggingInterceptor)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
@@ -30,32 +41,30 @@ class SmartFixer(private val context: Context) {
         }
     }
 
-    suspend fun fix(text: String, contextInformation: String?): String {
-        val prefs = context.dataStore.data.first()
-        val enabled = prefs[SMART_FIX_ENABLED] ?: false
-        if (!enabled || text.isBlank()) return text
-
-        Log.d(TAG, "Starting Smart Fix for: \"$text\"")
-
-        val backend = prefs[SMART_FIX_BACKEND] ?: context.getString(R.string.settings_smart_fix_backend_openai)
-        val endpoint = prefs[SMART_FIX_ENDPOINT] ?: ""
-        val apiKey = prefs[SMART_FIX_API_KEY] ?: ""
-        val model = prefs[SMART_FIX_MODEL] ?: ""
-        val temperature = prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
-        var promptTemplate = prefs[SMART_FIX_PROMPT] ?: ""
-
-        if (promptTemplate.isBlank()) {
-            promptTemplate = getDefaultPrompt()
-        }
-
-        if (endpoint.isBlank() || apiKey.isBlank() || model.isBlank()) {
+    suspend fun fix(
+        text: String, 
+        contextInformation: String?,
+        provider: ServiceProvider,
+        modelId: String,
+        temperature: Float,
+        promptTemplate: String
+    ): String {
+        if (text.isBlank()) return text
+        if (provider.endpoint.isBlank() || provider.apiKey.isBlank() || modelId.isBlank()) {
             val error = "Smart Fix configuration incomplete (Endpoint, API Key, or Model missing)"
             Log.w(TAG, error)
             return text
         }
 
+        Log.d(TAG, "Starting Smart Fix using Provider: ${provider.name} (${provider.type}), Model: $modelId")
+
+        var finalPromptTemplate = promptTemplate
+        if (finalPromptTemplate.isBlank()) {
+            finalPromptTemplate = getDefaultPrompt()
+        }
+
         val fullPrompt = buildString {
-            append(promptTemplate)
+            append(finalPromptTemplate)
             append("\n\n")
             if (!contextInformation.isNullOrBlank()) {
                 append("<CONTEXT_INFORMATION>\n")
@@ -67,15 +76,18 @@ class SmartFixer(private val context: Context) {
             append("\n</TRANSCRIPT>")
         }
 
-        return if (backend == context.getString(R.string.settings_smart_fix_backend_openai)) {
-            callOpenAI(endpoint, apiKey, model, temperature, fullPrompt)
+        return if (provider.type == ProviderType.OPENAI || provider.type == ProviderType.CUSTOM) {
+            callOpenAI(provider, modelId, temperature, fullPrompt)
+        } else if (provider.type == ProviderType.GEMINI) {
+            callGoogle(provider, modelId, temperature, fullPrompt)
         } else {
-            callGoogle(endpoint, apiKey, model, temperature, fullPrompt)
+            // Fallback or error
+            text
         }
     }
 
-    private fun callOpenAI(endpoint: String, apiKey: String, model: String, temperature: Float, prompt: String): String {
-        Log.d(TAG, "Calling OpenAI at $endpoint with model $model")
+    private fun callOpenAI(provider: ServiceProvider, model: String, temperature: Float, prompt: String): String {
+        Log.d(TAG, "Calling OpenAI at ${provider.endpoint} with model $model")
         val json = JSONObject().apply {
             put("model", model)
             put("messages", JSONArray().apply {
@@ -84,12 +96,19 @@ class SmartFixer(private val context: Context) {
                     put("content", prompt)
                 })
             })
-            put("temperature", temperature)
+            
+            // Thinking / Reasoning Effort
+            val modelConfig = provider.models.find { it.id == model }
+            if (provider.thinkingEnabled && modelConfig?.isThinking == true) {
+                put("reasoning_effort", provider.thinkingLevel.lowercase())
+            } else {
+                put("temperature", temperature)
+            }
         }
 
         val request = Request.Builder()
-            .url(endpoint)
-            .addHeader("Authorization", "Bearer $apiKey")
+            .url(provider.endpoint)
+            .addHeader("Authorization", "Bearer ${provider.apiKey}")
             .addHeader("Content-Type", "application/json")
             .post(json.toString().toRequestBody("application/json".toMediaType()))
             .build()
@@ -108,11 +127,11 @@ class SmartFixer(private val context: Context) {
         }
     }
 
-    private fun callGoogle(endpoint: String, apiKey: String, model: String, temperature: Float, prompt: String): String {
-        Log.d(TAG, "Calling Google Gemini at $endpoint with model $model")
+    private fun callGoogle(provider: ServiceProvider, model: String, temperature: Float, prompt: String): String {
+        Log.d(TAG, "Calling Google Gemini at ${provider.endpoint} with model $model")
         val apiAction = "generateContent"
         
-        var url = endpoint
+        var url = provider.endpoint
         if (!url.contains(":$apiAction") && model.isNotEmpty()) {
             url = if (url.endsWith("/")) "${url}models/${model}:$apiAction" 
                   else "${url}/models/${model}:$apiAction"
@@ -130,16 +149,24 @@ class SmartFixer(private val context: Context) {
                 })
             })
             put("generationConfig", JSONObject().apply {
-                put("temperature", temperature)
-                put("thinkingConfig", JSONObject().apply {
-                    put("thinkingBudget", 4096)
-                })
+                val modelConfig = provider.models.find { it.id == model }
+                if (provider.thinkingEnabled && modelConfig?.isThinking == true) {
+                    put("thinkingConfig", JSONObject().apply {
+                        if (provider.thinkingType == ThinkingType.BUDGET) {
+                            put("thinkingBudget", provider.thinkingBudget)
+                        } else {
+                            put("thinkingLevel", provider.thinkingLevel.uppercase())
+                        }
+                    })
+                } else {
+                    put("temperature", temperature)
+                }
             })
         }
 
         val request = Request.Builder()
             .url(url)
-            .addHeader("x-goog-api-key", apiKey)
+            .addHeader("x-goog-api-key", provider.apiKey)
             .addHeader("Content-Type", "application/json")
             .post(json.toString().toRequestBody("application/json".toMediaType()))
             .build()
@@ -169,3 +196,4 @@ class SmartFixer(private val context: Context) {
         }
     }
 }
+
