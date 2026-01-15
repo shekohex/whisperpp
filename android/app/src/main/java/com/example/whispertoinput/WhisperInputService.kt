@@ -33,9 +33,12 @@ import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.KeyEvent
 import android.view.View
+import android.view.Window
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.appcompat.widget.PopupMenu
+import androidx.core.view.WindowCompat
+import android.graphics.Color
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -107,9 +110,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var languageLabel = mutableStateOf("")
     private var microphoneAmplitude = mutableStateOf(0)
     private var shouldOfferImeSwitch = mutableStateOf(false)
-    private var recordingTime = mutableStateOf(0L)
-    private var recordingStartTime = 0L
+    private var recordingTimeMs = mutableStateOf(0L)
+    private var showLongPressHint = mutableStateOf(false)
     private var timerJob: Job? = null
+    private val activeMediaPlayers = mutableListOf<MediaPlayer>()
 
     override fun onCreate() {
 
@@ -231,6 +235,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
     }
 
+    private fun decorViewOwners(decor: View) {
+        decor.setViewTreeLifecycleOwner(this)
+        decor.setViewTreeSavedStateRegistryOwner(this)
+        decor.setViewTreeViewModelStoreOwner(this)
+    }
+
     override fun onCreateInputView(): View {
         ChineseUtils.preLoad(true, TransType.SIMPLE_TO_TAIWAN)
         ChineseUtils.preLoad(true, TransType.TAIWAN_TO_SIMPLE)
@@ -246,10 +256,16 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         recorderManager?.setOnUpdateMicrophoneAmplitude { microphoneAmplitude.value = it }
 
         // Ensure the window's decor view has the owners for components that search up the tree
-        window?.window?.decorView?.let { decor ->
-            decor.setViewTreeLifecycleOwner(this)
-            decor.setViewTreeSavedStateRegistryOwner(this)
-            decor.setViewTreeViewModelStoreOwner(this)
+        window?.window?.let { win ->
+            decorViewOwners(win.decorView)
+            
+            // Edge-to-Edge Support
+            WindowCompat.setDecorFitsSystemWindows(win, false)
+            win.navigationBarColor = Color.TRANSPARENT
+            
+            val isNightMode = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+            val insetsController = WindowCompat.getInsetsController(win, win.decorView)
+            insetsController.isAppearanceLightNavigationBars = !isNightMode
         }
 
         return ComposeView(this).apply {
@@ -268,13 +284,18 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         state = keyboardState.value,
                         languageLabel = languageLabel.value,
                         amplitude = microphoneAmplitude.value,
-                        recordingTime = recordingTime.value,
+                        recordingTimeMs = recordingTimeMs.value,
+                        showLongPressHint = showLongPressHint.value,
                         onMicAction = { onMicAction() },
                         onCancelAction = { onCancelAction() },
+                        onDiscardAction = { discardRecording() },
                         onSendAction = { onSendAction() },
                         onDeleteAction = { onDeleteText() },
                         onOpenSettings = { launchMainActivity() },
-                        onLanguageClick = { showLanguageMenu(this) }
+                        onLanguageClick = { showLanguageMenu(this) },
+                        onDismissHint = { showLongPressHint.value = false },
+                        onLockAction = { lockRecording() },
+                        onUnlockAction = { unlockRecording() }
                     )
                 }
             }
@@ -307,6 +328,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 performFeedback(customSoundId = R.raw.rec_pause)
                 pauseRecording()
             }
+            KeyboardState.RecordingLocked -> {
+                performFeedback(customSoundId = R.raw.rec_pause)
+                pauseRecording()
+            }
             KeyboardState.Paused -> {
                 performFeedback(customSoundId = R.raw.rec_start)
                 resumeRecording()
@@ -320,10 +345,19 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         else performFeedback()
     }
 
+    private fun lockRecording() {
+        setKeyboardState(KeyboardState.RecordingLocked)
+    }
+
+    private fun unlockRecording() {
+        performFeedback(customSoundId = R.raw.rec_pause)
+        pauseRecording()
+    }
+
     private fun onCancelAction() {
         performFeedback(customSoundId = R.raw.rec_pause)
         when (keyboardState.value) {
-            KeyboardState.Recording, KeyboardState.Paused -> confirmCancelAction { cancelRecording() }
+            KeyboardState.Recording, KeyboardState.RecordingLocked, KeyboardState.Paused -> confirmCancelAction { cancelRecording() }
             KeyboardState.Transcribing, KeyboardState.SmartFixing -> confirmCancelAction { cancelTranscription() }
             else -> Unit
         }
@@ -335,16 +369,31 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             setKeyboardState(KeyboardState.Ready)
             return
         }
+        showLongPressHint.value = false
         setKeyboardState(KeyboardState.Recording)
-        recordingTime.value = 0L
+        recordingTimeMs.value = 0L
         startTimer()
         recorderManager!!.start(this, recordedAudioFilename, useOggFormat)
     }
 
     private fun pauseRecording() {
-        recorderManager!!.pause()
         stopTimer()
-        setKeyboardState(KeyboardState.Paused)
+        if (recordingTimeMs.value < 500L) {
+            showLongPressHint.value = true
+            recorderManager!!.stop()
+            recordingTimeMs.value = 0L
+            setKeyboardState(KeyboardState.Ready)
+        } else {
+            CoroutineScope(Dispatchers.Main).launch {
+                val autoTranscribe = dataStore.data.map { it[AUTO_TRANSCRIBE_ON_PAUSE] ?: true }.first()
+                if (autoTranscribe) {
+                    startTranscription("")
+                } else {
+                    recorderManager!!.pause()
+                    setKeyboardState(KeyboardState.Paused)
+                }
+            }
+        }
     }
 
     private fun resumeRecording() {
@@ -356,16 +405,26 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private fun cancelRecording() {
         recorderManager!!.stop()
         stopTimer()
-        recordingTime.value = 0L
+        recordingTimeMs.value = 0L
+        showLongPressHint.value = false
+        setKeyboardState(KeyboardState.Ready)
+    }
+
+    private fun discardRecording() {
+        playCustomSound(R.raw.rec_pause)
+        recorderManager!!.stop()
+        stopTimer()
+        recordingTimeMs.value = 0L
         setKeyboardState(KeyboardState.Ready)
     }
 
     private fun startTimer() {
         timerJob?.cancel()
+        val startTime = System.currentTimeMillis() - recordingTimeMs.value
         timerJob = CoroutineScope(Dispatchers.Main).launch {
             while (true) {
-                delay(1000)
-                recordingTime.value += 1
+                recordingTimeMs.value = System.currentTimeMillis() - startTime
+                delay(33)
             }
         }
     }
@@ -408,11 +467,17 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         CoroutineScope(Dispatchers.IO).launch {
             val soundEnabled = dataStore.data.map { it[SOUND_EFFECTS_ENABLED] ?: true }.first()
             if (soundEnabled) {
-                try {
-                    val mp = MediaPlayer.create(this@WhisperInputService, resId)
-                    mp.setOnCompletionListener { it.release() }
-                    mp.start()
-                } catch (e: Exception) { Log.e(TAG, "Sound error", e) }
+                withContext(Dispatchers.Main) {
+                    try {
+                        val mp = MediaPlayer.create(this@WhisperInputService, resId) ?: return@withContext
+                        synchronized(activeMediaPlayers) { activeMediaPlayers.add(mp) }
+                        mp.setOnCompletionListener { player ->
+                            synchronized(activeMediaPlayers) { activeMediaPlayers.remove(player) }
+                            player.release()
+                        }
+                        mp.start()
+                    } catch (e: Exception) { Log.e(TAG, "Sound error", e) }
+                }
             }
         }
     }
@@ -494,6 +559,9 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 Log.d(TAG, "Intercepting Back Key Up: ${keyboardState.value}")
                 onCancelAction()
                 return true
+            } else {
+                requestHideSelf(0)
+                return true
             }
         }
         return super.onKeyUp(keyCode, event)
@@ -517,7 +585,20 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         whisperTranscriber.stop()
         recorderManager?.stop()
         stopTimer()
+        releaseAllMediaPlayers()
         if (keyboardState.value != KeyboardState.Ready) setKeyboardState(KeyboardState.Ready)
+    }
+
+    private fun releaseAllMediaPlayers() {
+        synchronized(activeMediaPlayers) {
+            activeMediaPlayers.forEach { mp ->
+                try {
+                    if (mp.isPlaying) mp.stop()
+                    mp.release()
+                } catch (_: Exception) {}
+            }
+            activeMediaPlayers.clear()
+        }
     }
 
     override fun onDestroy() {
@@ -526,5 +607,6 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         store.clear()
         whisperTranscriber.stop()
         recorderManager?.stop()
+        releaseAllMediaPlayers()
     }
 }

@@ -29,6 +29,9 @@
     <string name="microphone">Microphone</string>
     <string name="successfully_set">Successfully set!</string>
     <string name="backspace_button_hint">Backspace Button</string>
+    <string name="long_press_hint">Long press to record</string>
+    <string name="swipe_to_discard">Swipe to discard</string>
+    <string name="swipe_to_lock">Swipe to lock</string>
     <string name="btn_previous_ime_hint">Switch To Previous Input Method</string>
     <string name="btn_settings_hint">Open Settings</string>
     <string name="generate_logcat">Generate Recent Logcat</string>
@@ -122,6 +125,8 @@
         <item>@string/settings_option_yes</item>
         <item>@string/settings_option_no</item>
     </string-array>
+    <string name="settings_auto_transcribe">Auto Transcribe</string>
+    <string name="settings_auto_transcribe_desc">Automatically start transcription when you release the mic button.</string>
     <string name="settings_confirm_cancel">Confirm Cancel</string>
     <string name="settings_confirm_cancel_desc">Ask before canceling recording or transcription.</string>
     <string-array name="settings_confirm_cancel_array">

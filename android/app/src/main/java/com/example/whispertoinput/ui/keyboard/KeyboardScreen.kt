@@ -26,6 +26,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.example.whispertoinput.R
 import com.example.whispertoinput.keyboard.KeyboardState
 import kotlinx.coroutines.delay
@@ -36,17 +43,36 @@ fun KeyboardScreen(
     state: KeyboardState,
     languageLabel: String,
     amplitude: Int,
-    recordingTime: Long,
+    recordingTimeMs: Long,
+    showLongPressHint: Boolean,
     onMicAction: () -> Unit,
     onCancelAction: () -> Unit,
+    onDiscardAction: () -> Unit,
     onSendAction: () -> Unit,
     onDeleteAction: () -> Unit,
     onOpenSettings: () -> Unit,
-    onLanguageClick: () -> Unit
+    onLanguageClick: () -> Unit,
+    onDismissHint: () -> Unit,
+    onLockAction: () -> Unit = {},
+    onUnlockAction: () -> Unit = {}
 ) {
+    var swipeProgress by remember { mutableFloatStateOf(0f) }
+    var swipeUpProgress by remember { mutableFloatStateOf(0f) }
+    val isSwiping = swipeProgress > 0.05f
+    val isSwipingUp = swipeUpProgress > 0.05f
+    val isRecordingState = state == KeyboardState.Recording || state == KeyboardState.RecordingLocked
+    
+    LaunchedEffect(state) {
+        if (!isRecordingState) {
+            swipeProgress = 0f
+            swipeUpProgress = 0f
+        }
+    }
+    
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 15.dp)
             .height(72.dp)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         shape = RoundedCornerShape(36.dp),
@@ -63,51 +89,59 @@ fun KeyboardScreen(
         ) {
             // Left Cluster
             Box(modifier = Modifier.width(100.dp), contentAlignment = Alignment.CenterStart) {
-                AnimatedContent(
-                    targetState = state,
-                    transitionSpec = {
-                        fadeIn() + slideInHorizontally() togetherWith fadeOut() + slideOutHorizontally()
-                    },
-                    label = "LeftClusterTransition"
-                ) { targetState ->
-                    when (targetState) {
-                        KeyboardState.Recording -> {
-                            Text(
-                                text = formatTime(recordingTime),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        KeyboardState.Paused -> {
-                            IconButton(onClick = onCancelAction) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    null,
-                                    tint = MaterialTheme.colorScheme.error
-                                )
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isSwiping && isRecordingState,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    PulsatingTrashIcon(swipeProgress)
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !isSwiping || !isRecordingState,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    AnimatedContent(
+                        targetState = state,
+                        transitionSpec = {
+                            fadeIn() + slideInHorizontally() togetherWith fadeOut() + slideOutHorizontally()
+                        },
+                        label = "LeftClusterTransition"
+                    ) { targetState ->
+                        when (targetState) {
+                            KeyboardState.Recording, KeyboardState.RecordingLocked -> {
+                                RecordingTimer(recordingTimeMs)
                             }
-                        }
-                        else -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = onOpenSettings) {
+                            KeyboardState.Paused -> {
+                                IconButton(onClick = onCancelAction) {
                                     Icon(
-                                        Icons.Default.Settings,
+                                        Icons.Default.Delete,
                                         null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        tint = MaterialTheme.colorScheme.error
                                     )
                                 }
-                                Surface(
-                                    onClick = onLanguageClick,
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = MaterialTheme.colorScheme.secondaryContainer
-                                ) {
-                                    Text(
-                                        text = languageLabel,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
+                            }
+                            else -> {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(onClick = onOpenSettings) {
+                                        Icon(
+                                            Icons.Default.Settings,
+                                            null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Surface(
+                                        onClick = onLanguageClick,
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer
+                                    ) {
+                                        Text(
+                                            text = languageLabel,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -120,7 +154,30 @@ fun KeyboardScreen(
                 modifier = Modifier.weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                StatusContent(state, amplitude, recordingTime)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isSwiping && isRecordingState,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    ShimmerText(
+                        text = stringResource(R.string.swipe_to_discard),
+                        progress = swipeProgress
+                    )
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = isSwipingUp && state == KeyboardState.Recording && !isSwiping,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    ShimmerLockText(progress = swipeUpProgress)
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !isSwiping && !isSwipingUp || !isRecordingState,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    StatusContent(state, amplitude, recordingTimeMs)
+                }
             }
 
             // Right Cluster
@@ -137,20 +194,63 @@ fun KeyboardScreen(
 
                 Spacer(Modifier.width(8.dp))
                 
-                MainActionButton(state, onMicAction, onSendAction)
+                MainActionButton(
+                    state = state,
+                    showLongPressHint = showLongPressHint,
+                    onSwipeProgress = { swipeProgress = it },
+                    onSwipeUpProgress = { swipeUpProgress = it },
+                    onMicAction = onMicAction,
+                    onDiscardAction = onDiscardAction,
+                    onSendAction = onSendAction,
+                    onDismissHint = onDismissHint,
+                    onLockAction = onLockAction,
+                    onUnlockAction = onUnlockAction
+                )
             }
         }
     }
 }
 
-fun formatTime(seconds: Long): String {
-    val mins = seconds / 60
-    val secs = seconds % 60
-    return "%02d:%02d".format(mins, secs)
+fun formatTime(millis: Long): String {
+    val totalSeconds = millis / 1000
+    val mins = totalSeconds / 60
+    val secs = totalSeconds % 60
+    val ms = (millis % 1000) / 10
+    return "%02d:%02d.%02d".format(mins, secs, ms)
 }
 
 @Composable
-fun StatusContent(state: KeyboardState, amplitude: Int, recordingTime: Long) {
+fun RecordingTimer(millis: Long) {
+    val infiniteTransition = rememberInfiniteTransition(label = "RecDot")
+    val dotAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(500, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "DotAlpha"
+    )
+    
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.error.copy(alpha = dotAlpha))
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = formatTime(millis),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.error,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+fun StatusContent(state: KeyboardState, amplitude: Int, recordingTimeMs: Long) {
     AnimatedContent(
         targetState = state,
         transitionSpec = {
@@ -169,30 +269,69 @@ fun StatusContent(state: KeyboardState, amplitude: Int, recordingTime: Long) {
             KeyboardState.Recording -> {
                 VoiceWaveform(amplitude)
             }
+            KeyboardState.RecordingLocked -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    VoiceWaveform(amplitude)
+                }
+            }
             KeyboardState.Paused -> {
                 Text(
-                    text = formatTime(recordingTime),
-                    color = Color(0xFFFFD600), // Material Yellow
+                    text = formatTime(recordingTimeMs),
+                    color = Color(0xFFFFD600),
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     modifier = Modifier.animateAlphaLoop()
                 )
             }
             KeyboardState.Transcribing -> {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Transcribing...", color = MaterialTheme.colorScheme.primary)
-                }
+                TranscribingStatus()
             }
             KeyboardState.SmartFixing -> {
                 WhimsicalStatus()
             }
         }
+    }
+}
+
+@Composable
+fun TranscribingStatus() {
+    val infiniteTransition = rememberInfiniteTransition(label = "TranscribingShimmer")
+    val shimmerOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "TranscribingShimmerOffset"
+    )
+    
+    val baseColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+    val highlightColor = MaterialTheme.colorScheme.primary
+    val brush = Brush.linearGradient(
+        colors = listOf(baseColor, highlightColor, baseColor),
+        start = Offset(shimmerOffset * 400f - 100f, 0f),
+        end = Offset(shimmerOffset * 400f + 100f, 0f)
+    )
+    
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = "Transcribing...",
+            style = MaterialTheme.typography.bodyMedium.copy(brush = brush)
+        )
     }
 }
 
@@ -228,16 +367,74 @@ fun VoiceWaveform(amplitude: Int) {
 }
 
 @Composable
+fun PulsatingTrashIcon(progress: Float) {
+    val pulseDuration = (600 - (progress * 400)).toInt().coerceAtLeast(160)
+    
+    val infiniteTransition = rememberInfiniteTransition(label = "TrashPulse")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.3f + (progress * 0.2f),
+        animationSpec = infiniteRepeatable(
+            animation = tween(pulseDuration, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "TrashScale"
+    )
+    
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(pulseDuration, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "TrashAlpha"
+    )
+    
+    Icon(
+        Icons.Default.Delete,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.error.copy(alpha = alpha),
+        modifier = Modifier
+            .size(28.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+    )
+}
+
+@Composable
 fun MainActionButton(
     state: KeyboardState,
+    showLongPressHint: Boolean,
+    onSwipeProgress: (Float) -> Unit,
+    onSwipeUpProgress: (Float) -> Unit,
     onMicAction: () -> Unit,
-    onSendAction: () -> Unit
+    onDiscardAction: () -> Unit,
+    onSendAction: () -> Unit,
+    onDismissHint: () -> Unit,
+    onLockAction: () -> Unit,
+    onUnlockAction: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     val currentState by rememberUpdatedState(state)
+    val swipeThreshold = 300f
+    val swipeUpThreshold = 200f
+    
+    LaunchedEffect(showLongPressHint) {
+        if (showLongPressHint) {
+            delay(2500)
+            onDismissHint()
+        }
+    }
     
     val size by animateDpAsState(
-        targetValue = if (state == KeyboardState.Recording) 64.dp else 48.dp,
+        targetValue = when (state) {
+            KeyboardState.Recording -> 64.dp
+            KeyboardState.RecordingLocked -> 56.dp
+            else -> 48.dp
+        },
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "ButtonSize"
     )
@@ -245,6 +442,7 @@ fun MainActionButton(
     val containerColor by animateColorAsState(
         when (state) {
             KeyboardState.Recording -> MaterialTheme.colorScheme.error
+            KeyboardState.RecordingLocked -> MaterialTheme.colorScheme.tertiary
             KeyboardState.Paused -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.primaryContainer
         },
@@ -254,6 +452,7 @@ fun MainActionButton(
     val contentColor by animateColorAsState(
         when (state) {
             KeyboardState.Recording -> MaterialTheme.colorScheme.onError
+            KeyboardState.RecordingLocked -> MaterialTheme.colorScheme.onTertiary
             KeyboardState.Paused -> MaterialTheme.colorScheme.onPrimary
             else -> MaterialTheme.colorScheme.onPrimaryContainer
         },
@@ -262,6 +461,7 @@ fun MainActionButton(
 
     val icon = when (state) {
         KeyboardState.Paused -> Icons.AutoMirrored.Filled.Send
+        KeyboardState.RecordingLocked -> Icons.Default.Lock
         else -> Icons.Default.Mic
     }
 
@@ -269,6 +469,27 @@ fun MainActionButton(
         modifier = Modifier.size(64.dp),
         contentAlignment = Alignment.Center
     ) {
+        if (showLongPressHint) {
+            Popup(
+                alignment = Alignment.BottomCenter,
+                offset = androidx.compose.ui.unit.IntOffset(-110, -160),
+                properties = PopupProperties(clippingEnabled = false)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.inverseSurface,
+                    shadowElevation = 8.dp
+                ) {
+                    Text(
+                        text = stringResource(R.string.long_press_hint),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.inverseOnSurface
+                    )
+                }
+            }
+        }
+        
         Box(
             modifier = Modifier
                 .size(size)
@@ -276,13 +497,123 @@ fun MainActionButton(
                 .background(containerColor)
                 .pointerInput(Unit) {
                     awaitEachGesture {
-                        awaitFirstDown()
+                        val down = awaitFirstDown()
                         val stateAtDown = currentState
+                        
                         if (stateAtDown == KeyboardState.Ready) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onMicAction() // Start
-                            waitForUpOrCancellation()
-                            onMicAction() // Pause
+                            onMicAction()
+                            
+                            var currentDragX = 0f
+                            var currentDragY = 0f
+                            var didDiscard = false
+                            var didLock = false
+                            var didHapticAtThreshold = false
+                            var didHapticAtLockThreshold = false
+                            
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull() ?: break
+                                
+                                if (event.type == PointerEventType.Move) {
+                                    val dragDelta = change.positionChange()
+                                    currentDragX += dragDelta.x
+                                    currentDragY += dragDelta.y
+                                    
+                                    val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                                    val upProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
+                                    
+                                    if (leftProgress > upProgress) {
+                                        onSwipeProgress(leftProgress)
+                                        onSwipeUpProgress(0f)
+                                        
+                                        if (leftProgress >= 1f && !didHapticAtThreshold) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            didHapticAtThreshold = true
+                                        } else if (leftProgress < 0.9f) {
+                                            didHapticAtThreshold = false
+                                        }
+                                    } else if (upProgress > 0.05f) {
+                                        onSwipeUpProgress(upProgress)
+                                        onSwipeProgress(0f)
+                                        
+                                        if (upProgress >= 1f && !didHapticAtLockThreshold) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            didHapticAtLockThreshold = true
+                                        } else if (upProgress < 0.9f) {
+                                            didHapticAtLockThreshold = false
+                                        }
+                                    } else {
+                                        onSwipeProgress(0f)
+                                        onSwipeUpProgress(0f)
+                                    }
+                                }
+                                
+                                if (!change.pressed) {
+                                    val finalLeftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                                    val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
+                                    
+                                    if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
+                                        didDiscard = true
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onDiscardAction()
+                                    } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
+                                        didLock = true
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onLockAction()
+                                    }
+                                    onSwipeProgress(0f)
+                                    onSwipeUpProgress(0f)
+                                    break
+                                }
+                            }
+                            
+                            if (!didDiscard && !didLock) {
+                                onMicAction()
+                            }
+                        } else if (stateAtDown == KeyboardState.RecordingLocked) {
+                            var currentDragX = 0f
+                            var didDiscard = false
+                            var didHapticAtThreshold = false
+                            
+                            val up = withTimeoutOrNull(400) {
+                                waitForUpOrCancellation()
+                            }
+                            
+                            if (up != null) {
+                                onUnlockAction()
+                            } else {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull() ?: break
+                                    
+                                    if (event.type == PointerEventType.Move) {
+                                        val dragDelta = change.positionChange()
+                                        currentDragX += dragDelta.x
+                                        
+                                        val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                                        onSwipeProgress(leftProgress)
+                                        
+                                        if (leftProgress >= 1f && !didHapticAtThreshold) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            didHapticAtThreshold = true
+                                        } else if (leftProgress < 0.9f) {
+                                            didHapticAtThreshold = false
+                                        }
+                                    }
+                                    
+                                    if (!change.pressed) {
+                                        val finalProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                                        if (finalProgress >= 1f) {
+                                            didDiscard = true
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            onDiscardAction()
+                                        }
+                                        onSwipeProgress(0f)
+                                        break
+                                    }
+                                }
+                            }
                         } else if (stateAtDown == KeyboardState.Paused) {
                             val up = withTimeoutOrNull(400) {
                                 waitForUpOrCancellation()
@@ -290,11 +621,76 @@ fun MainActionButton(
                             if (up != null) {
                                 onSendAction()
                             } else {
-                                // Long press detected
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onMicAction() // Resume
-                                waitForUpOrCancellation()
-                                onMicAction() // Pause
+                                onMicAction()
+                                
+                                var currentDragX = 0f
+                                var currentDragY = 0f
+                                var didDiscard = false
+                                var didLock = false
+                                var didHapticAtThreshold = false
+                                var didHapticAtLockThreshold = false
+                                
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull() ?: break
+                                    
+                                    if (event.type == PointerEventType.Move) {
+                                        val dragDelta = change.positionChange()
+                                        currentDragX += dragDelta.x
+                                        currentDragY += dragDelta.y
+                                        
+                                        val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                                        val upProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
+                                        
+                                        if (leftProgress > upProgress) {
+                                            onSwipeProgress(leftProgress)
+                                            onSwipeUpProgress(0f)
+                                            
+                                            if (leftProgress >= 1f && !didHapticAtThreshold) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                didHapticAtThreshold = true
+                                            } else if (leftProgress < 0.9f) {
+                                                didHapticAtThreshold = false
+                                            }
+                                        } else if (upProgress > 0.05f) {
+                                            onSwipeUpProgress(upProgress)
+                                            onSwipeProgress(0f)
+                                            
+                                            if (upProgress >= 1f && !didHapticAtLockThreshold) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                didHapticAtLockThreshold = true
+                                            } else if (upProgress < 0.9f) {
+                                                didHapticAtLockThreshold = false
+                                            }
+                                        } else {
+                                            onSwipeProgress(0f)
+                                            onSwipeUpProgress(0f)
+                                        }
+                                    }
+                                    
+                                    if (!change.pressed) {
+                                        val finalLeftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                                        val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
+                                        
+                                        if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
+                                            didDiscard = true
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            onDiscardAction()
+                                        } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
+                                            didLock = true
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            onLockAction()
+                                        }
+                                        onSwipeProgress(0f)
+                                        onSwipeUpProgress(0f)
+                                        break
+                                    }
+                                }
+                                
+                                if (!didDiscard && !didLock) {
+                                    onMicAction()
+                                }
                             }
                         }
                     }
@@ -305,7 +701,11 @@ fun MainActionButton(
                 imageVector = icon,
                 contentDescription = null,
                 tint = contentColor,
-                modifier = Modifier.size(if (state == KeyboardState.Recording) 32.dp else 24.dp)
+                modifier = Modifier.size(when (state) {
+                    KeyboardState.Recording -> 32.dp
+                    KeyboardState.RecordingLocked -> 28.dp
+                    else -> 24.dp
+                })
             )
         }
     }
@@ -362,12 +762,19 @@ fun WhimsicalStatus() {
         "Clarifying", "Perfecting", "Stylizing", "Flowing", "Connecting",
         "Analyzing", "Processing", "Distilling", "Capturing", "Translating",
         "Echoing", "Vocalizing", "Resonating", "Balancing", "Filtering",
-        "Reconstruct", "Smoothing", "Fine-tuning", "Adapting", "Reshaping",
+        "Reconstructing", "Smoothing", "Fine-tuning", "Adapting", "Reshaping",
         "Aligning", "Synchronizing", "Optimizing", "Gleaning", "Extracting",
-        "Polishing", "Transcribing", "Enunciating", "Projecting", "Symphonizing",
-        "Detecting", "Listening", "Composing", "Crafting", "Mending",
-        "Rectifying", "Perfecting", "Mapping", "Weaving", "Sculpting",
-        "Polishing", "Refining", "Polishing", "Whispering", "Thinking"
+        "Transcribing", "Enunciating", "Projecting", "Symphonizing", "Detecting",
+        "Listening", "Composing", "Crafting", "Mending", "Rectifying",
+        "Mapping", "Weaving", "Sculpting", "Whispering", "Thinking",
+        "Untangling", "Crystallizing", "Illuminating", "Channeling", "Parsing",
+        "Braiding", "Conjuring", "Manifesting", "Transmuting", "Awakening",
+        "Brewing", "Curating", "Deciphering", "Elevating", "Forging",
+        "Germinating", "Harvesting", "Infusing", "Kindling", "Layering",
+        "Marinating", "Nurturing", "Orchestrating", "Percolating", "Quickening",
+        "Radiating", "Simmering", "Tempering", "Unveiling", "Ventilating",
+        "Wrangling", "Yielding", "Zeroing", "Assembling", "Blending",
+        "Condensing", "Digesting", "Embroidering", "Funneling", "Galvanizing"
     )
     val glyphs = listOf("·", "✻", "✽", "✶", "✳", "✢")
     
@@ -389,15 +796,37 @@ fun WhimsicalStatus() {
 
     LaunchedEffect(Unit) {
         while (true) {
-            delay(100)
+            delay(200)
             glyphIndex = (glyphIndex + 1) % glyphs.size
         }
     }
 
+    val infiniteTransition = rememberInfiniteTransition(label = "WhimsicalShimmer")
+    val shimmerOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "WhimsicalShimmerOffset"
+    )
+    
+    val baseColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)
+    val highlightColor = MaterialTheme.colorScheme.tertiary
+    val brush = Brush.linearGradient(
+        colors = listOf(baseColor, highlightColor, baseColor),
+        start = Offset(shimmerOffset * 400f - 100f, 0f),
+        end = Offset(shimmerOffset * 400f + 100f, 0f)
+    )
+
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(glyph, color = MaterialTheme.colorScheme.tertiary, fontSize = 20.sp)
         Spacer(Modifier.width(8.dp))
-        Text(word, color = MaterialTheme.colorScheme.tertiary)
+        Text(
+            text = word,
+            style = MaterialTheme.typography.bodyMedium.copy(brush = brush)
+        )
     }
 }
 
@@ -413,4 +842,79 @@ fun Modifier.animateAlphaLoop(): Modifier = this.composed {
         label = "AlphaValue"
     )
     this.then(Modifier.graphicsLayer { this.alpha = alpha })
+}
+
+@Composable
+fun ShimmerText(text: String, progress: Float) {
+    val infiniteTransition = rememberInfiniteTransition(label = "Shimmer")
+    val shimmerOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ShimmerOffset"
+    )
+    
+    val baseColor = MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+    val highlightColor = MaterialTheme.colorScheme.error
+    
+    val brush = Brush.linearGradient(
+        colors = listOf(baseColor, highlightColor, baseColor),
+        start = Offset(shimmerOffset * 500f - 100f, 0f),
+        end = Offset(shimmerOffset * 500f + 100f, 0f)
+    )
+    
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium.copy(
+            brush = brush
+        ),
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.graphicsLayer {
+            alpha = 0.7f + (progress * 0.3f)
+        }
+    )
+}
+
+@Composable
+fun ShimmerLockText(progress: Float) {
+    val infiniteTransition = rememberInfiniteTransition(label = "LockShimmer")
+    val shimmerOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "LockShimmerOffset"
+    )
+    
+    val baseColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)
+    val highlightColor = MaterialTheme.colorScheme.tertiary
+    
+    val brush = Brush.linearGradient(
+        colors = listOf(baseColor, highlightColor, baseColor),
+        start = Offset(shimmerOffset * 500f - 100f, 0f),
+        end = Offset(shimmerOffset * 500f + 100f, 0f)
+    )
+    
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            Icons.Default.Lock,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.tertiary,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = stringResource(R.string.swipe_to_lock),
+            style = MaterialTheme.typography.titleMedium.copy(brush = brush),
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.graphicsLayer {
+                alpha = 0.7f + (progress * 0.3f)
+            }
+        )
+    }
 }
