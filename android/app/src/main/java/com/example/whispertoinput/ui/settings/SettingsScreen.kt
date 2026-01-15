@@ -88,13 +88,19 @@ fun MainSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHost
                     }
                 }
             )
-        }
+        },
+        contentWindowInsets = WindowInsets.statusBars
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = 16.dp,
+                bottom = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
@@ -185,7 +191,8 @@ fun BackendSettingsScreen(dataStore: DataStore<Preferences>, navController: NavH
             FloatingActionButton(onClick = { showAddOptions = true }) {
                 Icon(Icons.Default.Add, "Add Provider")
             }
-        }
+        },
+        contentWindowInsets = WindowInsets.statusBars
     ) { padding ->
         if (providers.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -197,7 +204,7 @@ fun BackendSettingsScreen(dataStore: DataStore<Preferences>, navController: NavH
                     .fillMaxSize()
                     .padding(padding)
                     .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 items(providers.size) { index ->
@@ -416,16 +423,18 @@ fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHost
                     }
                 }
             )
-        }
+        },
+        contentWindowInsets = WindowInsets.statusBars
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
                 .fillMaxSize()
                 .verticalScroll(androidx.compose.foundation.rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Spacer(Modifier.height(16.dp))
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -642,6 +651,7 @@ fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHost
             }
             
             Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
 }
@@ -711,9 +721,11 @@ fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     }
                 }
             )
-        }
+        },
+        contentWindowInsets = WindowInsets.statusBars
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(modifier = Modifier.padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Spacer(Modifier.height(16.dp))
             SettingsGroup(title = "Behavior") {
                 SettingsToggle(
                     icon = Icons.Default.AutoFixHigh,
@@ -829,6 +841,7 @@ fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                 }
             )
         }
+        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }
 }
 
@@ -848,9 +861,11 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     }
                 }
             )
-        }
+        },
+        contentWindowInsets = WindowInsets.statusBars
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(modifier = Modifier.padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Spacer(Modifier.height(16.dp))
             SettingsGroup(title = "Automation") {
                 SettingsToggle(
                     icon = Icons.Default.Mic,
@@ -863,6 +878,12 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     title = "Auto Switch Back",
                     checked = settingsState?.get(AUTO_SWITCH_BACK) ?: false,
                     onCheckedChange = { scope.launch { dataStore.edit { s -> s[AUTO_SWITCH_BACK] = it } } }
+                )
+                SettingsToggle(
+                    icon = Icons.Default.Send,
+                    title = "Auto Transcribe",
+                    checked = settingsState?.get(AUTO_TRANSCRIBE_ON_PAUSE) ?: true,
+                    onCheckedChange = { scope.launch { dataStore.edit { s -> s[AUTO_TRANSCRIBE_ON_PAUSE] = it } } }
                 )
             }
 
@@ -895,6 +916,7 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     onCheckedChange = { scope.launch { dataStore.edit { s -> s[SOUND_EFFECTS_ENABLED] = it } } }
                 )
             }
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
 }
