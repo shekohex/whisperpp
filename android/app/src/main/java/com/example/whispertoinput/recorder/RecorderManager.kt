@@ -119,13 +119,21 @@ class RecorderManager(context: Context) {
     fun stop() {
         recorder?.apply {
             try {
+                // Set listeners to null before stopping/releasing to avoid "unhandled events" warnings
+                setOnErrorListener(null)
+                setOnInfoListener(null)
+                
+                // Ensure we are in a state that can be stopped
                 stop()
-            } catch (e: IllegalStateException) {
-                Log.e("whisper-input", "stop failed", e)
-            } catch (e: RuntimeException) {
-                Log.e("whisper-input", "stop runtime error", e)
+            } catch (e: Exception) {
+                // Just log and continue to release
+                Log.w("whisper-input", "stop failed (expected if already stopped): ${e.message}")
             } finally {
-                release()
+                try {
+                    release()
+                } catch (e: Exception) {
+                    Log.e("whisper-input", "release failed", e)
+                }
             }
         }
         recorder = null
