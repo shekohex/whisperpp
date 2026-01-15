@@ -35,15 +35,14 @@ fun KeyboardScreen(
     state: KeyboardState,
     languageLabel: String,
     amplitude: Int,
-    shouldOfferImeSwitch: Boolean,
     onMicAction: () -> Unit,
     onCancelAction: () -> Unit,
     onSendAction: () -> Unit,
     onDeleteAction: () -> Unit,
-    onSwitchIme: () -> Unit,
     onOpenSettings: () -> Unit,
     onLanguageClick: () -> Unit
 ) {
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -63,11 +62,6 @@ fun KeyboardScreen(
         ) {
             // Left Cluster
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (shouldOfferImeSwitch) {
-                    IconButton(onClick = onSwitchIme) {
-                        Icon(Icons.Default.Language, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
                 IconButton(onClick = onOpenSettings) {
                     Icon(Icons.Default.Settings, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

@@ -240,7 +240,18 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
         recorderManager?.setOnUpdateMicrophoneAmplitude { microphoneAmplitude.value = it }
 
+        // Ensure the window's decor view has the owners for components that search up the tree
+        window?.window?.decorView?.let { decor ->
+            decor.setViewTreeLifecycleOwner(this)
+            decor.setViewTreeSavedStateRegistryOwner(this)
+            decor.setViewTreeViewModelStoreOwner(this)
+        }
+
         return ComposeView(this).apply {
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            )
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setViewTreeLifecycleOwner(this@WhisperInputService)
             setViewTreeSavedStateRegistryOwner(this@WhisperInputService)
@@ -252,12 +263,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         state = keyboardState.value,
                         languageLabel = languageLabel.value,
                         amplitude = microphoneAmplitude.value,
-                        shouldOfferImeSwitch = shouldOfferImeSwitch.value,
                         onMicAction = { onMicAction() },
                         onCancelAction = { onCancelAction() },
                         onSendAction = { onSendAction() },
                         onDeleteAction = { onDeleteText() },
-                        onSwitchIme = { onSwitchIme() },
                         onOpenSettings = { launchMainActivity() },
                         onLanguageClick = { showLanguageMenu(this) }
                     )
@@ -443,10 +452,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK && event?.repeatCount == 0) {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (keyboardState.value != KeyboardState.Ready) {
-                cancelRecording()
-                cancelTranscription()
+                Log.d(TAG, "Intercepting Back key to cancel active state: ${keyboardState.value}")
+                onCancelAction()
                 return true
             }
         }
