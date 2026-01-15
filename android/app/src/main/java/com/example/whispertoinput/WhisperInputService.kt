@@ -511,10 +511,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     override fun onWindowHidden() {
         super.onWindowHidden()
+        Log.d(TAG, "onWindowHidden: Stopping all active tasks")
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         whisperTranscriber.stop()
         recorderManager?.stop()
+        stopTimer()
         if (keyboardState.value != KeyboardState.Ready) setKeyboardState(KeyboardState.Ready)
     }
 

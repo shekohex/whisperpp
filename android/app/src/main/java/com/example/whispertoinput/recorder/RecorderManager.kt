@@ -69,7 +69,9 @@ class RecorderManager(context: Context) {
         }
 
         recorder =
-            if (Build.VERSION.SDK_INT >= MEDIA_RECORDER_CONSTRUCTOR_DEPRECATION_API_LEVEL) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(context.createAttributionContext("whisper_recorder"))
+            } else if (Build.VERSION.SDK_INT >= MEDIA_RECORDER_CONSTRUCTOR_DEPRECATION_API_LEVEL) {
                 MediaRecorder(context)
             } else {
                 MediaRecorder()
