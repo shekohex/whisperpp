@@ -4,44 +4,38 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     
-    <!-- Safe Zone Border (Circular) -->
-    <path
-        android:pathData="M54,21 A33,33 0 1,1 53.99,21 Z"
-        android:strokeColor="#1A000000"
-        android:strokeWidth="1" />
-
-    <!-- Bar 1: Blue -->
+    <!-- Bar 1 -->
     <path
         android:pathData="M32,34 L32,74"
-        android:strokeColor="#4285F4"
+        android:strokeColor="#000000"
         android:strokeWidth="8"
         android:strokeLineCap="round" />
     
-    <!-- Bar 2: Red -->
+    <!-- Bar 2 -->
     <path
         android:pathData="M43,50 L43,74"
-        android:strokeColor="#EA4335"
+        android:strokeColor="#000000"
         android:strokeWidth="8"
         android:strokeLineCap="round" />
     
-    <!-- Bar 3: Yellow -->
+    <!-- Bar 3 -->
     <path
         android:pathData="M54,34 L54,74"
-        android:strokeColor="#FBBC05"
+        android:strokeColor="#000000"
         android:strokeWidth="8"
         android:strokeLineCap="round" />
     
-    <!-- Bar 4: Green -->
+    <!-- Bar 4 -->
     <path
         android:pathData="M65,50 L65,74"
-        android:strokeColor="#34A853"
+        android:strokeColor="#000000"
         android:strokeWidth="8"
         android:strokeLineCap="round" />
     
-    <!-- Bar 5: Blue -->
+    <!-- Bar 5 -->
     <path
         android:pathData="M76,34 L76,74"
-        android:strokeColor="#4285F4"
+        android:strokeColor="#000000"
         android:strokeWidth="8"
         android:strokeLineCap="round" />
 </vector>

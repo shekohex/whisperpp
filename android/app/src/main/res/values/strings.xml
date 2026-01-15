@@ -3,12 +3,24 @@
     <string name="app_name">Whisper To Input</string>
     <string name="enter_text">Enter Text</string>
     <string name="whisper_to_input">Whisper To Input</string>
+    <string name="language_auto_label">Auto</string>
     <string name="empty_string" />
     <string name="loading">Loading…</string>
 
     <!-- Keyboard -->
-    <string name="recording">Recording…</string>
-    <string name="transcribing">Transcribing…</string>
+    <string name="recording">Recording</string>
+    <string name="transcribing">Transcribing</string>
+    <string name="paused">Paused</string>
+    <string name="input_ready">Ready</string>
+    <string name="input_recording">Recording</string>
+    <string name="input_paused">Paused</string>
+    <string name="input_transcribing">Transcribing</string>
+    <string name="input_smart_fixing">Smart Fixing</string>
+    <string name="toast_transcription_empty">Transcription was empty</string>
+    <string name="cancel_confirmation_title">Cancel recording?</string>
+    <string name="cancel_confirmation_message">This will discard the current audio.</string>
+    <string name="cancel_confirmation_confirm">Cancel</string>
+    <string name="cancel_confirmation_dismiss">Keep</string>
     <string name="start_speech_to_text">Start speech-to-text.</string>
     <string name="start_transcribing">Start transcribing.</string>
     <string name="grant_microphone_permission">Grant Microphone Permission</string>
@@ -18,6 +30,7 @@
     <string name="successfully_set">Successfully set!</string>
     <string name="backspace_button_hint">Backspace Button</string>
     <string name="btn_previous_ime_hint">Switch To Previous Input Method</string>
+    <string name="btn_settings_hint">Open Settings</string>
     <string name="generate_logcat">Generate Recent Logcat</string>
 
     <!-- Warning and Error Messages -->
@@ -27,6 +40,10 @@
     <!-- Settings -->
     <string name="whisper_to_input_settings_title">Whisper To Input Settings</string>
     <string name="settings_btn_apply">Apply</string>
+    <string name="menu_open_settings">Open Settings</string>
+    <string name="menu_auto_recording_start">Auto Recording Start</string>
+    <string name="menu_auto_switch_back">Auto Switch Back</string>
+    <string name="menu_switch_ime">Switch Keyboard</string>
     <string name="settings_speech_to_text_backend">Speech to Text Backend</string>
     <string name="settings_speech_to_text_backend_desc">Use the official OpenAI API, Whisper ASR Webservice, or NVIDIA NIM backend.</string>
     <string name="settings_option_openai_api">OpenAI API</string>
@@ -57,6 +74,40 @@
     <string name="settings_model">Model</string>
     <string name="settings_model_desc">The model to use for transcription (e.g., whisper-1).</string>
     <string name="settings_model_hint">Enter model name (e.g., whisper-1)</string>
+    <string name="settings_timeout">Request Timeout (ms)</string>
+    <string name="settings_timeout_desc">The timeout for transcription requests in milliseconds.</string>
+    <string name="settings_timeout_hint">Enter timeout in ms (default 10000)</string>
+    <string name="settings_prompt">Transcription Prompt</string>
+    <string name="settings_prompt_desc">Guide the model style/vocabulary (OpenAI/NIM only). Up to 224 tokens.</string>
+    <string name="settings_prompt_hint">e.g., Use academic terminology, specific names, or previous context…</string>
+    <string name="settings_use_context">Use Input Context</string>
+    <string name="settings_use_context_desc">Append text before cursor to the prompt for better continuity.</string>
+
+    <!-- Smart Fix -->
+    <string name="settings_smart_fix_title">Smart Fix (Post-processing)</string>
+    <string name="settings_smart_fix_enabled">Enable Smart Fix</string>
+    <string name="settings_smart_fix_enabled_desc">Clean up transcription using an LLM (OpenAI or Gemini).</string>
+    <string name="settings_smart_fix_backend">Smart Fix Backend</string>
+    <string name="settings_smart_fix_backend_openai">OpenAI Format</string>
+    <string name="settings_smart_fix_backend_google">Google Gemini Format</string>
+    <string-array name="settings_smart_fix_backend_array">
+        <item>@string/settings_smart_fix_backend_openai</item>
+        <item>@string/settings_smart_fix_backend_google</item>
+    </string-array>
+    <string name="settings_smart_fix_endpoint">Smart Fix Endpoint</string>
+    <string name="settings_smart_fix_endpoint_hint">e.g., https://api.openai.com/v1/chat/completions</string>
+    <string name="settings_smart_fix_api_key">Smart Fix API Key</string>
+    <string name="settings_smart_fix_openai_default_endpoint">https://api.openai.com/v1/chat/completions</string>
+    <string name="settings_smart_fix_openai_default_model">gpt-4o-mini</string>
+    <string name="settings_smart_fix_google_default_endpoint">https://generativelanguage.googleapis.com/v1beta</string>
+    <string name="settings_smart_fix_google_default_model">gemini-2.5-flash-lite</string>
+    <string name="settings_smart_fix_model">Smart Fix Model</string>
+    <string name="settings_smart_fix_model_hint">e.g., gpt-4o-mini or gemini-1.5-flash</string>
+    <string name="settings_smart_fix_temperature">Temperature</string>
+    <string name="settings_smart_fix_prompt">Smart Fix Prompt</string>
+    <string name="settings_smart_fix_prompt_desc">The instruction prompt for the LLM. Leave empty to use default.</string>
+    <string name="settings_smart_fix_prompt_hint">Customize the cleanup rules…</string>
+
     <string name="settings_option_yes">Yes</string>
     <string name="settings_option_no">No</string>
     <string name="settings_auto_recording_start">Auto Recording Start</string>
@@ -68,6 +119,12 @@
     <string name="settings_auto_switch_back">Auto Switch Back</string>
     <string name="settings_auto_switch_back_desc">Automatically switch back to the previous keyboard after transcription.</string>
     <string-array name="settings_auto_switch_back_array">
+        <item>@string/settings_option_yes</item>
+        <item>@string/settings_option_no</item>
+    </string-array>
+    <string name="settings_confirm_cancel">Confirm Cancel</string>
+    <string name="settings_confirm_cancel_desc">Ask before canceling recording or transcription.</string>
+    <string-array name="settings_confirm_cancel_array">
         <item>@string/settings_option_yes</item>
         <item>@string/settings_option_no</item>
     </string-array>

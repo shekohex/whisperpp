@@ -33,6 +33,7 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
+import java.util.concurrent.TimeUnit
 import com.github.liuyueyi.quick.transfer.ChineseUtils
 
 class WhisperTranscriber {
@@ -43,7 +44,9 @@ class WhisperTranscriber {
         val apiKey: String,
         val model: String,
         val postprocessing: String,
-        val addTrailingSpace: Boolean
+        val addTrailingSpace: Boolean,
+        val timeout: Int,
+        val prompt: String
     )
 
     private val TAG = "WhisperTranscriber"
@@ -54,12 +57,13 @@ class WhisperTranscriber {
         filename: String,
         mediaType: String,
         attachToEnd: String,
+        contextPrompt: String?,
         callback: (String?) -> Unit,
         exceptionCallback: (String) -> Unit
     ) {
         suspend fun makeWhisperRequest(): String {
             // Retrieve configs
-            val (endpoint, languageCode, speechToTextBackend, apiKey, model, postprocessing, addTrailingSpace) = context.dataStore.data.map { preferences: Preferences ->
+            val (endpoint, languageCode, speechToTextBackend, apiKey, model, postprocessing, addTrailingSpace, timeout, staticPrompt) = context.dataStore.data.map { preferences: Preferences ->
                 Config(
                     preferences[ENDPOINT] ?: "",
                     preferences[LANGUAGE_CODE] ?: "",
@@ -67,9 +71,18 @@ class WhisperTranscriber {
                     preferences[API_KEY] ?: "",
                     preferences[MODEL] ?: "",
                     preferences[POSTPROCESSING] ?: context.getString(R.string.settings_option_no_conversion),
-                    preferences[ADD_TRAILING_SPACE] ?: false
+                    preferences[ADD_TRAILING_SPACE] ?: false,
+                    preferences[TIMEOUT] ?: 10000,
+                    preferences[PROMPT] ?: ""
                 )
             }.first()
+
+            // Construct full prompt
+            val fullPrompt = if (!contextPrompt.isNullOrEmpty()) {
+                if (staticPrompt.isNotEmpty()) "$staticPrompt\n$contextPrompt" else contextPrompt
+            } else {
+                staticPrompt
+            }
 
             // Foolproof message
             if (endpoint == "") {
@@ -77,7 +90,11 @@ class WhisperTranscriber {
             }
 
             // Make request
-            val client = OkHttpClient()
+            val client = OkHttpClient.Builder()
+                .connectTimeout(timeout.toLong(), TimeUnit.MILLISECONDS)
+                .readTimeout(timeout.toLong(), TimeUnit.MILLISECONDS)
+                .writeTimeout(timeout.toLong(), TimeUnit.MILLISECONDS)
+                .build()
             val request = buildWhisperRequest(
                 context,
                 filename,
@@ -86,7 +103,8 @@ class WhisperTranscriber {
                 endpoint,
                 languageCode,
                 apiKey,
-                model
+                model,
+                fullPrompt
             )
             val response = client.newCall(request).execute()
 
@@ -120,30 +138,26 @@ class WhisperTranscriber {
 
         // Create a cancellable job in the main thread (for UI updating)
         val job = CoroutineScope(Dispatchers.Main).launch {
-
-            // Within the job, make a suspend call at the I/O thread
-            // It suspends before result is obtained.
-            // Returns (transcribed string, exception message)
+            Log.d(TAG, "Transcription job start")
             val (transcribedText, exceptionMessage) = withContext(Dispatchers.IO) {
                 try {
-                    // Perform transcription here
                     val response = makeWhisperRequest()
-                    // Clean up unused audio file after transcription
-                    // Ref: https://developer.android.com/reference/android/media/MediaRecorder#setOutputFile(java.io.File)
                     File(filename).delete()
                     return@withContext Pair(response, null)
                 } catch (e: CancellationException) {
-                    // Task was canceled
                     return@withContext Pair(null, null)
+                } catch (e: java.net.SocketTimeoutException) {
+                    return@withContext Pair(null, "Request timed out")
                 } catch (e: Exception) {
-                    return@withContext Pair(null, e.message)
+                    return@withContext Pair(null, e.message ?: "Unknown error")
                 }
             }
 
-            // This callback is within the main thread.
+            if (transcribedText != null) {
+                Log.d(TAG, "Transcription completed length=${transcribedText.length}")
+            }
             callback.invoke(transcribedText)
 
-            // If exception message is not null
             if (!exceptionMessage.isNullOrEmpty()) {
                 Log.e(TAG, exceptionMessage)
                 exceptionCallback(exceptionMessage)
@@ -170,7 +184,8 @@ class WhisperTranscriber {
         endpoint: String,
         languageCode: String,
         apiKey: String,
-        model: String
+        model: String,
+        prompt: String
     ): Request {
         // Please refer to the following for the endpoint/payload definitions:
         // OpenAI API:
@@ -213,10 +228,16 @@ class WhisperTranscriber {
             if (speechToTextBackend == context.getString(R.string.settings_option_openai_api)) {
                 addFormDataPart("model", model)
                 addFormDataPart("response_format", "text")
+                if (prompt.isNotEmpty()) {
+                    addFormDataPart("prompt", prompt)
+                }
             }
             if (speechToTextBackend == context.getString(R.string.settings_option_nvidia_nim)) {
                 addFormDataPart("language", languageCode)
                 addFormDataPart("response_format", "text")
+                if (prompt.isNotEmpty()) {
+                    addFormDataPart("prompt", prompt)
+                }
             }
         }.build()
 

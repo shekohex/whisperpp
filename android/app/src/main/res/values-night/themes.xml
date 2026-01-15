@@ -5,20 +5,8 @@
         <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
     </style>
 
-    <style name="RegularImage">
-        <item name="android:tint">#AAA</item>
-    </style>
-
-    <style name="RegularText">
-        <item name="android:textColor">#AAA</item>
-    </style>
-
-    <style name="Background">
-        <item name="android:background">#373737</item>
-    </style>
-
-    <style name="TopBar">
-        <item name="android:background">#AAAAAA</item>
-    </style>
-
+    <!-- We rely on the Base definitions in values/themes.xml which use ?attr/color... 
+         These will automatically resolve correctly for night mode. -->
+    
+    <style name="Theme.WhisperToInput" parent="Base.Theme.WhisperToInput" />
 </resources>

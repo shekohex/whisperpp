@@ -46,6 +46,7 @@ class RecorderManager(context: Context) {
     }
 
     private var recorder: MediaRecorder? = null
+    private var isPaused: Boolean = false
     private var onUpdateMicrophoneAmplitude: (Int) -> Unit = { }
     private var microphoneAmplitudeUpdateJob: Job? = null
     private val amplitudeReportPeriod: Long
@@ -59,7 +60,11 @@ class RecorderManager(context: Context) {
 
     fun start(context: Context, filename: String, useOggFormat: Boolean = false) {
         recorder?.apply {
-            stop()
+            try {
+                stop()
+            } catch (e: IllegalStateException) {
+                Log.e("whisper-input", "stop before start failed", e)
+            }
             release()
         }
 
@@ -77,15 +82,14 @@ class RecorderManager(context: Context) {
         }
 
         recorder!!.apply {
+            setOnErrorListener { _, what, extra ->
+                Log.e("whisper-input", "recorder error what=$what extra=$extra")
+            }
             setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
             if (useOggFormat) {
-                // Use the OGG and OPUS encoder following the recommendation in NVIDIA Riva
-                // Ref: https://docs.nvidia.com/deeplearning/riva/user-guide/docs/reference/protos/riva_audio.proto.html
-                // This format and encoder is the only one supported by both NVIDIA Riva and MediaRecorder.
                 setOutputFormat(MediaRecorder.OutputFormat.OGG)
                 setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
             } else {
-                // Use M4A format for other backends
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
             }
@@ -93,18 +97,19 @@ class RecorderManager(context: Context) {
 
             try {
                 prepare()
+                start()
+                isPaused = false
             } catch (e: IOException) {
-                Log.e("whisper-input", "prepare() failed")
+                Log.e("whisper-input", "prepare failed", e)
+            } catch (e: IllegalStateException) {
+                Log.e("whisper-input", "start failed", e)
             }
-
-            start()
         }
 
-        // Start a job to periodically report current amplitude
         microphoneAmplitudeUpdateJob?.cancel()
         microphoneAmplitudeUpdateJob = CoroutineScope(Dispatchers.Main).launch {
             while (recorder != null) {
-                val amplitude = recorder?.maxAmplitude ?: 0
+                val amplitude = if (isPaused) 0 else recorder?.maxAmplitude ?: 0
                 onUpdateMicrophoneAmplitude(amplitude)
                 delay(amplitudeReportPeriod)
             }
@@ -113,13 +118,49 @@ class RecorderManager(context: Context) {
 
     fun stop() {
         recorder?.apply {
-            stop()
-            release()
+            try {
+                stop()
+            } catch (e: IllegalStateException) {
+                Log.e("whisper-input", "stop failed", e)
+            } catch (e: RuntimeException) {
+                Log.e("whisper-input", "stop runtime error", e)
+            } finally {
+                release()
+            }
         }
         recorder = null
+        isPaused = false
 
         microphoneAmplitudeUpdateJob?.cancel()
         microphoneAmplitudeUpdateJob = null
+    }
+
+    fun pause() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+            return
+        }
+        recorder?.apply {
+            try {
+                pause()
+                isPaused = true
+            } catch (e: IllegalStateException) {
+                Log.e("whisper-input", "pause failed", e)
+            }
+        }
+    }
+
+    fun resume() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+            return
+        }
+        recorder?.apply {
+            try {
+                resume()
+                isPaused = false
+            } catch (e: IllegalStateException) {
+                Log.e("whisper-input", "resume failed", e)
+            }
+        }
     }
 
     // Assign onUpdateMicrophoneAmplitude callback

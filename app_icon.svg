@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  <circle cx="512" cy="512" r="312" fill="none" stroke="#EEEEEE" stroke-width="10"/>
+  <!-- Bar 1: Blue -->
+  <rect x="303" y="322" width="76" height="380" rx="38" fill="#4285F4"/>
+  <!-- Bar 2: Red -->
+  <rect x="407" y="474" width="76" height="228" rx="38" fill="#EA4335"/>
+  <!-- Bar 3: Yellow -->
+  <rect x="512" y="322" width="76" height="380" rx="38" fill="#FBBC05"/>
+  <!-- Bar 4: Green -->
+  <rect x="616" y="474" width="76" height="228" rx="38" fill="#34A853"/>
+  <!-- Bar 5: Blue -->
+  <rect x="721" y="322" width="76" height="380" rx="38" fill="#4285F4"/>
+</svg>

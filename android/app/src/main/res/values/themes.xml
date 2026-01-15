@@ -6,47 +6,101 @@
     </style>
 
     <style name="RegularImage">
-        <item name="android:tint">@color/theme_rich_black</item>
+        <item name="android:tint">?attr/colorOnSurface</item>
     </style>
 
     <style name="RegularText">
-        <item name="android:textColor">@color/theme_rich_black</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
     </style>
 
     <style name="Background">
-        <item name="android:background">@color/theme_light_grey</item>
+        <item name="android:background">@android:color/transparent</item>
     </style>
 
     <style name="TopBar">
-        <item name="android:background">@color/theme_rich_black</item>
+        <item name="android:background">?attr/colorSurfaceContainerLow</item>
     </style>
 
-    <!-- Settings Page Styles -->
+    <style name="KeyboardHandle">
+        <item name="android:layout_width">32dp</item>
+        <item name="android:layout_height">4dp</item>
+        <item name="cardCornerRadius">2dp</item>
+        <item name="cardBackgroundColor">?attr/colorSurfaceVariant</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+
+    <style name="KeyboardBarCard">
+        <item name="cardCornerRadius">24dp</item>
+        <item name="cardBackgroundColor">?attr/colorSurfaceContainerLow</item>
+        <item name="cardElevation">2dp</item>
+    </style>
+
+    <style name="KeyboardLanguageChip">
+        <item name="cardCornerRadius">16dp</item>
+        <item name="cardBackgroundColor">?attr/colorSurfaceContainerHigh</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+
+    <style name="KeyboardLanguageText">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
+
+    <style name="KeyboardStatusText">
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="KeyboardIconButton">
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+        <item name="android:padding">6dp</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="tint">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="KeyboardMicButton">
+        <item name="android:background">@drawable/mic_button_bg</item>
+        <item name="android:padding">8dp</item>
+        <item name="android:scaleType">fitCenter</item>
+        <item name="tint">?attr/colorOnSurface</item>
+    </style>
+
+    <style name="SettingsTopBar">
+        <item name="android:background">?attr/colorSurfaceContainerLow</item>
+    </style>
+
+    <style name="SettingsCard">
+        <item name="cardCornerRadius">16dp</item>
+        <item name="cardBackgroundColor">?attr/colorSurfaceContainerLowest</item>
+        <item name="cardElevation">0dp</item>
+    </style>
+
     <style name="SettingsLabel">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:fontFamily">sans-serif</item>
-        <item name="android:textSize">22sp</item>
-        <item name="android:textStyle">bold</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
     </style>
     <style name="SettingsDescription">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:textColor">@color/dark_gray</item>
-        <item name="android:textSize">18sp</item>
-        <item name="android:textStyle">italic</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+        <item name="android:textSize">14sp</item>
     </style>
-    <style name="SettingsField">
+    <style name="SettingsItemContainer">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginBottom">16dp</item>
-        <item name="android:inputType">textMultiLine</item>
+        <item name="android:paddingVertical">16dp</item>
     </style>
-    <style name="SettingsSpinner">
-        <item name="android:layout_width">wrap_content</item>
+    <style name="SettingsField" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginBottom">16dp</item>
-        <item name="android:minHeight">48dp</item>
+    </style>
+    <style name="SettingsSpinner" parent="Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
     </style>
 
     <style name="Theme.WhisperToInput" parent="Base.Theme.WhisperToInput" />

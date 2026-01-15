@@ -30,6 +30,8 @@ import android.net.Uri
 import android.provider.*
 import android.view.View
 import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Spinner
@@ -40,8 +42,13 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.slider.Slider
+import com.google.android.material.color.DynamicColors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,14 +68,27 @@ val API_KEY = stringPreferencesKey("api-key")
 val MODEL = stringPreferencesKey("model")
 val AUTO_RECORDING_START = booleanPreferencesKey("is-auto-recording-start")
 val AUTO_SWITCH_BACK = booleanPreferencesKey("auto-switch-back")
+val CANCEL_CONFIRMATION = booleanPreferencesKey("cancel-confirmation")
 val ADD_TRAILING_SPACE = booleanPreferencesKey("add-trailing-space")
 val POSTPROCESSING = stringPreferencesKey("postprocessing")
+val TIMEOUT = intPreferencesKey("timeout")
+val PROMPT = stringPreferencesKey("prompt")
+val USE_CONTEXT = booleanPreferencesKey("use-context")
+
+val SMART_FIX_ENABLED = booleanPreferencesKey("smart-fix-enabled")
+val SMART_FIX_BACKEND = stringPreferencesKey("smart-fix-backend")
+val SMART_FIX_ENDPOINT = stringPreferencesKey("smart-fix-endpoint")
+val SMART_FIX_API_KEY = stringPreferencesKey("smart-fix-api-key")
+val SMART_FIX_MODEL = stringPreferencesKey("smart-fix-model")
+val SMART_FIX_TEMPERATURE = floatPreferencesKey("smart-fix-temperature")
+val SMART_FIX_PROMPT = stringPreferencesKey("smart-fix-prompt")
 
 class MainActivity : AppCompatActivity() {
     private var setupSettingItemsDone: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DynamicColors.applyToActivityIfAvailable(this)
         setContentView(R.layout.activity_main)
         setupSettingItems()
         checkPermissions()
@@ -195,45 +215,38 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    inner class SettingDropdown(
+    inner class SettingSwitch(
         private val viewId: Int,
         private val preferenceKey: Preferences.Key<Boolean>,
-        private val stringToValue: HashMap<String, Boolean>,
         private val defaultValue: Boolean = true
     ): SettingItem() {
         override fun setup(): Job {
             return CoroutineScope(Dispatchers.Main).launch {
                 val btnApply: Button = findViewById(R.id.btn_settings_apply)
-                val spinner = findViewById<Spinner>(viewId)
-                spinner.isEnabled = false
-                spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                    override fun onItemSelected(parent: AdapterView<*>, view: View?, pos: Int, id: Long) {
-                        if (!setupSettingItemsDone) return
-                        isDirty = true
-                        btnApply.isEnabled = true
-                    }
-                    override fun onNothingSelected(parent: AdapterView<*>) { }
+                val switch = findViewById<MaterialSwitch>(viewId)
+                switch.isEnabled = false
+
+                switch.setOnCheckedChangeListener { _, _ ->
+                    if (!setupSettingItemsDone) return@setOnCheckedChangeListener
+                    isDirty = true
+                    btnApply.isEnabled = true
                 }
 
-                val valueToString = stringToValue.map { (k, v) -> v to k }.toMap()
                 // Read data. If none, apply default value.
                 val settingValue: Boolean? = readSetting(preferenceKey)
                 val value: Boolean = settingValue ?: defaultValue
-                val string: String = valueToString[value]!!
                 if (settingValue == null) {
                     writeSetting(preferenceKey, defaultValue)
                 }
-                val index: Int? = (0 until spinner.adapter.count).firstOrNull {
-                    spinner.adapter.getItem(it) == string
-                }
-                spinner.setSelection(index!!, false)
-                spinner.isEnabled = true
+                
+                switch.isChecked = value
+                switch.isEnabled = true
             }
         }
         override suspend fun apply() {
             if (!isDirty) return
-            val selectedItem = findViewById<Spinner>(viewId).selectedItem
-            val newValue: Boolean = stringToValue[selectedItem]!!
+            val switch = findViewById<MaterialSwitch>(viewId)
+            val newValue: Boolean = switch.isChecked
             writeSetting(preferenceKey, newValue)
             isDirty = false
         }
@@ -248,47 +261,77 @@ class MainActivity : AppCompatActivity() {
         override fun setup(): Job {
             return CoroutineScope(Dispatchers.Main).launch {
                 val btnApply: Button = findViewById(R.id.btn_settings_apply)
-                val spinner = findViewById<Spinner>(viewId)
-                spinner.isEnabled = false
-                spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                    override fun onItemSelected(parent: AdapterView<*>, view: View?, pos: Int, id: Long) {
-                        if (!setupSettingItemsDone) return
-                        isDirty = true
-                        btnApply.isEnabled = true
-                        // Deal with individual spinner
-                        if (parent.id == R.id.spinner_speech_to_text_backend) {
-                            val selectedItem = parent.getItemAtPosition(pos)
-                            if (selectedItem == getString(R.string.settings_option_openai_api)) {
-                                val endpointEditText: EditText = findViewById<EditText>(R.id.field_endpoint)
-                                endpointEditText.setText(getString(R.string.settings_option_openai_api_default_endpoint))
-                                val modelEditText: EditText = findViewById<EditText>(R.id.field_model)
-                                modelEditText.setText(getString(R.string.settings_option_openai_api_default_model))
-                            } else if (selectedItem == getString(R.string.settings_option_whisper_asr_webservice)) {
-                                val endpointEditText: EditText = findViewById<EditText>(R.id.field_endpoint)
-                                if (endpointEditText.text.isEmpty() ||
-                                    endpointEditText.text.toString() == getString(R.string.settings_option_openai_api_default_endpoint) ||
-                                    endpointEditText.text.toString() == getString(R.string.settings_option_nvidia_nim_default_endpoint)
-                                ) {
-                                    endpointEditText.setText(getString(R.string.settings_option_whisper_asr_webservice_default_endpoint))
-                                }
-                                val modelEditText: EditText = findViewById<EditText>(R.id.field_model)
-                                modelEditText.setText(getString(R.string.settings_option_whisper_asr_webservice_default_model))
-                            } else if (selectedItem == getString(R.string.settings_option_nvidia_nim)) {
-                                val endpointEditText: EditText = findViewById<EditText>(R.id.field_endpoint)
-                                if (endpointEditText.text.isEmpty() ||
-                                    endpointEditText.text.toString() == getString(R.string.settings_option_openai_api_default_endpoint) ||
-                                    endpointEditText.text.toString() == getString(R.string.settings_option_whisper_asr_webservice_default_endpoint)
-                                ) {
-                                    endpointEditText.setText(getString(R.string.settings_option_nvidia_nim_default_endpoint))
-                                }
-                                val modelEditText: EditText = findViewById<EditText>(R.id.field_model)
-                                modelEditText.setText(getString(R.string.settings_option_nvidia_nim_default_model))
-                                val languageCodeEditText: EditText = findViewById<EditText>(R.id.field_language_code)
-                                languageCodeEditText.setText(getString(R.string.settings_option_nvidia_nim_default_language))
+                val dropdown = findViewById<AutoCompleteTextView>(viewId)
+                dropdown.isEnabled = false
+
+                val adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, optionValues)
+                dropdown.setAdapter(adapter)
+
+                dropdown.setOnItemClickListener { parent, _, position, _ ->
+                    if (!setupSettingItemsDone) return@setOnItemClickListener
+                    isDirty = true
+                    btnApply.isEnabled = true
+                    
+                    // Deal with individual dropdown logic
+                    if (viewId == R.id.spinner_speech_to_text_backend) {
+                         val selectedItem = parent.getItemAtPosition(position).toString()
+                         if (selectedItem == getString(R.string.settings_option_openai_api)) {
+                             val endpointEditText = findViewById<EditText>(R.id.field_endpoint)
+                             endpointEditText.setText(getString(R.string.settings_option_openai_api_default_endpoint))
+                             val modelEditText = findViewById<EditText>(R.id.field_model)
+                             modelEditText.setText(getString(R.string.settings_option_openai_api_default_model))
+                         } else if (selectedItem == getString(R.string.settings_option_whisper_asr_webservice)) {
+                             val endpointEditText = findViewById<EditText>(R.id.field_endpoint)
+                             if (endpointEditText.text.isEmpty() ||
+                                 endpointEditText.text.toString() == getString(R.string.settings_option_openai_api_default_endpoint) ||
+                                 endpointEditText.text.toString() == getString(R.string.settings_option_nvidia_nim_default_endpoint)
+                             ) {
+                                 endpointEditText.setText(getString(R.string.settings_option_whisper_asr_webservice_default_endpoint))
+                             }
+                             val modelEditText = findViewById<EditText>(R.id.field_model)
+                             modelEditText.setText(getString(R.string.settings_option_whisper_asr_webservice_default_model))
+                         } else if (selectedItem == getString(R.string.settings_option_nvidia_nim)) {
+                             val endpointEditText = findViewById<EditText>(R.id.field_endpoint)
+                             if (endpointEditText.text.isEmpty() ||
+                                 endpointEditText.text.toString() == getString(R.string.settings_option_openai_api_default_endpoint) ||
+                                 endpointEditText.text.toString() == getString(R.string.settings_option_whisper_asr_webservice_default_endpoint)
+                             ) {
+                                 endpointEditText.setText(getString(R.string.settings_option_nvidia_nim_default_endpoint))
+                             }
+                             val modelEditText = findViewById<EditText>(R.id.field_model)
+                             modelEditText.setText(getString(R.string.settings_option_nvidia_nim_default_model))
+                             val languageCodeEditText = findViewById<EditText>(R.id.field_language_code)
+                             languageCodeEditText.setText(getString(R.string.settings_option_nvidia_nim_default_language))
+                         }
+                    } else if (viewId == R.id.spinner_smart_fix_backend) {
+                        val selectedItem = parent.getItemAtPosition(position).toString()
+                        val endpointEditText = findViewById<EditText>(R.id.field_smart_fix_endpoint)
+                        val modelEditText = findViewById<EditText>(R.id.field_smart_fix_model)
+
+                        if (selectedItem == getString(R.string.settings_smart_fix_backend_openai)) {
+                            if (endpointEditText.text.isEmpty() ||
+                                endpointEditText.text.toString() == getString(R.string.settings_smart_fix_google_default_endpoint)
+                            ) {
+                                endpointEditText.setText(getString(R.string.settings_smart_fix_openai_default_endpoint))
+                            }
+                            if (modelEditText.text.isEmpty() ||
+                                modelEditText.text.toString() == getString(R.string.settings_smart_fix_google_default_model)
+                            ) {
+                                modelEditText.setText(getString(R.string.settings_smart_fix_openai_default_model))
+                            }
+                        } else if (selectedItem == getString(R.string.settings_smart_fix_backend_google)) {
+                            if (endpointEditText.text.isEmpty() ||
+                                endpointEditText.text.toString() == getString(R.string.settings_smart_fix_openai_default_endpoint)
+                            ) {
+                                endpointEditText.setText(getString(R.string.settings_smart_fix_google_default_endpoint))
+                            }
+                            if (modelEditText.text.isEmpty() ||
+                                modelEditText.text.toString() == getString(R.string.settings_smart_fix_openai_default_model)
+                            ) {
+                                modelEditText.setText(getString(R.string.settings_smart_fix_google_default_model))
                             }
                         }
                     }
-                    override fun onNothingSelected(parent: AdapterView<*>) { }
                 }
 
                 // Read data. If none, apply default value.
@@ -297,18 +340,110 @@ class MainActivity : AppCompatActivity() {
                 if (settingValue == null) {
                     writeSetting(preferenceKey, defaultValue)
                 }
-                val index: Int? = (0 until spinner.adapter.count).firstOrNull {
-                    spinner.adapter.getItem(it) == value
-                }
-                spinner.setSelection(index ?: 0, false)
-                spinner.isEnabled = true
+                
+                dropdown.setText(value, false)
+                dropdown.isEnabled = true
             }
         }
         override suspend fun apply() {
             if (!isDirty) return
-            val selectedItem = findViewById<Spinner>(viewId).selectedItem
-            val newValue: String = selectedItem.toString()
+            val dropdown = findViewById<AutoCompleteTextView>(viewId)
+            val newValue: String = dropdown.text.toString()
             writeSetting(preferenceKey, newValue)
+            isDirty = false
+        }
+    }
+
+    inner class SettingTimeout(
+        private val sliderId: Int,
+        private val fieldId: Int,
+        private val preferenceKey: Preferences.Key<Int>,
+        private val defaultValue: Int = 10000
+    ): SettingItem() {
+        override fun setup(): Job {
+            return CoroutineScope(Dispatchers.Main).launch {
+                val btnApply: Button = findViewById(R.id.btn_settings_apply)
+                val slider = findViewById<Slider>(sliderId)
+                val editText = findViewById<EditText>(fieldId)
+                
+                slider.isEnabled = false
+                editText.isEnabled = false
+
+                slider.addOnChangeListener { _, value, fromUser ->
+                    if (!setupSettingItemsDone || !fromUser) return@addOnChangeListener
+                    editText.setText(value.toInt().toString())
+                    isDirty = true
+                    btnApply.isEnabled = true
+                }
+
+                editText.doOnTextChanged { text, _, _, _ ->
+                    if (!setupSettingItemsDone) return@doOnTextChanged
+                    val value = text.toString().toIntOrNull()
+                    if (value != null) {
+                        if (value in slider.valueFrom.toInt()..slider.valueTo.toInt()) {
+                            slider.value = value.toFloat()
+                        }
+                    }
+                    isDirty = true
+                    btnApply.isEnabled = true
+                }
+
+                // Read data. If none, apply default value.
+                val settingValue: Int? = readSetting(preferenceKey)
+                val value: Int = settingValue ?: defaultValue
+                if (settingValue == null) {
+                    writeSetting(preferenceKey, defaultValue)
+                }
+                
+                editText.setText(value.toString())
+                if (value in slider.valueFrom.toInt()..slider.valueTo.toInt()) {
+                    slider.value = value.toFloat()
+                }
+                
+                slider.isEnabled = true
+                editText.isEnabled = true
+            }
+        }
+        override suspend fun apply() {
+            if (!isDirty) return
+            val editText = findViewById<EditText>(fieldId)
+            val newValue: Int = editText.text.toString().toIntOrNull() ?: defaultValue
+            writeSetting(preferenceKey, newValue)
+            isDirty = false
+        }
+    }
+
+    inner class SettingFloatSlider(
+        private val sliderId: Int,
+        private val preferenceKey: Preferences.Key<Float>,
+        private val defaultValue: Float = 0.0f
+    ): SettingItem() {
+        override fun setup(): Job {
+            return CoroutineScope(Dispatchers.Main).launch {
+                val btnApply: Button = findViewById(R.id.btn_settings_apply)
+                val slider = findViewById<Slider>(sliderId)
+                slider.isEnabled = false
+
+                slider.addOnChangeListener { _, _, fromUser ->
+                    if (!setupSettingItemsDone || !fromUser) return@addOnChangeListener
+                    isDirty = true
+                    btnApply.isEnabled = true
+                }
+
+                val settingValue: Float? = readSetting(preferenceKey)
+                val value: Float = settingValue ?: defaultValue
+                if (settingValue == null) {
+                    writeSetting(preferenceKey, defaultValue)
+                }
+                
+                slider.value = value
+                slider.isEnabled = true
+            }
+        }
+        override suspend fun apply() {
+            if (!isDirty) return
+            val slider = findViewById<Slider>(sliderId)
+            writeSetting(preferenceKey, slider.value)
             isDirty = false
         }
     }
@@ -325,25 +460,30 @@ class MainActivity : AppCompatActivity() {
                 ), getString(R.string.settings_option_openai_api)),
                 SettingText(R.id.field_endpoint, ENDPOINT, getString(R.string.settings_option_openai_api_default_endpoint)),
                 SettingText(R.id.field_language_code, LANGUAGE_CODE, getString(R.string.settings_option_openai_api_default_language)),
+                SettingTimeout(R.id.slider_timeout, R.id.field_timeout, TIMEOUT, 10000),
                 SettingText(R.id.field_api_key, API_KEY),
                 SettingText(R.id.field_model, MODEL, getString(R.string.settings_option_openai_api_default_model)),
-                SettingDropdown(R.id.spinner_auto_recording_start, AUTO_RECORDING_START, hashMapOf(
-                    getString(R.string.settings_option_yes) to true,
-                    getString(R.string.settings_option_no) to false,
-                )),
-                SettingDropdown(R.id.spinner_auto_switch_back, AUTO_SWITCH_BACK, hashMapOf(
-                    getString(R.string.settings_option_yes) to true,
-                    getString(R.string.settings_option_no) to false,
-                ), false),
-                SettingDropdown(R.id.spinner_add_trailing_space, ADD_TRAILING_SPACE, hashMapOf(
-                    getString(R.string.settings_option_yes) to true,
-                    getString(R.string.settings_option_no) to false,
-                ), false),
+                SettingSwitch(R.id.switch_auto_recording_start, AUTO_RECORDING_START),
+                SettingSwitch(R.id.switch_auto_switch_back, AUTO_SWITCH_BACK, false),
+                SettingSwitch(R.id.switch_confirm_cancel, CANCEL_CONFIRMATION, true),
+                SettingSwitch(R.id.switch_add_trailing_space, ADD_TRAILING_SPACE, false),
                 SettingStringDropdown(R.id.spinner_postprocessing, POSTPROCESSING, listOf(
                     getString(R.string.settings_option_to_traditional),
                     getString(R.string.settings_option_to_simplified),
                     getString(R.string.settings_option_no_conversion)
                 ), getString(R.string.settings_option_to_traditional)),
+                SettingText(R.id.field_prompt, PROMPT),
+                SettingSwitch(R.id.switch_use_context, USE_CONTEXT, false),
+                SettingSwitch(R.id.switch_smart_fix_enabled, SMART_FIX_ENABLED, false),
+                SettingStringDropdown(R.id.spinner_smart_fix_backend, SMART_FIX_BACKEND, listOf(
+                    getString(R.string.settings_smart_fix_backend_openai),
+                    getString(R.string.settings_smart_fix_backend_google)
+                ), getString(R.string.settings_smart_fix_backend_openai)),
+                SettingText(R.id.field_smart_fix_endpoint, SMART_FIX_ENDPOINT),
+                SettingText(R.id.field_smart_fix_api_key, SMART_FIX_API_KEY),
+                SettingText(R.id.field_smart_fix_model, SMART_FIX_MODEL),
+                SettingFloatSlider(R.id.slider_smart_fix_temperature, SMART_FIX_TEMPERATURE, 0.0f),
+                SettingText(R.id.field_smart_fix_prompt, SMART_FIX_PROMPT),
             )
             val btnApply: Button = findViewById(R.id.btn_settings_apply)
             btnApply.isEnabled = false
@@ -358,6 +498,13 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this@MainActivity, R.string.successfully_set, Toast.LENGTH_SHORT).show()
             }
             settingItems.map { settingItem -> settingItem.setup() }.joinAll()
+            
+            // Setup help button
+            findViewById<View>(R.id.btn_prompt_help).setOnClickListener {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://platform.openai.com/docs/guides/speech-to-text#prompting"))
+                startActivity(intent)
+            }
+            
             setupSettingItemsDone = true
         }
     }
