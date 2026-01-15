@@ -3,7 +3,7 @@ package com.example.whispertoinput.ui.keyboard
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,12 +29,14 @@ import androidx.compose.ui.unit.sp
 import com.example.whispertoinput.R
 import com.example.whispertoinput.keyboard.KeyboardState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
 fun KeyboardScreen(
     state: KeyboardState,
     languageLabel: String,
     amplitude: Int,
+    recordingTime: Long,
     onMicAction: () -> Unit,
     onCancelAction: () -> Unit,
     onSendAction: () -> Unit,
@@ -42,7 +44,6 @@ fun KeyboardScreen(
     onOpenSettings: () -> Unit,
     onLanguageClick: () -> Unit
 ) {
-
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -61,52 +62,74 @@ fun KeyboardScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             // Left Cluster
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onOpenSettings) {
-                    Icon(Icons.Default.Settings, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                
-                Surface(
-                    onClick = onLanguageClick,
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    modifier = Modifier.padding(start = 4.dp)
-                ) {
-                    Text(
-                        text = languageLabel,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+            Box(modifier = Modifier.width(100.dp), contentAlignment = Alignment.CenterStart) {
+                AnimatedContent(
+                    targetState = state,
+                    transitionSpec = {
+                        fadeIn() + slideInHorizontally() togetherWith fadeOut() + slideOutHorizontally()
+                    },
+                    label = "LeftClusterTransition"
+                ) { targetState ->
+                    when (targetState) {
+                        KeyboardState.Recording -> {
+                            Text(
+                                text = formatTime(recordingTime),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        KeyboardState.Paused -> {
+                            IconButton(onClick = onCancelAction) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                        else -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = onOpenSettings) {
+                                    Icon(
+                                        Icons.Default.Settings,
+                                        null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Surface(
+                                    onClick = onLanguageClick,
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer
+                                ) {
+                                    Text(
+                                        text = languageLabel,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
-            // Center Status / Mic
+            // Center Status
             Box(
                 modifier = Modifier.weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                StatusContent(state, amplitude)
+                StatusContent(state, amplitude, recordingTime)
             }
 
             // Right Cluster
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AnimatedVisibility(visible = state == KeyboardState.Paused) {
-                    IconButton(
-                        onClick = onSendAction,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, null)
-                    }
-                }
-
                 AnimatedVisibility(visible = state == KeyboardState.Ready) {
                     BackspaceButton(onDeleteAction)
                 }
 
-                AnimatedVisibility(visible = state != KeyboardState.Ready) {
+                AnimatedVisibility(visible = state == KeyboardState.Transcribing || state == KeyboardState.SmartFixing) {
                     IconButton(onClick = onCancelAction) {
                         Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.error)
                     }
@@ -114,14 +137,20 @@ fun KeyboardScreen(
 
                 Spacer(Modifier.width(8.dp))
                 
-                MicButton(state, onMicAction)
+                MainActionButton(state, onMicAction, onSendAction)
             }
         }
     }
 }
 
+fun formatTime(seconds: Long): String {
+    val mins = seconds / 60
+    val secs = seconds % 60
+    return "%02d:%02d".format(mins, secs)
+}
+
 @Composable
-fun StatusContent(state: KeyboardState, amplitude: Int) {
+fun StatusContent(state: KeyboardState, amplitude: Int, recordingTime: Long) {
     AnimatedContent(
         targetState = state,
         transitionSpec = {
@@ -142,8 +171,10 @@ fun StatusContent(state: KeyboardState, amplitude: Int) {
             }
             KeyboardState.Paused -> {
                 Text(
-                    stringResource(R.string.input_paused),
+                    text = formatTime(recordingTime),
                     color = Color(0xFFFFD600), // Material Yellow
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
                     modifier = Modifier.animateAlphaLoop()
                 )
             }
@@ -170,7 +201,6 @@ fun VoiceWaveform(amplitude: Int) {
     val bars = 5
     val multipliers = listOf(0.5f, 0.8f, 1.0f, 0.8f, 0.5f)
     
-    // Simple log-based normalization
     val normalized = remember(amplitude) {
         val amp = amplitude.coerceIn(10, 25000).toFloat()
         (kotlin.math.log10(amp) - 1f) / (4.398f - 1f)
@@ -198,30 +228,86 @@ fun VoiceWaveform(amplitude: Int) {
 }
 
 @Composable
-fun MicButton(state: KeyboardState, onClick: () -> Unit) {
+fun MainActionButton(
+    state: KeyboardState,
+    onMicAction: () -> Unit,
+    onSendAction: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    val currentState by rememberUpdatedState(state)
+    
+    val size by animateDpAsState(
+        targetValue = if (state == KeyboardState.Recording) 64.dp else 48.dp,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "ButtonSize"
+    )
+
     val containerColor by animateColorAsState(
         when (state) {
-            KeyboardState.Recording -> MaterialTheme.colorScheme.errorContainer
-            KeyboardState.Paused -> MaterialTheme.colorScheme.secondaryContainer
+            KeyboardState.Recording -> MaterialTheme.colorScheme.error
+            KeyboardState.Paused -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.primaryContainer
         },
-        label = "MicButtonColor"
+        label = "ContainerColor"
     )
-    
+
+    val contentColor by animateColorAsState(
+        when (state) {
+            KeyboardState.Recording -> MaterialTheme.colorScheme.onError
+            KeyboardState.Paused -> MaterialTheme.colorScheme.onPrimary
+            else -> MaterialTheme.colorScheme.onPrimaryContainer
+        },
+        label = "ContentColor"
+    )
+
     val icon = when (state) {
-        KeyboardState.Recording -> Icons.Default.Pause
-        KeyboardState.Paused -> Icons.Default.PlayArrow
+        KeyboardState.Paused -> Icons.AutoMirrored.Filled.Send
         else -> Icons.Default.Mic
     }
 
-    FilledIconButton(
-        onClick = onClick,
-        modifier = Modifier.size(48.dp),
-        colors = IconButtonDefaults.filledIconButtonColors(
-            containerColor = containerColor
-        )
+    Box(
+        modifier = Modifier.size(64.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Icon(icon, null)
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(containerColor)
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown()
+                        val stateAtDown = currentState
+                        if (stateAtDown == KeyboardState.Ready) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onMicAction() // Start
+                            waitForUpOrCancellation()
+                            onMicAction() // Pause
+                        } else if (stateAtDown == KeyboardState.Paused) {
+                            val up = withTimeoutOrNull(400) {
+                                waitForUpOrCancellation()
+                            }
+                            if (up != null) {
+                                onSendAction()
+                            } else {
+                                // Long press detected
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onMicAction() // Resume
+                                waitForUpOrCancellation()
+                                onMicAction() // Pause
+                            }
+                        }
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(if (state == KeyboardState.Recording) 32.dp else 24.dp)
+            )
+        }
     }
 }
 
@@ -232,7 +318,7 @@ fun BackspaceButton(onDeleteAction: () -> Unit) {
     LaunchedEffect(isPressed) {
         if (isPressed) {
             onDeleteAction()
-            delay(500L) // Initial delay before repeating
+            delay(500L)
             var currentDelay = 100L
             while (isPressed) {
                 onDeleteAction()
@@ -247,16 +333,15 @@ fun BackspaceButton(onDeleteAction: () -> Unit) {
             .size(48.dp)
             .clip(CircleShape)
             .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        try {
-                            awaitRelease()
-                        } finally {
-                            isPressed = false
-                        }
+                awaitEachGesture {
+                    awaitFirstDown()
+                    isPressed = true
+                    try {
+                        waitForUpOrCancellation()
+                    } finally {
+                        isPressed = false
                     }
-                )
+                }
             },
         contentAlignment = Alignment.Center
     ) {

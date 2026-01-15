@@ -61,6 +61,7 @@ import com.github.liuyueyi.quick.transfer.ChineseUtils
 import com.github.liuyueyi.quick.transfer.constants.TransType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -106,8 +107,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var languageLabel = mutableStateOf("")
     private var microphoneAmplitude = mutableStateOf(0)
     private var shouldOfferImeSwitch = mutableStateOf(false)
+    private var recordingTime = mutableStateOf(0L)
+    private var recordingStartTime = 0L
+    private var timerJob: Job? = null
 
     override fun onCreate() {
+
         super.onCreate()
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
@@ -263,6 +268,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         state = keyboardState.value,
                         languageLabel = languageLabel.value,
                         amplitude = microphoneAmplitude.value,
+                        recordingTime = recordingTime.value,
                         onMicAction = { onMicAction() },
                         onCancelAction = { onCancelAction() },
                         onSendAction = { onSendAction() },
@@ -330,22 +336,43 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             return
         }
         setKeyboardState(KeyboardState.Recording)
+        recordingTime.value = 0L
+        startTimer()
         recorderManager!!.start(this, recordedAudioFilename, useOggFormat)
     }
 
     private fun pauseRecording() {
         recorderManager!!.pause()
+        stopTimer()
         setKeyboardState(KeyboardState.Paused)
     }
 
     private fun resumeRecording() {
         recorderManager!!.resume()
+        startTimer()
         setKeyboardState(KeyboardState.Recording)
     }
 
     private fun cancelRecording() {
         recorderManager!!.stop()
+        stopTimer()
+        recordingTime.value = 0L
         setKeyboardState(KeyboardState.Ready)
+    }
+
+    private fun startTimer() {
+        timerJob?.cancel()
+        timerJob = CoroutineScope(Dispatchers.Main).launch {
+            while (true) {
+                delay(1000)
+                recordingTime.value += 1
+            }
+        }
+    }
+
+    private fun stopTimer() {
+        timerJob?.cancel()
+        timerJob = null
     }
 
     private fun cancelTranscription() {
@@ -454,12 +481,22 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (keyboardState.value != KeyboardState.Ready) {
-                Log.d(TAG, "Intercepting Back key to cancel active state: ${keyboardState.value}")
-                onCancelAction()
+                Log.d(TAG, "Intercepting Back Key Down: ${keyboardState.value}")
                 return true
             }
         }
         return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (keyboardState.value != KeyboardState.Ready) {
+                Log.d(TAG, "Intercepting Back Key Up: ${keyboardState.value}")
+                onCancelAction()
+                return true
+            }
+        }
+        return super.onKeyUp(keyCode, event)
     }
 
     override fun onWindowShown() {
@@ -469,10 +506,6 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         CoroutineScope(Dispatchers.Main).launch {
             updateAudioFormat()
             updateLanguageLabel()
-            if (isFirstTime) {
-                isFirstTime = false
-                if (dataStore.data.map { it[AUTO_RECORDING_START] ?: true }.first()) startRecording()
-            }
         }
     }
 
