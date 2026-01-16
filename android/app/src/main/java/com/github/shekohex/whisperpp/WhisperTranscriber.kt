@@ -31,6 +31,7 @@ import okhttp3.logging.HttpLoggingInterceptor
 import java.io.File
 import java.util.concurrent.TimeUnit
 import com.github.liuyueyi.quick.transfer.ChineseUtils
+import org.json.JSONObject
 
 class WhisperTranscriber {
     private val TAG = "WhisperTranscriber"
@@ -100,6 +101,19 @@ class WhisperTranscriber {
             }
 
             var rawText = response.body!!.string().trim()
+            val contentType = response.header("Content-Type")
+
+            // Check for JSON response (either by header or content)
+            if (contentType?.contains("application/json") == true || rawText.startsWith("{")) {
+                try {
+                    val jsonObject = JSONObject(rawText)
+                    if (jsonObject.has("text")) {
+                        rawText = jsonObject.getString("text").trim()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse JSON response, using raw text", e)
+                }
+            }
             
             // For NVIDIA NIM or similar, remove quotes if they wrap the text
             if (provider.type == ProviderType.CUSTOM && 

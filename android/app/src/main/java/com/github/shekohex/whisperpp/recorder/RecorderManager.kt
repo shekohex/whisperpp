@@ -71,7 +71,7 @@ class RecorderManager(context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    fun start(context: Context, filename: String, useOggFormat: Boolean = false) {
+    fun start(filename: String) {
         stop() // Ensure previous recording is stopped
 
         val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)

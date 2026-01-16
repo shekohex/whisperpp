@@ -84,7 +84,6 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var recorderManager: RecorderManager? = null
     private var recordedAudioFilename: String = ""
     private var audioMediaType: String = AUDIO_MEDIA_TYPE_WAV
-    private var useOggFormat: Boolean = false
     private var isFirstTime: Boolean = true
     
     private lateinit var repository: SettingsRepository
@@ -371,7 +370,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         setKeyboardState(KeyboardState.Recording)
         recordingTimeMs.value = 0L
         startTimer()
-        recorderManager!!.start(this, recordedAudioFilename, useOggFormat)
+        recorderManager!!.start(recordedAudioFilename)
     }
 
     private fun pauseRecording() {
