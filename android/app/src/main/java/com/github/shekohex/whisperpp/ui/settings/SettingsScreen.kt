@@ -32,6 +32,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.datastore.core.DataStore
@@ -47,6 +48,9 @@ import com.github.shekohex.whisperpp.*
 import com.github.shekohex.whisperpp.data.*
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 sealed class SettingsScreen(val route: String) {
@@ -88,12 +92,99 @@ fun SettingsNavigation(dataStore: DataStore<Preferences>) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val settingsState by dataStore.data.collectAsState(initial = null)
     val repository = remember { SettingsRepository(dataStore) }
     val providers by repository.providers.collectAsState(initial = emptyList())
     
     val activeBackendId = settingsState?.get(SPEECH_TO_TEXT_BACKEND)
     val activeBackendName = providers.find { it.id == activeBackendId }?.name ?: "Select Provider"
+
+    var showImportConfirmDialog by remember { mutableStateOf(false) }
+    var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+
+    val appVersionName = remember {
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
+        } catch (e: Exception) {
+            "unknown"
+        }
+    }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                try {
+                    val json = repository.exportSettings(appVersionName)
+                    context.contentResolver.openOutputStream(it)?.use { output ->
+                        output.write(json.toByteArray())
+                    }
+                    Toast.makeText(context, "Settings exported successfully", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            pendingImportUri = it
+            showImportConfirmDialog = true
+        }
+    }
+
+    if (showImportConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showImportConfirmDialog = false
+                pendingImportUri = null
+            },
+            icon = { Icon(Icons.Default.Warning, null) },
+            title = { Text("Import Settings") },
+            text = { Text("This will override your current settings. Are you sure you want to continue?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showImportConfirmDialog = false
+                    pendingImportUri?.let { uri ->
+                        scope.launch {
+                            try {
+                                val json = context.contentResolver.openInputStream(uri)?.use { input ->
+                                    input.bufferedReader().readText()
+                                } ?: throw Exception("Could not read file")
+                                when (val result = repository.importSettings(json)) {
+                                    is ImportResult.Success -> {
+                                        Toast.makeText(context, "Settings imported successfully", Toast.LENGTH_SHORT).show()
+                                    }
+                                    is ImportResult.Error -> {
+                                        Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }
+                    pendingImportUri = null
+                }) {
+                    Text("Import")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showImportConfirmDialog = false 
+                    pendingImportUri = null
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -143,6 +234,28 @@ fun MainSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHost
                         title = "Keyboard Behavior",
                         subtitle = "Haptics, Auto-start, etc.",
                         onClick = { navController.navigate(SettingsScreen.Keyboard.route) }
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(title = "Data") {
+                    SettingsItem(
+                        icon = Icons.Default.Upload,
+                        title = "Export Settings",
+                        subtitle = "Save settings to file",
+                        onClick = {
+                            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                            exportLauncher.launch("whisper_settings_${timestamp}.json")
+                        }
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.Download,
+                        title = "Import Settings",
+                        subtitle = "Restore from file",
+                        onClick = {
+                            importLauncher.launch(arrayOf("application/json"))
+                        }
                     )
                 }
             }
