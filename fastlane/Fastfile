@@ -69,15 +69,15 @@ platform :android do
     )
 
     # Use a rolling tag for nightly
-    set_github_release(
-      repository_name: "shekohex/whisperpp",
-      api_token: ENV["GITHUB_API_TOKEN"],
-      tag_name: "nightly",
-      name: "Nightly Build",
-      description: "Automated nightly build from branch main.\n\n## Changes in this build\n#{changelog.empty? ? "No changes detected." : changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{version_name}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/nightly/app-release.apk) |",
-      commitish: "main",
-      upload_assets: ["android/app/build/outputs/apk/release/app-release.apk"]
-    )
+    # Create release notes file
+    notes = "Automated nightly build from branch main.\n\n## Changes in this build\n#{changelog.empty? ? "No changes detected." : changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{version_name}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/nightly/app-release.apk) |"
+    File.write("nightly_notes.md", notes)
+
+    # Clean up old nightly tag and release using gh CLI
+    sh("gh release delete nightly --yes --cleanup-tag --repo shekohex/whisperpp || true")
+
+    # Create new release using gh CLI
+    sh("gh release create nightly android/app/build/outputs/apk/release/app-release.apk --repo shekohex/whisperpp --target main --title 'Nightly Build' --notes-file nightly_notes.md --prerelease")
   end
 
   desc "Build and release a tagged version"
@@ -143,13 +143,10 @@ platform :android do
       }
     )
 
-    set_github_release(
-      repository_name: "shekohex/whisperpp",
-      api_token: ENV["GITHUB_API_TOKEN"],
-      tag_name: tag,
-      name: "Release #{tag}",
-      description: "## Changelog\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{tag}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/#{tag}/app-release.apk) |",
-      upload_assets: ["android/app/build/outputs/apk/release/app-release.apk"]
-    )
+    # Create release notes file
+    notes = "## Changelog\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{tag}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/#{tag}/app-release.apk) |"
+    File.write("release_notes.md", notes)
+
+    sh("gh release create #{tag} android/app/build/outputs/apk/release/app-release.apk --repo shekohex/whisperpp --title 'Release #{tag}' --notes-file release_notes.md")
   end
 end
