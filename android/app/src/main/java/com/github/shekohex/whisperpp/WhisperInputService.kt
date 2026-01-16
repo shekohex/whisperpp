@@ -73,10 +73,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
-private const val RECORDED_AUDIO_FILENAME_M4A = "recorded.m4a"
-private const val RECORDED_AUDIO_FILENAME_OGG = "recorded.ogg"
-private const val AUDIO_MEDIA_TYPE_M4A = "audio/mp4"
-private const val AUDIO_MEDIA_TYPE_OGG = "audio/ogg"
+private const val RECORDED_AUDIO_FILENAME_WAV = "recorded.wav"
+private const val AUDIO_MEDIA_TYPE_WAV = "audio/wav"
 private const val IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL = 28
 private const val TAG = "WhisperInputService"
 
@@ -85,7 +83,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private lateinit var smartFixer: SmartFixer
     private var recorderManager: RecorderManager? = null
     private var recordedAudioFilename: String = ""
-    private var audioMediaType: String = AUDIO_MEDIA_TYPE_M4A
+    private var audioMediaType: String = AUDIO_MEDIA_TYPE_WAV
     private var useOggFormat: Boolean = false
     private var isFirstTime: Boolean = true
     
@@ -303,8 +301,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private suspend fun updateAudioFormat() {
-        recordedAudioFilename = "${externalCacheDir?.absolutePath}/${RECORDED_AUDIO_FILENAME_M4A}"
-        audioMediaType = AUDIO_MEDIA_TYPE_M4A
+        recordedAudioFilename = "${externalCacheDir?.absolutePath}/${RECORDED_AUDIO_FILENAME_WAV}"
+        audioMediaType = AUDIO_MEDIA_TYPE_WAV
     }
 
     private fun updateLanguageLabel() {
