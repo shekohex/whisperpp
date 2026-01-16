@@ -1,12 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <style>
-    .bg { fill: #FFFFFF; }
-    .circle { stroke: #EEEEEE; }
-    @media (prefers-color-scheme: dark) {
-      .bg { fill: #1A1A1A; }
-      .circle { stroke: #333333; }
-    }
-
     .bar {
       animation: wave-anim 5s ease-in-out infinite;
     }
@@ -32,7 +25,6 @@
     .b5 { --y: 0px; animation-delay: 0.4s; }
 
   </style>
-  <rect class="bg" width="1024" height="1024"/>
   <g fill="none" stroke-width="49" stroke-linecap="round">
     <g transform="translate(364.5, 512)"><path class="bar b1" stroke="#4285F4" d="M 0 -144 L 0 144"/></g>
     <g transform="translate(438.5, 512)"><path class="bar b2" stroke="#EA4335" d="M 0 -51 L 0 51"/></g>
