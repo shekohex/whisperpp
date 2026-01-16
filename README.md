@@ -14,6 +14,8 @@ An Android keyboard that performs speech-to-text (STT/ASR) using OpenAI Whisper.
     - **OpenAI API**: Official Whisper-1 model.
     - **Whisper ASR Webservice**: Self-hosted open-source backend.
     - **NVIDIA NIM**: Highly optimized self-hosted backend.
+    - **OpenAI Compatible**: Supports any API that follows the OpenAI Whisper specification.
+- **SmartFix (LLM Post-processing)**: Automatically cleans up, punctuates, and corrects transcriptions using LLMs (OpenAI GPT or Google Gemini).
 
 ## Installation
 
@@ -31,9 +33,14 @@ Open the **Whisper++** app from your launcher to configure your preferred STT ba
 - **Model**: `whisper-1`
 - **API Key**: Your OpenAI secret key.
 
-### Self-Hosted (Whisper ASR / NVIDIA NIM)
+### Self-Hosted (Whisper ASR / NVIDIA NIM / Custom)
 - **Endpoint**: `http://<YOUR_IP>:9000/asr` (or `/v1/audio/transcriptions`)
 - **API Key**: Optional (if required by your proxy).
+
+### SmartFix Configuration
+Enable **SmartFix** in settings to use an LLM for post-processing:
+- **Backends**: OpenAI (any compatible provider) or Google Gemini.
+- **Custom Prompts**: Fine-tune how the LLM cleans up your text.
 
 ## Development & CI/CD
 
