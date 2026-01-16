@@ -77,7 +77,8 @@ platform :android do
     sh("gh release delete nightly --yes --cleanup-tag --repo shekohex/whisperpp || true")
 
     # Create new release using gh CLI
-    sh("gh release create nightly android/app/build/outputs/apk/release/app-release.apk --repo shekohex/whisperpp --target main --title 'Nightly Build' --notes-file nightly_notes.md --prerelease")
+    apk_path = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
+    sh("gh release create nightly \"#{apk_path}\" --repo shekohex/whisperpp --target main --title 'Nightly Build' --notes-file nightly_notes.md --prerelease")
   end
 
   desc "Build and release a tagged version"
@@ -147,6 +148,7 @@ platform :android do
     notes = "## Changelog\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{tag}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/#{tag}/app-release.apk) |"
     File.write("release_notes.md", notes)
 
-    sh("gh release create #{tag} android/app/build/outputs/apk/release/app-release.apk --repo shekohex/whisperpp --title 'Release #{tag}' --notes-file release_notes.md")
+    apk_path = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
+    sh("gh release create #{tag} \"#{apk_path}\" --repo shekohex/whisperpp --title 'Release #{tag}' --notes-file release_notes.md")
   end
 end
