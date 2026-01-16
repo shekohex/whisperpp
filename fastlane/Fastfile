@@ -57,6 +57,7 @@ platform :android do
       task: "assemble",
       build_type: "Release",
       project_dir: "android/",
+      flags: "--no-daemon",
       properties: {
         "versionCode" => version_code,
         "versionName" => version_name,
@@ -130,6 +131,7 @@ platform :android do
       task: "assemble",
       build_type: "Release",
       project_dir: "android/",
+      flags: "--no-daemon",
       properties: {
         "versionCode" => version_code,
         "versionName" => tag,
