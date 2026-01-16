@@ -11,8 +11,8 @@ android {
         applicationId = "com.github.shekohex.whisperpp"
         minSdk = 24
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.4"
+        versionCode = (project.findProperty("versionCode")?.toString()?.toInt()) ?: 4
+        versionName = (project.findProperty("versionName")?.toString()) ?: "0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -20,8 +20,18 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(project.findProperty("android.injected.signing.store.file") ?: "release.jks")
+            storePassword = project.findProperty("android.injected.signing.store.password") as String?
+            keyAlias = project.findProperty("android.injected.signing.key.alias") as String?
+            keyPassword = project.findProperty("android.injected.signing.key.password") as String?
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
