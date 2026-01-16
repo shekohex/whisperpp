@@ -1,0 +1,151 @@
+default_platform(:android)
+
+platform :android do
+  desc "Build and release a nightly APK"
+  lane :nightly do
+    # Generate short SHA for version name
+    sha = sh("git rev-parse --short HEAD").strip
+    version_name = "nightly-#{sha}"
+    
+    # Calculate version code based on run number if available
+    version_code = ENV["GITHUB_RUN_NUMBER"] || "1"
+
+    # Generate Changelog for Nightly (last 24h or since last tag)
+    begin
+      previous_tag = sh("git describe --tags --abbrev=0 HEAD^").strip
+      log_range = "#{previous_tag}..HEAD"
+    rescue
+      log_range = "--since='24 hours ago'"
+    end
+    
+    raw_log = sh("git log #{log_range} --pretty=format:'%s'").strip
+    
+    features = []
+    fixes = []
+    perf = []
+    docs = []
+    chore = []
+    others = []
+    
+    raw_log.each_line do |line|
+      clean_line = line.strip
+      next if clean_line.empty?
+      if clean_line.start_with?("feat")
+        features << clean_line
+      elsif clean_line.start_with?("fix")
+        fixes << clean_line
+      elsif clean_line.start_with?("perf")
+        perf << clean_line
+      elsif clean_line.start_with?("docs")
+        docs << clean_line
+      elsif clean_line.start_with?("chore")
+        chore << clean_line
+      else
+        others << clean_line
+      end
+    end
+    
+    changelog = ""
+    changelog += "### ✨ New Features\n#{features.map{|l| "* #{l}"}.join("\n")}\n\n" unless features.empty?
+    changelog += "### 🐛 Bug Fixes\n#{fixes.map{|l| "* #{l}"}.join("\n")}\n\n" unless fixes.empty?
+    changelog += "### 🚀 Performance Improvements\n#{perf.map{|l| "* #{l}"}.join("\n")}\n\n" unless perf.empty?
+    changelog += "### 📝 Documentation\n#{docs.map{|l| "* #{l}"}.join("\n")}\n\n" unless docs.empty?
+    changelog += "### 🛠 Maintenance\n#{chore.map{|l| "* #{l}"}.join("\n")}\n\n" unless chore.empty?
+    changelog += "### 🗒 Other Changes\n#{others.map{|l| "* #{l}"}.join("\n")}\n\n" unless others.empty?
+
+    gradle(
+      task: "assemble",
+      build_type: "Release",
+      project_dir: "android/",
+      properties: {
+        "versionCode" => version_code,
+        "versionName" => version_name,
+        "android.injected.signing.store.file" => "release.jks",
+        "android.injected.signing.store.password" => ENV["KEYSTORE_PASSWORD"],
+        "android.injected.signing.key.alias" => ENV["KEY_ALIAS"],
+        "android.injected.signing.key.password" => ENV["KEY_PASSWORD"],
+      }
+    )
+
+    # Use a rolling tag for nightly
+    set_github_release(
+      repository_name: "shekohex/whisperpp",
+      tag_name: "nightly",
+      name: "Nightly Build",
+      body: "Automated nightly build from branch main.\n\n## Changes in this build\n#{changelog.empty? ? "No changes detected." : changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{version_name}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/nightly/app-release.apk) |",
+      commitish: "main",
+      upload_assets: ["android/app/build/outputs/apk/release/app-release.apk"]
+    )
+  end
+
+  desc "Build and release a tagged version"
+  lane :release do
+    # Get tag name from environment
+    tag = ENV["GITHUB_REF_NAME"]
+    version_code = ENV["GITHUB_RUN_NUMBER"] || "1"
+
+    # Generate Changelog
+    begin
+      previous_tag = sh("git describe --tags --abbrev=0 HEAD^").strip
+      log_range = "#{previous_tag}..HEAD"
+    rescue
+      log_range = ""
+    end
+    log_cmd = "git log #{log_range} --pretty=format:'%s'"
+    raw_log = sh(log_cmd).strip
+    
+    features = []
+    fixes = []
+    perf = []
+    docs = []
+    chore = []
+    others = []
+    
+    raw_log.each_line do |line|
+      clean_line = line.strip
+      if clean_line.start_with?("feat")
+        features << clean_line
+      elsif clean_line.start_with?("fix")
+        fixes << clean_line
+      elsif clean_line.start_with?("perf")
+        perf << clean_line
+      elsif clean_line.start_with?("docs")
+        docs << clean_line
+      elsif clean_line.start_with?("chore")
+        chore << clean_line
+      else
+        others << clean_line
+      end
+    end
+    
+    changelog = ""
+    changelog += "### ✨ New Features\n#{features.map{|l| "* #{l}"}.join("\n")}\n\n" unless features.empty?
+    changelog += "### 🐛 Bug Fixes\n#{fixes.map{|l| "* #{l}"}.join("\n")}\n\n" unless fixes.empty?
+    changelog += "### 🚀 Performance Improvements\n#{perf.map{|l| "* #{l}"}.join("\n")}\n\n" unless perf.empty?
+    changelog += "### 📝 Documentation\n#{docs.map{|l| "* #{l}"}.join("\n")}\n\n" unless docs.empty?
+    changelog += "### 🛠 Maintenance\n#{chore.map{|l| "* #{l}"}.join("\n")}\n\n" unless chore.empty?
+    changelog += "### 🗒 Other Changes\n#{others.map{|l| "* #{l}"}.join("\n")}\n\n" unless others.empty?
+
+    gradle(
+      task: "assemble",
+      build_type: "Release",
+      project_dir: "android/",
+      properties: {
+        "versionCode" => version_code,
+        "versionName" => tag,
+        "android.injected.signing.store.file" => "release.jks",
+        "android.injected.signing.store.password" => ENV["KEYSTORE_PASSWORD"],
+        "android.injected.signing.key.alias" => ENV["KEY_ALIAS"],
+        "android.injected.signing.key.password" => ENV["KEY_PASSWORD"],
+      }
+    )
+
+    set_github_release(
+      repository_name: "shekohex/whisperpp",
+      tag_name: tag,
+      name: "Release #{tag}",
+      body: "## Changelog\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{tag}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/#{tag}/app-release.apk) |",
+      upload_assets: ["android/app/build/outputs/apk/release/app-release.apk"]
+    )
+  end
+end
