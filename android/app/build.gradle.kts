@@ -11,8 +11,8 @@ android {
         applicationId = "com.github.shekohex.whisperpp"
         minSdk = 24
         targetSdk = 34
-        versionCode = (project.findProperty("versionCode")?.toString()?.toInt()) ?: 4
-        versionName = (project.findProperty("versionName")?.toString()) ?: "0.4"
+        versionCode = (project.findProperty("versionCode")?.toString()?.toInt()) ?: 1
+        versionName = (project.findProperty("versionName")?.toString()) ?: "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
