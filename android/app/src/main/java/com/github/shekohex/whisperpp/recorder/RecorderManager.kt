@@ -1,5 +1,5 @@
 /*
- * This file is part of Whisper To Input, see <https://github.com/j3soon/whisper-to-input>.
+ * This file is part of Whisper++, see <https://github.com/j3soon/whisper-to-input>.
  *
  * Copyright (c) 2023-2025 Yan-Bin Diau, Johnson Sun
  *
@@ -17,7 +17,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.example.whispertoinput.recorder
+package com.github.shekohex.whisperpp.recorder
 
 import android.Manifest
 import android.content.Context
@@ -26,7 +26,7 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.example.whispertoinput.R
+import com.github.shekohex.whisperpp.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -74,6 +74,7 @@ class RecorderManager(context: Context) {
             } else if (Build.VERSION.SDK_INT >= MEDIA_RECORDER_CONSTRUCTOR_DEPRECATION_API_LEVEL) {
                 MediaRecorder(context)
             } else {
+                @Suppress("DEPRECATION")
                 MediaRecorder()
             }
 

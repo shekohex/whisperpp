@@ -1,4 +1,4 @@
-package com.example.whispertoinput.data
+package com.github.shekohex.whisperpp.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -70,11 +70,5 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
     
-    // Helper to get profile for a language, falling back to "default" or first available
-    suspend fun getProfile(languageCode: String): LanguageProfile? {
-        // This is a synchronous check against current state, might not be ideal for Flow
-        // Typically we observe the Flow. But for one-off service calls this is useful.
-        // However, Repository usually exposes Flows.
-        return null 
-    }
+
 }

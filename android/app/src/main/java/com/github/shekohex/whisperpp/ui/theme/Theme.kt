@@ -1,4 +1,4 @@
-package com.example.whispertoinput.ui.theme
+package com.github.shekohex.whisperpp.ui.theme
 
 import android.app.Activity
 import android.os.Build

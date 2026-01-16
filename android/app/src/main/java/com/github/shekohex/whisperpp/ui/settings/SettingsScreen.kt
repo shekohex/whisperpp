@@ -1,4 +1,4 @@
-package com.example.whispertoinput.ui.settings
+package com.github.shekohex.whisperpp.ui.settings
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.clickable
@@ -9,15 +9,31 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import android.view.inputmethod.InputMethodManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -26,8 +42,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.whispertoinput.*
-import com.example.whispertoinput.data.*
+import com.github.shekohex.whisperpp.*
+import com.github.shekohex.whisperpp.data.*
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -880,7 +896,7 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     onCheckedChange = { scope.launch { dataStore.edit { s -> s[AUTO_SWITCH_BACK] = it } } }
                 )
                 SettingsToggle(
-                    icon = Icons.Default.Send,
+                    icon = Icons.AutoMirrored.Filled.Send,
                     title = "Auto Transcribe",
                     checked = settingsState?.get(AUTO_TRANSCRIBE_ON_PAUSE) ?: true,
                     onCheckedChange = { scope.launch { dataStore.edit { s -> s[AUTO_TRANSCRIBE_ON_PAUSE] = it } } }
@@ -910,7 +926,7 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     onCheckedChange = { scope.launch { dataStore.edit { s -> s[HAPTIC_FEEDBACK_ENABLED] = it } } }
                 )
                 SettingsToggle(
-                    icon = Icons.Filled.VolumeUp,
+                    icon = Icons.AutoMirrored.Filled.VolumeUp,
                     title = "Sound Effects",
                     checked = settingsState?.get(SOUND_EFFECTS_ENABLED) ?: true,
                     onCheckedChange = { scope.launch { dataStore.edit { s -> s[SOUND_EFFECTS_ENABLED] = it } } }
@@ -923,32 +939,108 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
 
 @Composable
 fun SuggestedCard() {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Permission State
+    var hasMicPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    // Permission Launcher
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted -> hasMicPermission = isGranted }
+    )
+
+    // IME State
+    fun checkImeEnabled(): Boolean {
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        val enabledImes = imm.enabledInputMethodList
+        return enabledImes.any { it.packageName == context.packageName }
+    }
+
+    var isImeEnabled by remember { mutableStateOf(checkImeEnabled()) }
+
+    // Re-check on resume
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasMicPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                isImeEnabled = checkImeEnabled()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Card(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).clickable {
+                if (!hasMicPermission) {
+                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                } else {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(intent)
+                }
+            },
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            colors = CardDefaults.cardColors(
+                containerColor = if (hasMicPermission) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.errorContainer
+            )
         ) {
             Column(Modifier.padding(16.dp)) {
-                Icon(Icons.Default.Mic, null)
+                Icon(
+                    Icons.Default.Mic,
+                    null,
+                    tint = if (hasMicPermission) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                )
                 Spacer(Modifier.height(8.dp))
-                Text("Microphone", fontWeight = FontWeight.Bold)
-                Text("Permission Granted", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                Text(
+                    "Microphone",
+                    fontWeight = FontWeight.Bold,
+                    color = if (hasMicPermission) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                )
+                Text(
+                    if (hasMicPermission) "Permission Granted" else "Tap to Grant",
+                    fontSize = 12.sp,
+                    color = if (hasMicPermission) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                )
             }
         }
         Card(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).clickable {
+                context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+            },
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+            colors = CardDefaults.cardColors(
+                containerColor = if (isImeEnabled) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant
+            )
         ) {
             Column(Modifier.padding(16.dp)) {
-                Icon(Icons.Default.Keyboard, null)
+                Icon(
+                    Icons.Default.Keyboard,
+                    null,
+                    tint = if (isImeEnabled) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(Modifier.height(8.dp))
-                Text("Keyboard", fontWeight = FontWeight.Bold)
-                Text("Active", fontSize = 12.sp, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                Text(
+                    "Keyboard",
+                    fontWeight = FontWeight.Bold,
+                    color = if (isImeEnabled) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    if (isImeEnabled) "Active" else "Tap to Enable",
+                    fontSize = 12.sp,
+                    color = if (isImeEnabled) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

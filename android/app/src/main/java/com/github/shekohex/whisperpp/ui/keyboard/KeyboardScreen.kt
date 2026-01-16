@@ -1,4 +1,4 @@
-package com.example.whispertoinput.ui.keyboard
+package com.github.shekohex.whisperpp.ui.keyboard
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -33,8 +33,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import com.example.whispertoinput.R
-import com.example.whispertoinput.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.R
+import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -497,7 +497,7 @@ fun MainActionButton(
                 .background(containerColor)
                 .pointerInput(Unit) {
                     awaitEachGesture {
-                        val down = awaitFirstDown()
+                        awaitFirstDown()
                         val stateAtDown = currentState
                         
                         if (stateAtDown == KeyboardState.Ready) {
@@ -506,8 +506,6 @@ fun MainActionButton(
                             
                             var currentDragX = 0f
                             var currentDragY = 0f
-                            var didDiscard = false
-                            var didLock = false
                             var didHapticAtThreshold = false
                             var didHapticAtLockThreshold = false
                             
@@ -554,26 +552,21 @@ fun MainActionButton(
                                     val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
                                     
                                     if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
-                                        didDiscard = true
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         onDiscardAction()
                                     } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
-                                        didLock = true
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         onLockAction()
+                                    } else {
+                                        onMicAction()
                                     }
                                     onSwipeProgress(0f)
                                     onSwipeUpProgress(0f)
                                     break
                                 }
                             }
-                            
-                            if (!didDiscard && !didLock) {
-                                onMicAction()
-                            }
                         } else if (stateAtDown == KeyboardState.RecordingLocked) {
                             var currentDragX = 0f
-                            var didDiscard = false
                             var didHapticAtThreshold = false
                             
                             val up = withTimeoutOrNull(400) {
@@ -605,7 +598,6 @@ fun MainActionButton(
                                     if (!change.pressed) {
                                         val finalProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
                                         if (finalProgress >= 1f) {
-                                            didDiscard = true
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             onDiscardAction()
                                         }
@@ -626,8 +618,6 @@ fun MainActionButton(
                                 
                                 var currentDragX = 0f
                                 var currentDragY = 0f
-                                var didDiscard = false
-                                var didLock = false
                                 var didHapticAtThreshold = false
                                 var didHapticAtLockThreshold = false
                                 
@@ -674,22 +664,18 @@ fun MainActionButton(
                                         val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
                                         
                                         if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
-                                            didDiscard = true
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             onDiscardAction()
                                         } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
-                                            didLock = true
                                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             onLockAction()
+                                        } else {
+                                            onMicAction()
                                         }
                                         onSwipeProgress(0f)
                                         onSwipeUpProgress(0f)
                                         break
                                     }
-                                }
-                                
-                                if (!didDiscard && !didLock) {
-                                    onMicAction()
                                 }
                             }
                         }

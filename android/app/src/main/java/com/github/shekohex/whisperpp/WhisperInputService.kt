@@ -1,5 +1,5 @@
 /*
- * This file is part of Whisper To Input, see <https://github.com/j3soon/whisper-to-input>.
+ * This file is part of Whisper++, see <https://github.com/j3soon/whisper-to-input>.
  *
  * Copyright (c) 2023-2025 Yan-Bin Diau, Johnson Sun
  *
@@ -17,7 +17,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.example.whispertoinput
+package com.github.shekohex.whisperpp
 
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
@@ -55,11 +55,11 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.example.whispertoinput.data.SettingsRepository
-import com.example.whispertoinput.keyboard.KeyboardState
-import com.example.whispertoinput.recorder.RecorderManager
-import com.example.whispertoinput.ui.keyboard.KeyboardScreen
-import com.example.whispertoinput.ui.theme.WhisperToInputTheme
+import com.github.shekohex.whisperpp.data.SettingsRepository
+import com.github.shekohex.whisperpp.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.recorder.RecorderManager
+import com.github.shekohex.whisperpp.ui.keyboard.KeyboardScreen
+import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
 import com.github.liuyueyi.quick.transfer.ChineseUtils
 import com.github.liuyueyi.quick.transfer.constants.TransType
 import kotlinx.coroutines.CoroutineScope
@@ -147,8 +147,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         if (provider != null) {
                             val temperature = if (provider.temperature > 0) provider.temperature else prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
                             val promptTemplate = if (provider.prompt.isNotEmpty()) provider.prompt else prefs[SMART_FIX_PROMPT] ?: ""
-                            
-                            val currentLanguage = prefs[LANGUAGE_CODE] ?: "auto"
+
                             Log.d(TAG, "Smart Fix using Provider: ${provider.name}, Model: $modelId")
 
                             withContext(Dispatchers.IO) {
@@ -250,6 +249,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             shouldOfferSwitchingToNextInputMethod()
         } else {
             val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+            @Suppress("DEPRECATION")
             imm.shouldOfferSwitchingToNextInputMethod(window?.window?.attributes?.token)
         }
 
@@ -508,6 +508,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         if (Build.VERSION.SDK_INT >= IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL) switchToPreviousInputMethod()
         else {
             val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+            @Suppress("DEPRECATION")
             imm.switchToLastInputMethod(window?.window?.attributes?.token)
         }
     }

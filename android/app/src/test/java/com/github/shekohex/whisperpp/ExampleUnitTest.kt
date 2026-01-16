@@ -1,4 +1,4 @@
-package com.example.whispertoinput
+package com.github.shekohex.whisperpp
 
 import org.junit.Test
 

@@ -1,10 +1,10 @@
-package com.example.whispertoinput
+package com.github.shekohex.whisperpp
 
 import android.content.Context
 import android.util.Log
-import com.example.whispertoinput.data.ProviderType
-import com.example.whispertoinput.data.ServiceProvider
-import com.example.whispertoinput.data.ThinkingType
+import com.github.shekohex.whisperpp.data.ProviderType
+import com.github.shekohex.whisperpp.data.ServiceProvider
+import com.github.shekohex.whisperpp.data.ThinkingType
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody

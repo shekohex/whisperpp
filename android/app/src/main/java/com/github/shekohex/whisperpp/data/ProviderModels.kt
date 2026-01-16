@@ -1,4 +1,4 @@
-package com.example.whispertoinput.data
+package com.github.shekohex.whisperpp.data
 
 import java.util.UUID
 

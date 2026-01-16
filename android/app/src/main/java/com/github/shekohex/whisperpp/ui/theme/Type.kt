@@ -1,4 +1,4 @@
-package com.example.whispertoinput.ui.theme
+package com.github.shekohex.whisperpp.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

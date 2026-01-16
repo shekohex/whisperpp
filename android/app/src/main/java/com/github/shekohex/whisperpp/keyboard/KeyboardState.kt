@@ -1,4 +1,4 @@
-package com.example.whispertoinput.keyboard
+package com.github.shekohex.whisperpp.keyboard
 
 enum class KeyboardState {
     Ready,

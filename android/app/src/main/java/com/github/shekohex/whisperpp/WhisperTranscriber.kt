@@ -1,5 +1,5 @@
 /*
- * This file is part of Whisper To Input, see <https://github.com/j3soon/whisper-to-input>.
+ * This file is part of Whisper++, see <https://github.com/j3soon/whisper-to-input>.
  *
  * Copyright (c) 2023-2025 Yan-Bin Diau, Johnson Sun
  *
@@ -17,12 +17,12 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.example.whispertoinput
+package com.github.shekohex.whisperpp
 
 import android.content.Context
 import android.util.Log
-import com.example.whispertoinput.data.ProviderType
-import com.example.whispertoinput.data.ServiceProvider
+import com.github.shekohex.whisperpp.data.ProviderType
+import com.github.shekohex.whisperpp.data.ServiceProvider
 import kotlinx.coroutines.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -85,7 +85,6 @@ class WhisperTranscriber {
             val client = getClient(timeout)
             
             val request = buildWhisperRequest(
-                context,
                 filename,
                 mediaType,
                 provider,
@@ -163,7 +162,6 @@ class WhisperTranscriber {
     }
 
     private fun buildWhisperRequest(
-        context: Context,
         filename: String,
         mediaType: String,
         provider: ServiceProvider,

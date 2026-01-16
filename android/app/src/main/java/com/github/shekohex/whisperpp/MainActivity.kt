@@ -1,4 +1,4 @@
-package com.example.whispertoinput
+package com.github.shekohex.whisperpp
 
 import android.Manifest
 import android.content.Context
@@ -16,8 +16,8 @@ import androidx.core.content.ContextCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
-import com.example.whispertoinput.ui.settings.SettingsNavigation
-import com.example.whispertoinput.ui.theme.WhisperToInputTheme
+import com.github.shekohex.whisperpp.ui.settings.SettingsNavigation
+import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
