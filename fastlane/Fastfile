@@ -71,6 +71,7 @@ platform :android do
     # Use a rolling tag for nightly
     set_github_release(
       repository_name: "shekohex/whisperpp",
+      api_token: ENV["GITHUB_API_TOKEN"],
       tag_name: "nightly",
       name: "Nightly Build",
       description: "Automated nightly build from branch main.\n\n## Changes in this build\n#{changelog.empty? ? "No changes detected." : changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{version_name}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/nightly/app-release.apk) |",
@@ -144,6 +145,7 @@ platform :android do
 
     set_github_release(
       repository_name: "shekohex/whisperpp",
+      api_token: ENV["GITHUB_API_TOKEN"],
       tag_name: tag,
       name: "Release #{tag}",
       description: "## Changelog\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{tag}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/#{tag}/app-release.apk) |",
