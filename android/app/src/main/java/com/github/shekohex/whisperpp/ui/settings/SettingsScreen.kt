@@ -1277,6 +1277,8 @@ fun UpdateSettingsSection(dataStore: DataStore<Preferences>, showUpdate: Boolean
     val isChecking by updateManager.isChecking.collectAsState()
     val installResult by updateManager.installResult.collectAsState()
 
+    val currentChannel = settingsState?.get(UPDATE_CHANNEL) ?: "stable"
+
     LaunchedEffect(Unit) {
         updateManager.observeExistingDownload(scope)
         if (showUpdate) {
@@ -1284,8 +1286,6 @@ fun UpdateSettingsSection(dataStore: DataStore<Preferences>, showUpdate: Boolean
             updateManager.checkForUpdate(scope, channel)
         }
     }
-
-    val currentChannel = settingsState?.get(UPDATE_CHANNEL) ?: "stable"
     var channelExpanded by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
 
