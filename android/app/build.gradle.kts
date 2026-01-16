@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.whispertoinput"
+    namespace = "com.github.shekohex.whisperpp"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.whispertoinput"
+        applicationId = "com.github.shekohex.whisperpp"
         minSdk = 24
         targetSdk = 34
         versionCode = 4

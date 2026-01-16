@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Whisper To Input"
+rootProject.name = "Whisper++"
 include(":app")
