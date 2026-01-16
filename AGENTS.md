@@ -30,13 +30,26 @@
 - Single method: `./android/gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.YourTest#testName`
 - Runner: `androidx.test.runner.AndroidJUnitRunner`.
 
-## Release Steps (Android Studio)
-- Bump `versionCode` and `versionName` in `android/app/build.gradle.kts`.
-- Retrieve signing keystore + password.
-- Menu: `Build > Generate Signed App Bundle / APK...`
-- Select `APK`, choose keystore, select `Debug`.
-- Rename output `android/app/build/outputs/apk/debug/app-debug.apk`.
-- Tag and release in GitHub.
+## Releasing
+When the user asks for a new release, follow this protocol:
+
+1. **Clarify Requirements** (if not provided):
+   - What is the target `versionName` (e.g., "1.0.0")?
+   - Should `versionCode` be incremented automatically (default)?
+
+2. **Update Configuration**:
+   - Edit `android/app/build.gradle.kts`.
+   - Update `defaultConfig.versionCode` and `defaultConfig.versionName`.
+
+3. **Commit Changes**:
+   - `git add android/app/build.gradle.kts`
+   - `git commit -m "chore: bump version to <versionName>"`
+   - `git push origin main`
+
+4. **Trigger CI/CD**:
+   - Create annotated tag: `git tag -a v<versionName> -m "Release v<versionName>"`
+   - Push tag: `git push origin v<versionName>`
+   - This triggers the `release` workflow in GitHub Actions.
 
 ## Project Structure
 - Main code: `android/app/src/main`.
