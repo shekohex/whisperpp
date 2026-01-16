@@ -22,10 +22,10 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file(project.findProperty("android.injected.signing.store.file") ?: "release.jks")
-            storePassword = project.findProperty("android.injected.signing.store.password") as String?
-            keyAlias = project.findProperty("android.injected.signing.key.alias") as String?
-            keyPassword = project.findProperty("android.injected.signing.key.password") as String?
+            storeFile = file(project.findProperty("signingStoreFile") ?: "release.jks")
+            storePassword = project.findProperty("signingStorePassword") as String?
+            keyAlias = project.findProperty("signingKeyAlias") as String?
+            keyPassword = project.findProperty("signingKeyPassword") as String?
         }
     }
 

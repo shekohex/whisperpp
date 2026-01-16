@@ -61,10 +61,10 @@ platform :android do
       properties: {
         "versionCode" => version_code,
         "versionName" => version_name,
-        "android.injected.signing.store.file" => "release.jks",
-        "android.injected.signing.store.password" => ENV["KEYSTORE_PASSWORD"],
-        "android.injected.signing.key.alias" => ENV["KEY_ALIAS"],
-        "android.injected.signing.key.password" => ENV["KEY_PASSWORD"],
+        "signingStoreFile" => File.expand_path("android/app/release.jks"),
+        "signingStorePassword" => ENV["KEYSTORE_PASSWORD"],
+        "signingKeyAlias" => ENV["KEY_ALIAS"],
+        "signingKeyPassword" => ENV["KEY_PASSWORD"],
       }
     )
 
@@ -135,10 +135,10 @@ platform :android do
       properties: {
         "versionCode" => version_code,
         "versionName" => tag,
-        "android.injected.signing.store.file" => "release.jks",
-        "android.injected.signing.store.password" => ENV["KEYSTORE_PASSWORD"],
-        "android.injected.signing.key.alias" => ENV["KEY_ALIAS"],
-        "android.injected.signing.key.password" => ENV["KEY_PASSWORD"],
+        "signingStoreFile" => File.expand_path("android/app/release.jks"),
+        "signingStorePassword" => ENV["KEYSTORE_PASSWORD"],
+        "signingKeyAlias" => ENV["KEY_ALIAS"],
+        "signingKeyPassword" => ENV["KEY_PASSWORD"],
       }
     )
 
