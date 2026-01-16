@@ -1,4 +1,13 @@
-# Whisper++
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="app_icon.svg">
+    <img alt="Whisper++ Logo" src="app_icon.svg" width="200">
+  </picture>
+  <br>
+  <b>Whisper++</b>
+  <br>
+  <i>Seamless speech-to-text integration for Android.</i>
+</p>
 
 An Android keyboard that performs speech-to-text (STT/ASR) using OpenAI Whisper. Input recognized text seamlessly in any app.
 
