@@ -7,6 +7,13 @@
   <b>Whisper++</b>
   <br>
   <i>Seamless speech-to-text integration for Android.</i>
+  <br><br>
+  <a href="https://github.com/shekohex/whisperpp/releases/latest">
+    <img src="https://img.shields.io/github/v/release/shekohex/whisperpp?label=Stable&logo=github&style=for-the-badge&color=green" alt="Stable Release">
+  </a>
+  <a href="https://github.com/shekohex/whisperpp/releases/tag/nightly">
+    <img src="https://img.shields.io/badge/Nightly-Download-blue?logo=github&style=for-the-badge" alt="Nightly Release">
+  </a>
 </p>
 
 An Android keyboard that performs speech-to-text (STT/ASR) using OpenAI Whisper. Input recognized text seamlessly in any app.
