@@ -19,7 +19,7 @@ An Android keyboard that performs speech-to-text (STT/ASR) using OpenAI Whisper.
 
 ## Installation
 
-1. Download the latest APK from the [Releases](https://github.com/shekohex/whisper-to-input/releases) page.
+1. Download the latest APK from the [Releases](https://github.com/shekohex/whisperpp/releases) page.
 2. Install the APK (allow "Install from unknown sources").
 3. Grant `RECORD_AUDIO` and `POST_NOTIFICATIONS` permissions.
 4. Enable **Whisper++** in your system Language & Input settings.

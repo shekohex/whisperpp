@@ -1,5 +1,5 @@
 /*
- * This file is part of Whisper++, see <https://github.com/j3soon/whisper-to-input>.
+ * This file is part of Whisper++, see <https://github.com/shekohex/whisperpp>.
  *
  * Copyright (c) 2023-2025 Yan-Bin Diau, Johnson Sun
  *
