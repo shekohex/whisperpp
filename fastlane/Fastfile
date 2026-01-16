@@ -1,5 +1,74 @@
 default_platform(:android)
 
+def generate_changelog(log_range)
+  repo_url = "https://github.com/shekohex/whisperpp"
+  # Format: Hash|Subject
+  cmd = "git log #{log_range} --pretty=format:'%H|%s'"
+  begin
+    raw_log = sh(cmd).strip
+  rescue => ex
+    UI.error("Error generating changelog: #{ex}")
+    return "No changes detected."
+  end
+  
+  features = []
+  fixes = []
+  perf = []
+  docs = []
+  chore = []
+  others = []
+  
+  raw_log.each_line do |line|
+    parts = line.strip.split('|', 2)
+    next if parts.length < 2
+    hash = parts[0]
+    msg = parts[1]
+    
+    # Short hash for display, full hash for link
+    short_hash = hash[0, 7]
+    link = "[#{short_hash}](#{repo_url}/commit/#{hash})"
+    
+    # Detect type to categorize
+    type_match = msg.match(/^(feat|fix|perf|docs|chore|test|style|refactor)(\(.*\))?:\s*/i)
+    
+    # Strip the prefix for the display message
+    if type_match
+      clean_msg = msg.sub(type_match[0], '')
+    else
+      clean_msg = msg
+    end
+    
+    # Capitalize first letter
+    clean_msg = clean_msg[0].upcase + clean_msg[1..-1] if clean_msg.length > 0
+    
+    entry = "#{clean_msg} (#{link})"
+
+    if msg.match?(/^feat/i)
+      features << entry
+    elsif msg.match?(/^fix/i)
+      fixes << entry
+    elsif msg.match?(/^perf/i)
+      perf << entry
+    elsif msg.match?(/^docs/i)
+      docs << entry
+    elsif msg.match?(/^chore/i)
+      chore << entry
+    else
+      others << entry
+    end
+  end
+  
+  changelog = ""
+  changelog += "### ✨ New Features\n#{features.map{|l| "* #{l}"}.join("\n")}\n\n" unless features.empty?
+  changelog += "### 🐛 Bug Fixes\n#{fixes.map{|l| "* #{l}"}.join("\n")}\n\n" unless fixes.empty?
+  changelog += "### 🚀 Performance Improvements\n#{perf.map{|l| "* #{l}"}.join("\n")}\n\n" unless perf.empty?
+  changelog += "### 📝 Documentation\n#{docs.map{|l| "* #{l}"}.join("\n")}\n\n" unless docs.empty?
+  changelog += "### 🛠 Maintenance\n#{chore.map{|l| "* #{l}"}.join("\n")}\n\n" unless chore.empty?
+  changelog += "### 🗒 Other Changes\n#{others.map{|l| "* #{l}"}.join("\n")}\n\n" unless others.empty?
+  
+  return changelog.empty? ? "No changes detected." : changelog
+end
+
 platform :android do
   desc "Build and release a nightly APK"
   lane :nightly do
@@ -18,41 +87,8 @@ platform :android do
       log_range = "--since='24 hours ago'"
     end
     
-    raw_log = sh("git log #{log_range} --pretty=format:'%s'").strip
+    changelog = generate_changelog(log_range)
     
-    features = []
-    fixes = []
-    perf = []
-    docs = []
-    chore = []
-    others = []
-    
-    raw_log.each_line do |line|
-      clean_line = line.strip
-      next if clean_line.empty?
-      if clean_line.start_with?("feat")
-        features << clean_line
-      elsif clean_line.start_with?("fix")
-        fixes << clean_line
-      elsif clean_line.start_with?("perf")
-        perf << clean_line
-      elsif clean_line.start_with?("docs")
-        docs << clean_line
-      elsif clean_line.start_with?("chore")
-        chore << clean_line
-      else
-        others << clean_line
-      end
-    end
-    
-    changelog = ""
-    changelog += "### ✨ New Features\n#{features.map{|l| "* #{l}"}.join("\n")}\n\n" unless features.empty?
-    changelog += "### 🐛 Bug Fixes\n#{fixes.map{|l| "* #{l}"}.join("\n")}\n\n" unless fixes.empty?
-    changelog += "### 🚀 Performance Improvements\n#{perf.map{|l| "* #{l}"}.join("\n")}\n\n" unless perf.empty?
-    changelog += "### 📝 Documentation\n#{docs.map{|l| "* #{l}"}.join("\n")}\n\n" unless docs.empty?
-    changelog += "### 🛠 Maintenance\n#{chore.map{|l| "* #{l}"}.join("\n")}\n\n" unless chore.empty?
-    changelog += "### 🗒 Other Changes\n#{others.map{|l| "* #{l}"}.join("\n")}\n\n" unless others.empty?
-
     gradle(
       task: "assemble",
       build_type: "Release",
@@ -70,7 +106,7 @@ platform :android do
 
     # Use a rolling tag for nightly
     # Create release notes file
-    notes = "Automated nightly build from branch main.\n\n## Changes in this build\n#{changelog.empty? ? "No changes detected." : changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{version_name}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/nightly/app-release.apk) |"
+    notes = "Automated nightly build from branch main.\n\n## Changes in this build\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{version_name}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/nightly/app-release.apk) |"
     File.write("nightly_notes.md", notes)
 
     # Clean up old nightly tag and release using gh CLI
@@ -94,40 +130,8 @@ platform :android do
     rescue
       log_range = ""
     end
-    log_cmd = "git log #{log_range} --pretty=format:'%s'"
-    raw_log = sh(log_cmd).strip
     
-    features = []
-    fixes = []
-    perf = []
-    docs = []
-    chore = []
-    others = []
-    
-    raw_log.each_line do |line|
-      clean_line = line.strip
-      if clean_line.start_with?("feat")
-        features << clean_line
-      elsif clean_line.start_with?("fix")
-        fixes << clean_line
-      elsif clean_line.start_with?("perf")
-        perf << clean_line
-      elsif clean_line.start_with?("docs")
-        docs << clean_line
-      elsif clean_line.start_with?("chore")
-        chore << clean_line
-      else
-        others << clean_line
-      end
-    end
-    
-    changelog = ""
-    changelog += "### ✨ New Features\n#{features.map{|l| "* #{l}"}.join("\n")}\n\n" unless features.empty?
-    changelog += "### 🐛 Bug Fixes\n#{fixes.map{|l| "* #{l}"}.join("\n")}\n\n" unless fixes.empty?
-    changelog += "### 🚀 Performance Improvements\n#{perf.map{|l| "* #{l}"}.join("\n")}\n\n" unless perf.empty?
-    changelog += "### 📝 Documentation\n#{docs.map{|l| "* #{l}"}.join("\n")}\n\n" unless docs.empty?
-    changelog += "### 🛠 Maintenance\n#{chore.map{|l| "* #{l}"}.join("\n")}\n\n" unless chore.empty?
-    changelog += "### 🗒 Other Changes\n#{others.map{|l| "* #{l}"}.join("\n")}\n\n" unless others.empty?
+    changelog = generate_changelog(log_range)
 
     gradle(
       task: "assemble",

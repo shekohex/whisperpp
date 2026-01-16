@@ -16,8 +16,11 @@ import androidx.core.content.ContextCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.compose.runtime.*
+import com.github.shekohex.whisperpp.ui.components.SplashScreen
 import com.github.shekohex.whisperpp.ui.settings.SettingsNavigation
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
+import kotlinx.coroutines.delay
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -59,11 +62,22 @@ class MainActivity : ComponentActivity() {
         
         setContent {
             WhisperToInputTheme {
+                var showSplash by remember { mutableStateOf(true) }
+                
+                LaunchedEffect(Unit) {
+                    delay(2500) // Show splash for 2.5 seconds
+                    showSplash = false
+                }
+                
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    SettingsNavigation(dataStore)
+                    if (showSplash) {
+                        SplashScreen()
+                    } else {
+                        SettingsNavigation(dataStore)
+                    }
                 }
             }
         }

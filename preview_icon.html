@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Icon Preview</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: sans-serif;
+            gap: 40px;
+            background-color: #888;
+        }
+        .preview {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            padding: 60px;
+            border-radius: 24px;
+        }
+        .light {
+            background-color: #f0f0f0;
+            color: #333;
+            color-scheme: light;
+        }
+        .dark {
+            background-color: #333;
+            color: #fff;
+            color-scheme: dark;
+        }
+        img {
+            width: 256px;
+            height: 256px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border-radius: 48px;
+        }
+    </style>
+</head>
+<body>
+    <div class="preview light">
+        <h2>Light Mode</h2>
+        <img src="app_icon.svg" alt="App Icon Light">
+    </div>
+    <div class="preview dark">
+        <h2>Dark Mode</h2>
+        <img src="app_icon.svg" alt="App Icon Dark">
+    </div>
+</body>
+</html>

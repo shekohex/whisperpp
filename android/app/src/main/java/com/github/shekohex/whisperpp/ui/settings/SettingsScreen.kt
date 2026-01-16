@@ -42,6 +42,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.github.shekohex.whisperpp.ui.components.VoiceWaveform
 import com.github.shekohex.whisperpp.*
 import com.github.shekohex.whisperpp.data.*
 import kotlinx.coroutines.flow.map
@@ -142,6 +143,19 @@ fun MainSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHost
                         title = "Keyboard Behavior",
                         subtitle = "Haptics, Auto-start, etc.",
                         onClick = { navController.navigate(SettingsScreen.Keyboard.route) }
+                    )
+                }
+            }
+
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    VoiceWaveform(
+                        modifier = Modifier.size(120.dp)
                     )
                 }
             }

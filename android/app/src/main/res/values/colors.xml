@@ -4,4 +4,5 @@
     <color name="theme_light_grey">#d9d9d9</color>
     <color name="theme_rich_black">#FF001A23</color>
     <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="ic_launcher_circle">#EEEEEE</color>
 </resources>

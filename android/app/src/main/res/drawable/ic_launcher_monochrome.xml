@@ -6,36 +6,36 @@
     
     <!-- Bar 1 -->
     <path
-        android:pathData="M32,34 L32,74"
+        android:pathData="M38.4,39.6 L38.4,70.0"
         android:strokeColor="#000000"
-        android:strokeWidth="8"
+        android:strokeWidth="5.17"
         android:strokeLineCap="round" />
     
     <!-- Bar 2 -->
     <path
-        android:pathData="M43,50 L43,74"
+        android:pathData="M46.2,55.5 L46.2,66.3"
         android:strokeColor="#000000"
-        android:strokeWidth="8"
+        android:strokeWidth="5.17"
         android:strokeLineCap="round" />
     
     <!-- Bar 3 -->
     <path
-        android:pathData="M54,34 L54,74"
+        android:pathData="M54,44.7 L54,63.2"
         android:strokeColor="#000000"
-        android:strokeWidth="8"
+        android:strokeWidth="5.17"
         android:strokeLineCap="round" />
     
     <!-- Bar 4 -->
     <path
-        android:pathData="M65,50 L65,74"
+        android:pathData="M61.8,55.7 L61.8,66.5"
         android:strokeColor="#000000"
-        android:strokeWidth="8"
+        android:strokeWidth="5.17"
         android:strokeLineCap="round" />
     
     <!-- Bar 5 -->
     <path
-        android:pathData="M76,34 L76,74"
+        android:pathData="M69.6,39.6 L69.6,70.0"
         android:strokeColor="#000000"
-        android:strokeWidth="8"
+        android:strokeWidth="5.17"
         android:strokeLineCap="round" />
 </vector>

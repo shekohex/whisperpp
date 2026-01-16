@@ -1,14 +1,43 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" fill="#FFFFFF"/>
-  <circle cx="512" cy="512" r="312" fill="none" stroke="#EEEEEE" stroke-width="10"/>
-  <!-- Bar 1: Blue -->
-  <rect x="303" y="322" width="76" height="380" rx="38" fill="#4285F4"/>
-  <!-- Bar 2: Red -->
-  <rect x="407" y="474" width="76" height="228" rx="38" fill="#EA4335"/>
-  <!-- Bar 3: Yellow -->
-  <rect x="512" y="322" width="76" height="380" rx="38" fill="#FBBC05"/>
-  <!-- Bar 4: Green -->
-  <rect x="616" y="474" width="76" height="228" rx="38" fill="#34A853"/>
-  <!-- Bar 5: Blue -->
-  <rect x="721" y="322" width="76" height="380" rx="38" fill="#4285F4"/>
+  <style>
+    .bg { fill: #FFFFFF; }
+    .circle { stroke: #EEEEEE; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #1A1A1A; }
+      .circle { stroke: #333333; }
+    }
+
+    .bar {
+      animation: wave-anim 5s ease-in-out infinite;
+    }
+
+    @keyframes wave-anim {
+      /* Start: Low-amplitude uniform height */
+      0%, 15% { transform: scaleY(0.2) translateY(0); }
+      
+      /* Active Wave Phase */
+      25% { transform: scaleY(1.2) translateY(-40px); }
+      35% { transform: scaleY(0.5) translateY(40px); }
+      45% { transform: scaleY(1.1) translateY(-20px); }
+      55% { transform: scaleY(0.6) translateY(20px); }
+      
+      /* Final Phase: Settle into Lottie proportions */
+      70%, 100% { transform: scaleY(1) translateY(var(--y)); }
+    }
+
+    .b1 { --y: 0px; animation-delay: 0.0s; }
+    .b2 { --y: 58px; animation-delay: 0.1s; }
+    .b3 { --y: 0px; animation-delay: 0.2s; }
+    .b4 { --y: 60px; animation-delay: 0.3s; }
+    .b5 { --y: 0px; animation-delay: 0.4s; }
+
+  </style>
+  <rect class="bg" width="1024" height="1024"/>
+  <g fill="none" stroke-width="49" stroke-linecap="round">
+    <g transform="translate(364.5, 512)"><path class="bar b1" stroke="#4285F4" d="M 0 -144 L 0 144"/></g>
+    <g transform="translate(438.5, 512)"><path class="bar b2" stroke="#EA4335" d="M 0 -51 L 0 51"/></g>
+    <g transform="translate(512.5, 512)"><path class="bar b3" stroke="#FBBC05" d="M 0 -87.5 L 0 87.5"/></g>
+    <g transform="translate(586.5, 512)"><path class="bar b4" stroke="#34A853" d="M 0 -50 L 0 50"/></g>
+    <g transform="translate(659.5, 512)"><path class="bar b5" stroke="#4285F4" d="M 0 -144 L 0 144"/></g>
+  </g>
 </svg>
