@@ -174,8 +174,12 @@ class WhisperTranscriber {
         val requestBody: RequestBody = MultipartBody.Builder().apply {
             setType(MultipartBody.FORM)
             // Determine filename based on media type
-            val formDataFilename = if (mediaType == "audio/ogg") "@audio.ogg" else "@audio.m4a"
-            
+            val formDataFilename = when (mediaType) {
+                "audio/mpeg" -> "@audio.mp3"
+                "audio/ogg" -> "@audio.ogg"
+                "audio/wav" -> "@audio.wav"
+                else -> "@audio.m4a"
+            }
             // Add file to payload
             if (provider.type == ProviderType.OPENAI || provider.type == ProviderType.CUSTOM || provider.type == ProviderType.GEMINI) {
                  addFormDataPart("file", formDataFilename, fileBody)
