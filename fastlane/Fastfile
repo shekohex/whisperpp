@@ -61,7 +61,7 @@ platform :android do
       properties: {
         "versionCode" => version_code,
         "versionName" => version_name,
-        "signingStoreFile" => File.expand_path("android/app/release.jks"),
+        "signingStoreFile" => File.expand_path("../android/app/release.jks", __dir__),
         "signingStorePassword" => ENV["KEYSTORE_PASSWORD"],
         "signingKeyAlias" => ENV["KEY_ALIAS"],
         "signingKeyPassword" => ENV["KEY_PASSWORD"],
@@ -135,7 +135,7 @@ platform :android do
       properties: {
         "versionCode" => version_code,
         "versionName" => tag,
-        "signingStoreFile" => File.expand_path("android/app/release.jks"),
+        "signingStoreFile" => File.expand_path("../android/app/release.jks", __dir__),
         "signingStorePassword" => ENV["KEYSTORE_PASSWORD"],
         "signingKeyAlias" => ENV["KEY_ALIAS"],
         "signingKeyPassword" => ENV["KEY_PASSWORD"],
