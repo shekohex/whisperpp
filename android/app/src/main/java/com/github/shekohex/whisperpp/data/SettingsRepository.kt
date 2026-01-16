@@ -51,7 +51,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             "smart-fix-endpoint",
             "smart-fix-api-key",
             "smart-fix-model",
-            "smart-fix-prompt"
+            "smart-fix-prompt",
+            "update-channel"
         )
         private val EXPORTABLE_BOOLEAN_KEYS = listOf(
             "is-auto-recording-start",

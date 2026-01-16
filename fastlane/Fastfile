@@ -1,8 +1,10 @@
 default_platform(:android)
 
+GITHUB_REPO = ENV["GITHUB_REPO"] || "shekohex/whisperpp"
+ABIS = ["armeabi-v7a", "arm64-v8a", "x86", "x86_64", "universal"]
+
 def generate_changelog(log_range)
-  repo_url = "https://github.com/shekohex/whisperpp"
-  # Format: Hash|Subject
+  repo_url = "https://github.com/#{GITHUB_REPO}"
   cmd = "git log #{log_range} --pretty=format:'%H|%s'"
   begin
     raw_log = sh(cmd).strip
@@ -24,21 +26,17 @@ def generate_changelog(log_range)
     hash = parts[0]
     msg = parts[1]
     
-    # Short hash for display, full hash for link
     short_hash = hash[0, 7]
     link = "[#{short_hash}](#{repo_url}/commit/#{hash})"
     
-    # Detect type to categorize
     type_match = msg.match(/^(feat|fix|perf|docs|chore|test|style|refactor)(\(.*\))?:\s*/i)
     
-    # Strip the prefix for the display message
     if type_match
       clean_msg = msg.sub(type_match[0], '')
     else
       clean_msg = msg
     end
     
-    # Capitalize first letter
     clean_msg = clean_msg[0].upcase + clean_msg[1..-1] if clean_msg.length > 0
     
     entry = "#{clean_msg} (#{link})"
@@ -69,17 +67,64 @@ def generate_changelog(log_range)
   return changelog.empty? ? "No changes detected." : changelog
 end
 
+def compute_sha256(file_path)
+  require 'digest'
+  Digest::SHA256.file(file_path).hexdigest
+end
+
+def find_apk_for_abi(output_dir, abi)
+  pattern = case abi
+            when "universal"
+              "*-universal-release.apk"
+            else
+              "*-#{abi}-release.apk"
+            end
+  Dir.glob(File.join(output_dir, pattern)).first
+end
+
+def generate_latest_json(version_name, version_code, tag, output_dir)
+  require 'json'
+  
+  pub_date = Time.now.utc.strftime("%Y-%m-%dT%H:%M:%S.%LZ")
+  platforms = {}
+  
+  ABIS.each do |abi|
+    apk_path = find_apk_for_abi(output_dir, abi)
+    next unless apk_path && File.exist?(apk_path)
+    
+    signature = "sha256:#{compute_sha256(apk_path)}"
+    filename = File.basename(apk_path)
+    url = "https://github.com/#{GITHUB_REPO}/releases/download/#{tag}/#{filename}"
+    
+    platforms[abi] = {
+      "signature" => signature,
+      "url" => url
+    }
+  end
+  
+  latest = {
+    "version" => version_name,
+    "version_code" => version_code.to_i,
+    "pub_date" => pub_date,
+    "platforms" => platforms
+  }
+  
+  json_path = File.join(output_dir, "latest.json")
+  File.write(json_path, JSON.pretty_generate(latest))
+  json_path
+end
+
+def collect_apk_paths(output_dir)
+  ABIS.map { |abi| find_apk_for_abi(output_dir, abi) }.compact
+end
+
 platform :android do
   desc "Build and release a nightly APK"
   lane :nightly do
-    # Generate short SHA for version name
     sha = sh("git rev-parse --short HEAD").strip
     version_name = "nightly-#{sha}"
-    
-    # Calculate version code based on run number if available
     version_code = ENV["GITHUB_RUN_NUMBER"] || "1"
 
-    # Generate Changelog for Nightly (last 24h or since last tag)
     begin
       previous_tag = sh("git describe --tags --abbrev=0 HEAD^").strip
       log_range = "#{previous_tag}..HEAD"
@@ -97,6 +142,8 @@ platform :android do
       properties: {
         "versionCode" => version_code,
         "versionName" => version_name,
+        "githubRepo" => GITHUB_REPO,
+        "updateChannel" => "nightly",
         "signingStoreFile" => File.expand_path("../android/app/release.jks", __dir__),
         "signingStorePassword" => ENV["KEYSTORE_PASSWORD"],
         "signingKeyAlias" => ENV["KEY_ALIAS"],
@@ -104,33 +151,39 @@ platform :android do
       }
     )
 
-    # Use a rolling tag for nightly
-    # Create release notes file
+    output_dir = File.expand_path("../android/app/build/outputs/apk/release", __dir__)
+    latest_json_path = generate_latest_json(version_name, version_code, "nightly", output_dir)
+    apk_paths = collect_apk_paths(output_dir)
+
     header = "<p align='center'>
-  <img alt='Whisper++ Logo' src='https://raw.githubusercontent.com/shekohex/whisperpp/main/app_icon.svg' width='200'>
+  <img alt='Whisper++ Logo' src='https://raw.githubusercontent.com/#{GITHUB_REPO}/main/app_icon.svg' width='200'>
   <br>
   <b>Whisper++</b>
   <br>
   <i>Seamless speech-to-text integration for Android.</i>
 </p><br>"
-    notes = "#{header}\n\nAutomated nightly build from branch main.\n\n## Changes in this build\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{version_name}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/nightly/app-release.apk) |"
+
+    download_table = "### Downloads\n| Architecture | Link |\n| :--- | :--- |\n"
+    apk_paths.each do |apk_path|
+      filename = File.basename(apk_path)
+      abi = ABIS.find { |a| filename.include?(a) } || "universal"
+      download_table += "| #{abi} | [Download](https://github.com/#{GITHUB_REPO}/releases/download/nightly/#{filename}) |\n"
+    end
+
+    notes = "#{header}\n\nAutomated nightly build from branch main.\n\n## Changes in this build\n#{changelog}\n\n#{download_table}"
     File.write("nightly_notes.md", notes)
 
-    # Clean up old nightly tag and release using gh CLI
-    sh("gh release delete nightly --yes --cleanup-tag --repo shekohex/whisperpp || true")
+    sh("gh release delete nightly --yes --cleanup-tag --repo #{GITHUB_REPO} || true")
 
-    # Create new release using gh CLI
-    apk_path = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
-    sh("gh release create nightly \"#{apk_path}\" --repo shekohex/whisperpp --target main --title 'Nightly Build' --notes-file nightly_notes.md --prerelease")
+    assets = apk_paths.map { |p| "\"#{p}\"" }.join(" ")
+    sh("gh release create nightly #{assets} \"#{latest_json_path}\" --repo #{GITHUB_REPO} --target main --title 'Nightly Build' --notes-file nightly_notes.md --prerelease")
   end
 
   desc "Build and release a tagged version"
   lane :release do
-    # Get tag name from environment
     tag = ENV["GITHUB_REF_NAME"]
     version_code = ENV["GITHUB_RUN_NUMBER"] || "1"
 
-    # Generate Changelog
     begin
       previous_tag = sh("git describe --tags --abbrev=0 --match 'v*' HEAD^").strip
       log_range = "#{previous_tag}..HEAD"
@@ -148,6 +201,8 @@ platform :android do
       properties: {
         "versionCode" => version_code,
         "versionName" => tag,
+        "githubRepo" => GITHUB_REPO,
+        "updateChannel" => "stable",
         "signingStoreFile" => File.expand_path("../android/app/release.jks", __dir__),
         "signingStorePassword" => ENV["KEYSTORE_PASSWORD"],
         "signingKeyAlias" => ENV["KEY_ALIAS"],
@@ -155,18 +210,32 @@ platform :android do
       }
     )
 
-    # Create release notes file
+    output_dir = File.expand_path("../android/app/build/outputs/apk/release", __dir__)
+    latest_json_path = generate_latest_json(tag, version_code, tag, output_dir)
+    apk_paths = collect_apk_paths(output_dir)
+
     header = "<p align='center'>
-  <img alt='Whisper++ Logo' src='https://raw.githubusercontent.com/shekohex/whisperpp/main/app_icon.svg' width='200'>
+  <img alt='Whisper++ Logo' src='https://raw.githubusercontent.com/#{GITHUB_REPO}/main/app_icon.svg' width='200'>
   <br>
   <b>Whisper++</b>
   <br>
   <i>Seamless speech-to-text integration for Android.</i>
 </p><br>"
-    notes = "#{header}\n\n## Changelog\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{tag}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/#{tag}/app-release.apk) |"
+
+    download_table = "### Downloads\n| Architecture | Link |\n| :--- | :--- |\n"
+    apk_paths.each do |apk_path|
+      filename = File.basename(apk_path)
+      abi = ABIS.find { |a| filename.include?(a) } || "universal"
+      download_table += "| #{abi} | [Download](https://github.com/#{GITHUB_REPO}/releases/download/#{tag}/#{filename}) |\n"
+    end
+
+    notes = "#{header}\n\n## Changelog\n#{changelog}\n\n#{download_table}"
     File.write("release_notes.md", notes)
 
-    apk_path = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
-    sh("gh release create #{tag} \"#{apk_path}\" --repo shekohex/whisperpp --title 'Release #{tag}' --notes-file release_notes.md")
+    assets = apk_paths.map { |p| "\"#{p}\"" }.join(" ")
+    sh("gh release create #{tag} #{assets} \"#{latest_json_path}\" --repo #{GITHUB_REPO} --title 'Release #{tag}' --notes-file release_notes.md")
+
+    sh("gh release delete latest --yes --cleanup-tag --repo #{GITHUB_REPO} || true")
+    sh("gh release create latest #{assets} \"#{latest_json_path}\" --repo #{GITHUB_REPO} --title 'Latest Stable' --notes-file release_notes.md --latest")
   end
 end

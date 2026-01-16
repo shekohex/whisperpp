@@ -151,4 +151,22 @@
     </string-array>
     <string name="desc_space_bar">Space Bar</string>
 
+    <!-- Updates -->
+    <string name="update_available_title">Update Available</string>
+    <string name="update_available_message">Version %1$s is available</string>
+    <string name="update_notification_channel_name">App Updates</string>
+    <string name="update_notification_channel_description">Notifications for app updates</string>
+    <string name="settings_update_channel">Update Channel</string>
+    <string name="settings_update_channel_desc">Choose between stable releases or nightly builds.</string>
+    <string name="settings_update_channel_stable">Stable</string>
+    <string name="settings_update_channel_nightly">Nightly</string>
+    <string name="settings_check_for_updates">Check for Updates</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_up_to_date">You are up to date</string>
+    <string name="update_download">Download</string>
+    <string name="update_install">Install</string>
+    <string name="update_downloading">Downloading… %1$d%%</string>
+    <string name="update_verifying">Verifying…</string>
+    <string name="update_failed">Update failed: %1$s</string>
+
 </resources>

@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import com.github.shekohex.whisperpp.ui.components.SplashScreen
 import com.github.shekohex.whisperpp.ui.settings.SettingsNavigation
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
+import com.github.shekohex.whisperpp.updater.UpdateCheckWorker
 import kotlinx.coroutines.delay
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -50,6 +51,8 @@ val SMART_FIX_PROMPT = stringPreferencesKey("smart-fix-prompt")
 val HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic-feedback-enabled")
 val SOUND_EFFECTS_ENABLED = booleanPreferencesKey("sound-effects-enabled")
 
+val UPDATE_CHANNEL = stringPreferencesKey("update-channel")
+
 private const val MICROPHONE_PERMISSION_REQUEST_CODE = 200
 private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 201
 
@@ -59,6 +62,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         checkPermissions()
+        UpdateCheckWorker.schedule(this)
         
         setContent {
             WhisperToInputTheme {
@@ -76,7 +80,8 @@ class MainActivity : ComponentActivity() {
                     if (showSplash) {
                         SplashScreen()
                     } else {
-                        SettingsNavigation(dataStore)
+                        val showUpdate = intent?.getBooleanExtra(UpdateCheckWorker.EXTRA_SHOW_UPDATE, false) ?: false
+                        SettingsNavigation(dataStore, showUpdate)
                     }
                 }
             }

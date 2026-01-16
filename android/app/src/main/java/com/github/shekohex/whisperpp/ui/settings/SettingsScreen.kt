@@ -45,7 +45,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.github.shekohex.whisperpp.ui.components.VoiceWaveform
 import com.github.shekohex.whisperpp.*
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.*
+import com.github.shekohex.whisperpp.updater.*
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -64,11 +66,11 @@ sealed class SettingsScreen(val route: String) {
 }
 
 @Composable
-fun SettingsNavigation(dataStore: DataStore<Preferences>) {
+fun SettingsNavigation(dataStore: DataStore<Preferences>, showUpdate: Boolean = false) {
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = SettingsScreen.Main.route) {
         composable(SettingsScreen.Main.route) {
-            MainSettingsScreen(dataStore, navController)
+            MainSettingsScreen(dataStore, navController, showUpdate)
         }
         composable(SettingsScreen.Backend.route) {
             BackendSettingsScreen(dataStore, navController)
@@ -91,7 +93,11 @@ fun SettingsNavigation(dataStore: DataStore<Preferences>) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
+fun MainSettingsScreen(
+    dataStore: DataStore<Preferences>,
+    navController: NavHostController,
+    showUpdate: Boolean = false
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val settingsState by dataStore.data.collectAsState(initial = null)
@@ -258,6 +264,10 @@ fun MainSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHost
                         }
                     )
                 }
+            }
+
+            item {
+                UpdateSettingsSection(dataStore, showUpdate)
             }
 
             item {
@@ -1250,5 +1260,178 @@ fun SettingsToggle(
         Spacer(Modifier.width(16.dp))
         Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UpdateSettingsSection(dataStore: DataStore<Preferences>, showUpdate: Boolean = false) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val settingsState by dataStore.data.collectAsState(initial = null)
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    val updateManager = remember { UpdateManager(context) }
+    val checkResult by updateManager.checkResult.collectAsState()
+    val downloadState by updateManager.downloadState.collectAsState()
+    val isChecking by updateManager.isChecking.collectAsState()
+    val installResult by updateManager.installResult.collectAsState()
+
+    LaunchedEffect(Unit) {
+        updateManager.observeExistingDownload(scope)
+        if (showUpdate) {
+            val channel = UpdateChannel.fromString(currentChannel)
+            updateManager.checkForUpdate(scope, channel)
+        }
+    }
+
+    val currentChannel = settingsState?.get(UPDATE_CHANNEL) ?: "stable"
+    var channelExpanded by remember { mutableStateOf(false) }
+    var showPermissionDialog by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && showPermissionDialog) {
+                if (updateManager.canInstallPackages()) {
+                    showPermissionDialog = false
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            updateManager.close()
+        }
+    }
+
+    LaunchedEffect(installResult) {
+        if (installResult is InstallResult.PermissionRequired) {
+            showPermissionDialog = true
+        }
+    }
+
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            icon = { Icon(Icons.Default.Security, null) },
+            title = { Text("Permission Required") },
+            text = { Text("To install updates, please allow installing apps from this source.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    updateManager.openInstallPermissionSettings()
+                }) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    SettingsGroup(title = context.getString(R.string.settings_check_for_updates)) {
+        ExposedDropdownMenuBox(
+            expanded = channelExpanded,
+            onExpandedChange = { channelExpanded = !channelExpanded },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            val channelLabel = if (currentChannel == "nightly") {
+                context.getString(R.string.settings_update_channel_nightly)
+            } else {
+                context.getString(R.string.settings_update_channel_stable)
+            }
+            OutlinedTextField(
+                readOnly = true,
+                value = channelLabel,
+                onValueChange = {},
+                label = { Text(context.getString(R.string.settings_update_channel)) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = channelExpanded) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
+            )
+            ExposedDropdownMenu(
+                expanded = channelExpanded,
+                onDismissRequest = { channelExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text(context.getString(R.string.settings_update_channel_stable)) },
+                    onClick = {
+                        scope.launch { dataStore.edit { it[UPDATE_CHANNEL] = "stable" } }
+                        channelExpanded = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(context.getString(R.string.settings_update_channel_nightly)) },
+                    onClick = {
+                        scope.launch { dataStore.edit { it[UPDATE_CHANNEL] = "nightly" } }
+                        channelExpanded = false
+                    }
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Button(
+                onClick = {
+                    val channel = UpdateChannel.fromString(currentChannel)
+                    updateManager.checkForUpdate(scope, channel)
+                },
+                enabled = !isChecking
+            ) {
+                if (isChecking) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(context.getString(R.string.update_checking))
+                } else {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(context.getString(R.string.settings_check_for_updates))
+                }
+            }
+        }
+
+        when (val result = checkResult) {
+            is UpdateCheckResult.Available -> {
+                UpdateAvailableCard(
+                    release = result.release,
+                    downloadState = downloadState,
+                    onDownload = { updateManager.downloadUpdate(scope) },
+                    onInstall = { path -> updateManager.installUpdate(path) },
+                    onCancel = { updateManager.cancelDownload(scope) },
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            is UpdateCheckResult.UpToDate -> {
+                Text(
+                    text = context.getString(R.string.update_up_to_date),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            is UpdateCheckResult.Error -> {
+                Text(
+                    text = context.getString(R.string.update_failed, result.message),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            null -> {}
+        }
     }
 }
