@@ -106,7 +106,8 @@ platform :android do
 
     # Use a rolling tag for nightly
     # Create release notes file
-    notes = "Automated nightly build from branch main.\n\n## Changes in this build\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{version_name}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/nightly/app-release.apk) |"
+    header = "<p align='center'><img alt='Whisper++ Logo' src='https://raw.githubusercontent.com/shekohex/whisperpp/main/app_icon.svg' width='200'></p><br>"
+    notes = "#{header}\nAutomated nightly build from branch main.\n\n## Changes in this build\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{version_name}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/nightly/app-release.apk) |"
     File.write("nightly_notes.md", notes)
 
     # Clean up old nightly tag and release using gh CLI
@@ -149,7 +150,8 @@ platform :android do
     )
 
     # Create release notes file
-    notes = "## Changelog\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{tag}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/#{tag}/app-release.apk) |"
+    header = "<p align='center'><img alt='Whisper++ Logo' src='https://raw.githubusercontent.com/shekohex/whisperpp/main/app_icon.svg' width='200'></p><br>"
+    notes = "#{header}\n## Changelog\n#{changelog}\n\n### Downloads\n| Artifact | Version | Link |\n| :--- | :--- | :--- |\n| **Whisper++ APK** | `#{tag}` | [Download APK](https://github.com/shekohex/whisperpp/releases/download/#{tag}/app-release.apk) |"
     File.write("release_notes.md", notes)
 
     apk_path = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
