@@ -30,7 +30,7 @@ data class ServiceProvider(
     val name: String,
     val type: ProviderType,
     val endpoint: String,
-    val apiKey: String,
+    @Transient val apiKey: String = "",
     val models: List<ModelConfig>,
     // Configuration
     val temperature: Float = 0.0f,

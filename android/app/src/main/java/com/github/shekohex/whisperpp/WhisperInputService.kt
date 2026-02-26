@@ -58,6 +58,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import com.github.shekohex.whisperpp.recorder.RecorderManager
 import com.github.shekohex.whisperpp.ui.keyboard.KeyboardScreen
@@ -71,6 +72,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
@@ -89,6 +91,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var isFirstTime: Boolean = true
     
     private lateinit var repository: SettingsRepository
+    private lateinit var secretsStore: SecretsStore
 
     // Lifecycle & SavedState & ViewModelStore
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -122,6 +125,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
         repository = SettingsRepository(dataStore)
+        secretsStore = SecretsStore(this)
+        runBlocking {
+            repository.migrateProviderApiKeysIfNeeded(this@WhisperInputService)
+        }
         recorderManager = RecorderManager(this)
         smartFixer = SmartFixer(this)
     }
@@ -170,13 +177,16 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         val provider = providers.find { it.id == providerId }
                         
                         if (provider != null) {
+                            val providerWithApiKey = provider.copy(
+                                apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
+                            )
                             val temperature = if (provider.temperature > 0) provider.temperature else prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
                             val promptTemplate = if (provider.prompt.isNotEmpty()) provider.prompt else prefs[SMART_FIX_PROMPT] ?: ""
 
                             Log.d(TAG, "Smart Fix using Provider: ${provider.name}, Model: $modelId")
 
                             withContext(Dispatchers.IO) {
-                                smartFixer.fix(text, contextPrompt, provider, modelId, temperature, promptTemplate)
+                                smartFixer.fix(text, contextPrompt, providerWithApiKey, modelId, temperature, promptTemplate)
                             }
                         } else {
                             text
@@ -252,6 +262,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 setKeyboardState(KeyboardState.Ready)
                 return@launch
             }
+
+            val providerWithApiKey = provider.copy(
+                apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
+            )
             
             val modelId = if (provider.models.isNotEmpty()) provider.models.first().id else prefs[MODEL] ?: "whisper-1"
             val staticPrompt = if (provider.prompt.isNotEmpty()) provider.prompt else prefs[PROMPT] ?: ""
@@ -267,7 +281,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
             whisperTranscriber.startAsync(
                 this@WhisperInputService, recordedAudioFilename, audioMediaType,
-                attachToEnd, contextPrompt, provider, modelId, postprocessing,
+                attachToEnd, contextPrompt, providerWithApiKey, modelId, postprocessing,
                 addTrailingSpace, timeout, staticPrompt, temperature,
                 { transcriptionCallback(it, contextPrompt) },
                 { transcriptionExceptionCallback(it) }

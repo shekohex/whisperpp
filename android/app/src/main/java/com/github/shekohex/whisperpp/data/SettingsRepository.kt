@@ -1,5 +1,6 @@
 package com.github.shekohex.whisperpp.data
 
+import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -7,8 +8,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.google.gson.Gson
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -19,6 +24,7 @@ import java.util.Locale
 
 val PROVIDERS_JSON = stringPreferencesKey("providers_json")
 val PROFILES_JSON = stringPreferencesKey("profiles_json")
+val PROVIDER_API_KEY_MIGRATION_DONE = booleanPreferencesKey("provider_api_key_migration_done")
 
 data class SettingsExport(
     val version: Int,
@@ -43,13 +49,11 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             "speech-to-text-backend",
             "endpoint",
             "language-code",
-            "api-key",
             "model",
             "postprocessing",
             "prompt",
             "smart-fix-backend",
             "smart-fix-endpoint",
-            "smart-fix-api-key",
             "smart-fix-model",
             "smart-fix-prompt",
             "update-channel"
@@ -102,6 +106,86 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { prefs ->
             prefs[PROVIDERS_JSON] = gson.toJson(providers)
         }
+    }
+
+    suspend fun migrateProviderApiKeysIfNeeded(context: Context) {
+        val migrationDone = dataStore.data.map { prefs ->
+            prefs[PROVIDER_API_KEY_MIGRATION_DONE] ?: false
+        }.first()
+
+        if (migrationDone) {
+            return
+        }
+
+        val prefs = dataStore.data.first()
+        val rawProvidersJson = prefs[PROVIDERS_JSON]
+
+        if (rawProvidersJson.isNullOrBlank()) {
+            dataStore.edit { mutablePrefs ->
+                mutablePrefs[PROVIDER_API_KEY_MIGRATION_DONE] = true
+            }
+            return
+        }
+
+        val rootElement = try {
+            JsonParser.parseString(rawProvidersJson)
+        } catch (_: Exception) {
+            return
+        }
+
+        val providerArray = extractProviderArray(rootElement) ?: return
+        val secretsStore = SecretsStore(context.applicationContext)
+
+        providerArray.forEach { providerElement ->
+            if (providerElement.isJsonObject) {
+                val providerObject = providerElement.asJsonObject
+                val providerId = providerObject.get("id")
+                    ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+                    ?.asString
+                    ?.trim()
+                    .orEmpty()
+                if (providerId.isNotEmpty()) {
+                    val apiKey = providerObject.get("apiKey")
+                        ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+                        ?.asString
+                        ?.trim()
+                        .orEmpty()
+                    if (apiKey.isNotEmpty()) {
+                        secretsStore.setProviderApiKey(providerId, apiKey)
+                    }
+                }
+                providerObject.remove("apiKey")
+            }
+        }
+
+        val sanitizedJson = gson.toJson(rootElement)
+        dataStore.edit { mutablePrefs ->
+            mutablePrefs[PROVIDERS_JSON] = sanitizedJson
+            mutablePrefs[PROVIDER_API_KEY_MIGRATION_DONE] = true
+        }
+    }
+
+    private fun extractProviderArray(rootElement: JsonElement): JsonArray? {
+        if (rootElement.isJsonArray) {
+            return rootElement.asJsonArray
+        }
+        if (!rootElement.isJsonObject) {
+            return null
+        }
+
+        val rootObject = rootElement.asJsonObject
+        rootObject.get("providers")?.let { providersElement ->
+            if (providersElement.isJsonArray) {
+                return providersElement.asJsonArray
+            }
+        }
+
+        rootObject.entrySet().forEach { entry ->
+            if (entry.value.isJsonArray) {
+                return entry.value.asJsonArray
+            }
+        }
+        return null
     }
     
     val profiles: Flow<List<LanguageProfile>> = dataStore.data.map { prefs ->

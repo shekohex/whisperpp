@@ -47,6 +47,7 @@ import com.github.shekohex.whisperpp.ui.components.VoiceWaveform
 import com.github.shekohex.whisperpp.*
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.*
+import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.updater.*
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -71,7 +72,10 @@ fun SettingsNavigation(
     showUpdate: Boolean = false,
     startRoute: String = SettingsScreen.Main.route,
 ) {
+    val context = LocalContext.current
     val navController = rememberNavController()
+    val repository = remember { SettingsRepository(dataStore) }
+    var migrationReady by remember { mutableStateOf(false) }
     val startDestination = when (startRoute) {
         SettingsScreen.Backend.route,
         SettingsScreen.PostProcessing.route,
@@ -79,6 +83,19 @@ fun SettingsNavigation(
         SettingsScreen.Main.route -> startRoute
         else -> SettingsScreen.Main.route
     }
+
+    LaunchedEffect(Unit) {
+        repository.migrateProviderApiKeysIfNeeded(context)
+        migrationReady = true
+    }
+
+    if (!migrationReady) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
     NavHost(navController = navController, startDestination = startDestination) {
         composable(SettingsScreen.Main.route) {
             MainSettingsScreen(dataStore, navController, showUpdate)
@@ -332,7 +349,9 @@ fun SettingsEditDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackendSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
+    val context = LocalContext.current
     val repository = remember { SettingsRepository(dataStore) }
+    val secretsStore = remember { SecretsStore(context) }
     val providers by repository.providers.collectAsState(initial = emptyList())
     val settingsState by dataStore.data.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
@@ -389,6 +408,7 @@ fun BackendSettingsScreen(dataStore: DataStore<Preferences>, navController: NavH
                                 val currentList = providers.toMutableList()
                                 currentList.removeAt(index)
                                 repository.saveProviders(currentList)
+                                secretsStore.clearProviderApiKey(provider.id)
                                 if (provider.id == activeBackendId) {
                                     dataStore.edit { it.remove(SPEECH_TO_TEXT_BACKEND) }
                                 }
@@ -481,7 +501,9 @@ fun ProviderCard(provider: ServiceProvider, isActive: Boolean, onSelectActive: (
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHostController, providerId: String?) {
+    val context = LocalContext.current
     val repository = remember { SettingsRepository(dataStore) }
+    val secretsStore = remember { SecretsStore(context) }
     val providers by repository.providers.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     
@@ -489,7 +511,9 @@ fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHost
     var name by remember { mutableStateOf("") }
     var type by remember { mutableStateOf(ProviderType.OPENAI) }
     var endpoint by remember { mutableStateOf("") }
-    var apiKey by remember { mutableStateOf("") }
+    var apiKeyInput by remember { mutableStateOf("") }
+    var apiKeyLast4 by remember { mutableStateOf<String?>(null) }
+    var hasStoredApiKey by remember { mutableStateOf(false) }
     var models by remember { mutableStateOf(listOf<ModelConfig>()) }
     var temperature by remember { mutableStateOf(0.0f) }
     var prompt by remember { mutableStateOf("") }
@@ -528,7 +552,6 @@ fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHost
                 name = provider.name
                 type = provider.type
                 endpoint = provider.endpoint
-                apiKey = provider.apiKey
                 models = provider.models
                 temperature = provider.temperature
                 prompt = provider.prompt
@@ -541,6 +564,16 @@ fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHost
             }
         } else if (name.isEmpty()) {
             name = "New Provider"
+        }
+
+        val secretsProviderId = providerId?.takeIf { it.isNotBlank() }
+        if (secretsProviderId != null) {
+            val last4 = secretsStore.getProviderApiKeyLast4(secretsProviderId)
+            apiKeyLast4 = last4
+            hasStoredApiKey = last4 != null
+        } else {
+            apiKeyLast4 = null
+            hasStoredApiKey = false
         }
     }
 
@@ -560,11 +593,11 @@ fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHost
                             name = name,
                             type = type,
                             endpoint = endpoint,
-                             apiKey = apiKey,
-                             models = models,
-                             temperature = temperature,
-                             prompt = prompt,
-                             languageCode = languageCode,
+                             apiKey = "",
+                              models = models,
+                              temperature = temperature,
+                              prompt = prompt,
+                              languageCode = languageCode,
                              timeout = timeout,
                              thinkingEnabled = thinkingEnabled,
                              thinkingType = thinkingType,
@@ -580,6 +613,9 @@ fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHost
                                 currentList.add(newProvider)
                             }
                             repository.saveProviders(currentList)
+                            if (apiKeyInput.isNotBlank()) {
+                                secretsStore.setProviderApiKey(newProvider.id, apiKeyInput.trim())
+                            }
                             navController.popBackStack()
                         }
                     }) {
@@ -676,13 +712,38 @@ fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHost
                 modifier = Modifier.fillMaxWidth()
             )
             
+            Text(
+                text = if (hasStoredApiKey) {
+                    if (apiKeyLast4.isNullOrEmpty()) "API Key: Key set" else "API Key: Key set (ends with $apiKeyLast4)"
+                } else {
+                    "API Key: Not set"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             OutlinedTextField(
-                value = apiKey,
-                onValueChange = { apiKey = it },
-                label = { Text("API Key") },
+                value = apiKeyInput,
+                onValueChange = { apiKeyInput = it },
+                label = { Text(if (hasStoredApiKey) "Replace API Key" else "Set API Key") },
                 visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            if (hasStoredApiKey) {
+                OutlinedButton(
+                    onClick = {
+                        val secretsProviderId = providerId?.takeIf { it.isNotBlank() } ?: return@OutlinedButton
+                        secretsStore.clearProviderApiKey(secretsProviderId)
+                        apiKeyInput = ""
+                        apiKeyLast4 = null
+                        hasStoredApiKey = false
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Clear Stored Key")
+                }
+            }
             
             OutlinedTextField(
                 value = timeout.toString(),
