@@ -66,9 +66,20 @@ sealed class SettingsScreen(val route: String) {
 }
 
 @Composable
-fun SettingsNavigation(dataStore: DataStore<Preferences>, showUpdate: Boolean = false) {
+fun SettingsNavigation(
+    dataStore: DataStore<Preferences>,
+    showUpdate: Boolean = false,
+    startRoute: String = SettingsScreen.Main.route,
+) {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = SettingsScreen.Main.route) {
+    val startDestination = when (startRoute) {
+        SettingsScreen.Backend.route,
+        SettingsScreen.PostProcessing.route,
+        SettingsScreen.Keyboard.route,
+        SettingsScreen.Main.route -> startRoute
+        else -> SettingsScreen.Main.route
+    }
+    NavHost(navController = navController, startDestination = startDestination) {
         composable(SettingsScreen.Main.route) {
             MainSettingsScreen(dataStore, navController, showUpdate)
         }

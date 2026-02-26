@@ -33,6 +33,7 @@ import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.KeyEvent
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.view.Window
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
@@ -57,6 +58,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import com.github.shekohex.whisperpp.recorder.RecorderManager
 import com.github.shekohex.whisperpp.ui.keyboard.KeyboardScreen
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
@@ -109,6 +111,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var shouldOfferImeSwitch = mutableStateOf(false)
     private var recordingTimeMs = mutableStateOf(0L)
     private var showLongPressHint = mutableStateOf(false)
+    private var externalSendBlockReason = mutableStateOf<SecureFieldDetector.Reason?>(null)
+    private var secureFieldExplanationDontShowAgain = mutableStateOf(false)
     private var timerJob: Job? = null
     private val activeMediaPlayers = mutableListOf<MediaPlayer>()
 
@@ -122,17 +126,41 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         smartFixer = SmartFixer(this)
     }
 
+    override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
+        super.onStartInput(attribute, restarting)
+        refreshExternalSendBlock(attribute)
+        if (externalSendBlockReason.value != null && isExternalSendingActive()) {
+            stopExternalSendingForSecureField()
+        }
+    }
+
+    override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
+        super.onStartInputView(info, restarting)
+        refreshExternalSendBlock(info)
+        if (externalSendBlockReason.value != null && isExternalSendingActive()) {
+            stopExternalSendingForSecureField()
+        }
+    }
+
     private fun transcriptionCallback(text: String?, contextPrompt: String?) {
         if (!text.isNullOrEmpty()) {
             Log.d(TAG, "Transcription received length=${text.length}")
             playCustomSound(R.raw.rec_done)
             
             CoroutineScope(Dispatchers.Main).launch {
+                if (shouldBlockExternalSend()) {
+                    setKeyboardState(KeyboardState.Ready)
+                    return@launch
+                }
+
                 val processedText = try {
                     val prefs = dataStore.data.first()
                     val smartFixEnabled = prefs[SMART_FIX_ENABLED] ?: false
                     
                     if (smartFixEnabled) {
+                        if (shouldBlockExternalSend()) {
+                            null
+                        } else {
                         setKeyboardState(KeyboardState.SmartFixing)
                         performFeedback()
                         
@@ -153,12 +181,18 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         } else {
                             text
                         }
+                        }
                     } else {
                         text
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Smart Fix failed", e)
                     text // fallback
+                }
+
+                if (shouldBlockExternalSend()) {
+                    setKeyboardState(KeyboardState.Ready)
+                    return@launch
                 }
                 
                 if (!processedText.isNullOrEmpty()) {
@@ -189,6 +223,11 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun startTranscription(attachToEnd: String) {
+        if (shouldBlockExternalSend()) {
+            setKeyboardState(KeyboardState.Ready)
+            return
+        }
+
         performFeedback(customSoundId = R.raw.rec_stop)
         recorderManager?.stop()
         setKeyboardState(KeyboardState.Transcribing)
@@ -220,6 +259,11 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             val postprocessing = prefs[POSTPROCESSING] ?: getString(R.string.settings_option_no_conversion)
             val addTrailingSpace = prefs[ADD_TRAILING_SPACE] ?: false
             val timeout = provider.timeout
+
+            if (shouldBlockExternalSend()) {
+                setKeyboardState(KeyboardState.Ready)
+                return@launch
+            }
 
             whisperTranscriber.startAsync(
                 this@WhisperInputService, recordedAudioFilename, audioMediaType,
@@ -289,10 +333,15 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         onSendAction = { onSendAction() },
                         onDeleteAction = { onDeleteText() },
                         onOpenSettings = { launchMainActivity() },
+                        onOpenSettingsDestination = { launchMainActivity(it) },
                         onLanguageClick = { showLanguageMenu(this) },
                         onDismissHint = { showLongPressHint.value = false },
                         onLockAction = { lockRecording() },
-                        onUnlockAction = { unlockRecording() }
+                        onUnlockAction = { unlockRecording() },
+                        externalSendBlockedReason = externalSendBlockReason.value,
+                        showSecureFieldExplanation = !secureFieldExplanationDontShowAgain.value,
+                        onBlockedAction = { handleBlockedExternalSendAction() },
+                        onDontShowSecureFieldExplanationAgain = { saveSecureFieldDontShowAgain() }
                     )
                 }
             }
@@ -315,7 +364,63 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         keyboardState.value = state
     }
 
+    private fun currentExternalSendBlock(editorInfo: EditorInfo? = currentInputEditorInfo): SecureFieldDetector.Result? {
+        val detection = SecureFieldDetector.detect(editorInfo)
+        return if (detection.isSecure) detection else null
+    }
+
+    private fun refreshExternalSendBlock(editorInfo: EditorInfo?) {
+        externalSendBlockReason.value = currentExternalSendBlock(editorInfo)?.reason
+    }
+
+    private fun isExternalSendingActive(): Boolean {
+        return when (keyboardState.value) {
+            KeyboardState.Recording,
+            KeyboardState.RecordingLocked,
+            KeyboardState.Paused,
+            KeyboardState.Transcribing,
+            KeyboardState.SmartFixing
+            -> true
+            KeyboardState.Ready -> false
+        }
+    }
+
+    private fun stopExternalSendingForSecureField() {
+        recorderManager?.stop()
+        stopTimer()
+        recordingTimeMs.value = 0L
+        showLongPressHint.value = false
+        whisperTranscriber.stop()
+        smartFixer.cancel()
+        setKeyboardState(KeyboardState.Ready)
+        Toast.makeText(this, getString(R.string.secure_field_sending_stopped), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun handleBlockedExternalSendAction() {
+        performFeedback()
+    }
+
+    private fun saveSecureFieldDontShowAgain() {
+        CoroutineScope(Dispatchers.Main).launch {
+            dataStore.edit { prefs ->
+                prefs[SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN] = true
+            }
+            secureFieldExplanationDontShowAgain.value = true
+        }
+    }
+
+    private fun shouldBlockExternalSend(): Boolean {
+        val block = currentExternalSendBlock()
+        externalSendBlockReason.value = block?.reason
+        return block != null
+    }
+
     private fun onMicAction() {
+        if (shouldBlockExternalSend()) {
+            handleBlockedExternalSendAction()
+            return
+        }
+
         when (keyboardState.value) {
             KeyboardState.Ready -> {
                 performFeedback(customSoundId = R.raw.rec_start)
@@ -338,6 +443,11 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun onSendAction() {
+        if (shouldBlockExternalSend()) {
+            handleBlockedExternalSendAction()
+            return
+        }
+
         if (keyboardState.value == KeyboardState.Paused) startTranscription("")
         else performFeedback()
     }
@@ -361,6 +471,11 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun startRecording() {
+        if (shouldBlockExternalSend()) {
+            setKeyboardState(KeyboardState.Ready)
+            return
+        }
+
         if (!recorderManager!!.allPermissionsGranted(this)) {
             launchMainActivity()
             setKeyboardState(KeyboardState.Ready)
@@ -433,6 +548,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private fun cancelTranscription() {
         whisperTranscriber.stop()
+        smartFixer.cancel()
         setKeyboardState(KeyboardState.Ready)
     }
 
@@ -536,8 +652,11 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
     }
 
-    private fun launchMainActivity() {
+    private fun launchMainActivity(destination: String? = null) {
         val intent = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (!destination.isNullOrBlank()) {
+            intent.putExtra(EXTRA_SETTINGS_DESTINATION, destination)
+        }
         startActivity(intent)
     }
 
@@ -572,6 +691,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         CoroutineScope(Dispatchers.Main).launch {
             updateAudioFormat()
             updateLanguageLabel()
+            secureFieldExplanationDontShowAgain.value = dataStore.data
+                .map { it[SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN] ?: false }
+                .first()
+            refreshExternalSendBlock(currentInputEditorInfo)
         }
     }
 
@@ -581,6 +704,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         whisperTranscriber.stop()
+        smartFixer.cancel()
         recorderManager?.stop()
         stopTimer()
         releaseAllMediaPlayers()
@@ -604,6 +728,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         store.clear()
         whisperTranscriber.stop()
+        smartFixer.cancel()
         recorderManager?.stop()
         releaseAllMediaPlayers()
     }

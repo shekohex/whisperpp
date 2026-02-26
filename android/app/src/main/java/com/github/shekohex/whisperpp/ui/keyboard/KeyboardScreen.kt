@@ -3,6 +3,7 @@ package com.github.shekohex.whisperpp.ui.keyboard
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -35,9 +36,13 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
+private const val PRIVACY_SAFETY_DESTINATION = "privacy_safety"
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KeyboardScreen(
     state: KeyboardState,
@@ -51,21 +56,90 @@ fun KeyboardScreen(
     onSendAction: () -> Unit,
     onDeleteAction: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSettingsDestination: (String) -> Unit = {},
     onLanguageClick: () -> Unit,
     onDismissHint: () -> Unit,
     onLockAction: () -> Unit = {},
-    onUnlockAction: () -> Unit = {}
+    onUnlockAction: () -> Unit = {},
+    externalSendBlockedReason: SecureFieldDetector.Reason? = null,
+    showSecureFieldExplanation: Boolean = true,
+    onBlockedAction: () -> Unit = {},
+    onDontShowSecureFieldExplanationAgain: () -> Unit = {},
 ) {
     var swipeProgress by remember { mutableFloatStateOf(0f) }
     var swipeUpProgress by remember { mutableFloatStateOf(0f) }
     val isSwiping = swipeProgress > 0.05f
     val isSwipingUp = swipeUpProgress > 0.05f
     val isRecordingState = state == KeyboardState.Recording || state == KeyboardState.RecordingLocked
+    val externalSendingBlocked = externalSendBlockedReason != null
+    var showSecureFieldSheet by remember { mutableStateOf(false) }
     
     LaunchedEffect(state) {
         if (!isRecordingState) {
             swipeProgress = 0f
             swipeUpProgress = 0f
+        }
+    }
+
+    LaunchedEffect(externalSendingBlocked) {
+        if (!externalSendingBlocked) {
+            showSecureFieldSheet = false
+        }
+    }
+
+    if (showSecureFieldSheet && externalSendBlockedReason != null) {
+        ModalBottomSheet(onDismissRequest = { showSecureFieldSheet = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.secure_field_sheet_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(R.string.secure_field_sheet_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                ) {
+                    Text(
+                        text = when (externalSendBlockedReason) {
+                            SecureFieldDetector.Reason.PasswordLike -> stringResource(R.string.secure_field_reason_password)
+                            SecureFieldDetector.Reason.OtpLike -> stringResource(R.string.secure_field_reason_otp)
+                            SecureFieldDetector.Reason.NoPersonalizedLearning -> stringResource(R.string.secure_field_reason_no_personalized_learning)
+                            SecureFieldDetector.Reason.Unknown -> stringResource(R.string.secure_field_reason_unknown)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    )
+                }
+                Button(
+                    onClick = {
+                        showSecureFieldSheet = false
+                        onOpenSettingsDestination(PRIVACY_SAFETY_DESTINATION)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.secure_field_sheet_open_settings))
+                }
+                TextButton(
+                    onClick = {
+                        onDontShowSecureFieldExplanationAgain()
+                        showSecureFieldSheet = false
+                    },
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text(stringResource(R.string.secure_field_sheet_dont_show_again))
+                }
+                Spacer(Modifier.height(12.dp))
+            }
         }
     }
     
@@ -196,6 +270,7 @@ fun KeyboardScreen(
                 
                 MainActionButton(
                     state = state,
+                    externalSendingBlocked = externalSendingBlocked,
                     showLongPressHint = showLongPressHint,
                     onSwipeProgress = { swipeProgress = it },
                     onSwipeUpProgress = { swipeUpProgress = it },
@@ -204,7 +279,13 @@ fun KeyboardScreen(
                     onSendAction = onSendAction,
                     onDismissHint = onDismissHint,
                     onLockAction = onLockAction,
-                    onUnlockAction = onUnlockAction
+                    onUnlockAction = onUnlockAction,
+                    onBlockedAction = {
+                        onBlockedAction()
+                        if (externalSendingBlocked && showSecureFieldExplanation) {
+                            showSecureFieldSheet = true
+                        }
+                    },
                 )
             }
         }
@@ -407,6 +488,7 @@ fun PulsatingTrashIcon(progress: Float) {
 @Composable
 fun MainActionButton(
     state: KeyboardState,
+    externalSendingBlocked: Boolean,
     showLongPressHint: Boolean,
     onSwipeProgress: (Float) -> Unit,
     onSwipeUpProgress: (Float) -> Unit,
@@ -415,7 +497,8 @@ fun MainActionButton(
     onSendAction: () -> Unit,
     onDismissHint: () -> Unit,
     onLockAction: () -> Unit,
-    onUnlockAction: () -> Unit
+    onUnlockAction: () -> Unit,
+    onBlockedAction: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     val currentState by rememberUpdatedState(state)
@@ -440,36 +523,230 @@ fun MainActionButton(
     )
 
     val containerColor by animateColorAsState(
-        when (state) {
-            KeyboardState.Recording -> MaterialTheme.colorScheme.error
-            KeyboardState.RecordingLocked -> MaterialTheme.colorScheme.tertiary
-            KeyboardState.Paused -> MaterialTheme.colorScheme.primary
+        when {
+            externalSendingBlocked -> MaterialTheme.colorScheme.surfaceVariant
+            state == KeyboardState.Recording -> MaterialTheme.colorScheme.error
+            state == KeyboardState.RecordingLocked -> MaterialTheme.colorScheme.tertiary
+            state == KeyboardState.Paused -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.primaryContainer
         },
         label = "ContainerColor"
     )
 
     val contentColor by animateColorAsState(
-        when (state) {
-            KeyboardState.Recording -> MaterialTheme.colorScheme.onError
-            KeyboardState.RecordingLocked -> MaterialTheme.colorScheme.onTertiary
-            KeyboardState.Paused -> MaterialTheme.colorScheme.onPrimary
+        when {
+            externalSendingBlocked -> MaterialTheme.colorScheme.onSurfaceVariant
+            state == KeyboardState.Recording -> MaterialTheme.colorScheme.onError
+            state == KeyboardState.RecordingLocked -> MaterialTheme.colorScheme.onTertiary
+            state == KeyboardState.Paused -> MaterialTheme.colorScheme.onPrimary
             else -> MaterialTheme.colorScheme.onPrimaryContainer
         },
         label = "ContentColor"
     )
 
-    val icon = when (state) {
-        KeyboardState.Paused -> Icons.AutoMirrored.Filled.Send
-        KeyboardState.RecordingLocked -> Icons.Default.Lock
+    val icon = when {
+        externalSendingBlocked -> Icons.Default.Lock
+        state == KeyboardState.Paused -> Icons.AutoMirrored.Filled.Send
+        state == KeyboardState.RecordingLocked -> Icons.Default.Lock
         else -> Icons.Default.Mic
+    }
+
+    val interactionModifier = if (externalSendingBlocked) {
+        Modifier.clickable(onClick = onBlockedAction)
+    } else {
+        Modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown()
+                val stateAtDown = currentState
+
+                if (stateAtDown == KeyboardState.Ready) {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onMicAction()
+
+                    var currentDragX = 0f
+                    var currentDragY = 0f
+                    var didHapticAtThreshold = false
+                    var didHapticAtLockThreshold = false
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+
+                        if (event.type == PointerEventType.Move) {
+                            val dragDelta = change.positionChange()
+                            currentDragX += dragDelta.x
+                            currentDragY += dragDelta.y
+
+                            val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                            val upProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
+
+                            if (leftProgress > upProgress) {
+                                onSwipeProgress(leftProgress)
+                                onSwipeUpProgress(0f)
+
+                                if (leftProgress >= 1f && !didHapticAtThreshold) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    didHapticAtThreshold = true
+                                } else if (leftProgress < 0.9f) {
+                                    didHapticAtThreshold = false
+                                }
+                            } else if (upProgress > 0.05f) {
+                                onSwipeUpProgress(upProgress)
+                                onSwipeProgress(0f)
+
+                                if (upProgress >= 1f && !didHapticAtLockThreshold) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    didHapticAtLockThreshold = true
+                                } else if (upProgress < 0.9f) {
+                                    didHapticAtLockThreshold = false
+                                }
+                            } else {
+                                onSwipeProgress(0f)
+                                onSwipeUpProgress(0f)
+                            }
+                        }
+
+                        if (!change.pressed) {
+                            val finalLeftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                            val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
+
+                            if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onDiscardAction()
+                            } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onLockAction()
+                            } else {
+                                onMicAction()
+                            }
+                            onSwipeProgress(0f)
+                            onSwipeUpProgress(0f)
+                            break
+                        }
+                    }
+                } else if (stateAtDown == KeyboardState.RecordingLocked) {
+                    var currentDragX = 0f
+                    var didHapticAtThreshold = false
+
+                    val up = withTimeoutOrNull(400) {
+                        waitForUpOrCancellation()
+                    }
+
+                    if (up != null) {
+                        onUnlockAction()
+                    } else {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+
+                            if (event.type == PointerEventType.Move) {
+                                val dragDelta = change.positionChange()
+                                currentDragX += dragDelta.x
+
+                                val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                                onSwipeProgress(leftProgress)
+
+                                if (leftProgress >= 1f && !didHapticAtThreshold) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    didHapticAtThreshold = true
+                                } else if (leftProgress < 0.9f) {
+                                    didHapticAtThreshold = false
+                                }
+                            }
+
+                            if (!change.pressed) {
+                                val finalProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                                if (finalProgress >= 1f) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onDiscardAction()
+                                }
+                                onSwipeProgress(0f)
+                                break
+                            }
+                        }
+                    }
+                } else if (stateAtDown == KeyboardState.Paused) {
+                    val up = withTimeoutOrNull(400) {
+                        waitForUpOrCancellation()
+                    }
+                    if (up != null) {
+                        onSendAction()
+                    } else {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onMicAction()
+
+                        var currentDragX = 0f
+                        var currentDragY = 0f
+                        var didHapticAtThreshold = false
+                        var didHapticAtLockThreshold = false
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+
+                            if (event.type == PointerEventType.Move) {
+                                val dragDelta = change.positionChange()
+                                currentDragX += dragDelta.x
+                                currentDragY += dragDelta.y
+
+                                val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                                val upProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
+
+                                if (leftProgress > upProgress) {
+                                    onSwipeProgress(leftProgress)
+                                    onSwipeUpProgress(0f)
+
+                                    if (leftProgress >= 1f && !didHapticAtThreshold) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        didHapticAtThreshold = true
+                                    } else if (leftProgress < 0.9f) {
+                                        didHapticAtThreshold = false
+                                    }
+                                } else if (upProgress > 0.05f) {
+                                    onSwipeUpProgress(upProgress)
+                                    onSwipeProgress(0f)
+
+                                    if (upProgress >= 1f && !didHapticAtLockThreshold) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        didHapticAtLockThreshold = true
+                                    } else if (upProgress < 0.9f) {
+                                        didHapticAtLockThreshold = false
+                                    }
+                                } else {
+                                    onSwipeProgress(0f)
+                                    onSwipeUpProgress(0f)
+                                }
+                            }
+
+                            if (!change.pressed) {
+                                val finalLeftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                                val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
+
+                                if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onDiscardAction()
+                                } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onLockAction()
+                                } else {
+                                    onMicAction()
+                                }
+                                onSwipeProgress(0f)
+                                onSwipeUpProgress(0f)
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Box(
         modifier = Modifier.size(64.dp),
         contentAlignment = Alignment.Center
     ) {
-        if (showLongPressHint) {
+        if (showLongPressHint && !externalSendingBlocked) {
             Popup(
                 alignment = Alignment.BottomCenter,
                 offset = androidx.compose.ui.unit.IntOffset(-110, -160),
@@ -495,192 +772,7 @@ fun MainActionButton(
                 .size(size)
                 .clip(CircleShape)
                 .background(containerColor)
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown()
-                        val stateAtDown = currentState
-                        
-                        if (stateAtDown == KeyboardState.Ready) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onMicAction()
-                            
-                            var currentDragX = 0f
-                            var currentDragY = 0f
-                            var didHapticAtThreshold = false
-                            var didHapticAtLockThreshold = false
-                            
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull() ?: break
-                                
-                                if (event.type == PointerEventType.Move) {
-                                    val dragDelta = change.positionChange()
-                                    currentDragX += dragDelta.x
-                                    currentDragY += dragDelta.y
-                                    
-                                    val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                                    val upProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
-                                    
-                                    if (leftProgress > upProgress) {
-                                        onSwipeProgress(leftProgress)
-                                        onSwipeUpProgress(0f)
-                                        
-                                        if (leftProgress >= 1f && !didHapticAtThreshold) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            didHapticAtThreshold = true
-                                        } else if (leftProgress < 0.9f) {
-                                            didHapticAtThreshold = false
-                                        }
-                                    } else if (upProgress > 0.05f) {
-                                        onSwipeUpProgress(upProgress)
-                                        onSwipeProgress(0f)
-                                        
-                                        if (upProgress >= 1f && !didHapticAtLockThreshold) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            didHapticAtLockThreshold = true
-                                        } else if (upProgress < 0.9f) {
-                                            didHapticAtLockThreshold = false
-                                        }
-                                    } else {
-                                        onSwipeProgress(0f)
-                                        onSwipeUpProgress(0f)
-                                    }
-                                }
-                                
-                                if (!change.pressed) {
-                                    val finalLeftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                                    val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
-                                    
-                                    if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onDiscardAction()
-                                    } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        onLockAction()
-                                    } else {
-                                        onMicAction()
-                                    }
-                                    onSwipeProgress(0f)
-                                    onSwipeUpProgress(0f)
-                                    break
-                                }
-                            }
-                        } else if (stateAtDown == KeyboardState.RecordingLocked) {
-                            var currentDragX = 0f
-                            var didHapticAtThreshold = false
-                            
-                            val up = withTimeoutOrNull(400) {
-                                waitForUpOrCancellation()
-                            }
-                            
-                            if (up != null) {
-                                onUnlockAction()
-                            } else {
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    val change = event.changes.firstOrNull() ?: break
-                                    
-                                    if (event.type == PointerEventType.Move) {
-                                        val dragDelta = change.positionChange()
-                                        currentDragX += dragDelta.x
-                                        
-                                        val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                                        onSwipeProgress(leftProgress)
-                                        
-                                        if (leftProgress >= 1f && !didHapticAtThreshold) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            didHapticAtThreshold = true
-                                        } else if (leftProgress < 0.9f) {
-                                            didHapticAtThreshold = false
-                                        }
-                                    }
-                                    
-                                    if (!change.pressed) {
-                                        val finalProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                                        if (finalProgress >= 1f) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onDiscardAction()
-                                        }
-                                        onSwipeProgress(0f)
-                                        break
-                                    }
-                                }
-                            }
-                        } else if (stateAtDown == KeyboardState.Paused) {
-                            val up = withTimeoutOrNull(400) {
-                                waitForUpOrCancellation()
-                            }
-                            if (up != null) {
-                                onSendAction()
-                            } else {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onMicAction()
-                                
-                                var currentDragX = 0f
-                                var currentDragY = 0f
-                                var didHapticAtThreshold = false
-                                var didHapticAtLockThreshold = false
-                                
-                                while (true) {
-                                    val event = awaitPointerEvent()
-                                    val change = event.changes.firstOrNull() ?: break
-                                    
-                                    if (event.type == PointerEventType.Move) {
-                                        val dragDelta = change.positionChange()
-                                        currentDragX += dragDelta.x
-                                        currentDragY += dragDelta.y
-                                        
-                                        val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                                        val upProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
-                                        
-                                        if (leftProgress > upProgress) {
-                                            onSwipeProgress(leftProgress)
-                                            onSwipeUpProgress(0f)
-                                            
-                                            if (leftProgress >= 1f && !didHapticAtThreshold) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                didHapticAtThreshold = true
-                                            } else if (leftProgress < 0.9f) {
-                                                didHapticAtThreshold = false
-                                            }
-                                        } else if (upProgress > 0.05f) {
-                                            onSwipeUpProgress(upProgress)
-                                            onSwipeProgress(0f)
-                                            
-                                            if (upProgress >= 1f && !didHapticAtLockThreshold) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                didHapticAtLockThreshold = true
-                                            } else if (upProgress < 0.9f) {
-                                                didHapticAtLockThreshold = false
-                                            }
-                                        } else {
-                                            onSwipeProgress(0f)
-                                            onSwipeUpProgress(0f)
-                                        }
-                                    }
-                                    
-                                    if (!change.pressed) {
-                                        val finalLeftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                                        val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
-                                        
-                                        if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onDiscardAction()
-                                        } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onLockAction()
-                                        } else {
-                                            onMicAction()
-                                        }
-                                        onSwipeProgress(0f)
-                                        onSwipeUpProgress(0f)
-                                        break
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
+                .then(interactionModifier),
             contentAlignment = Alignment.Center
         ) {
             Icon(

@@ -18,6 +18,7 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.compose.runtime.*
 import com.github.shekohex.whisperpp.ui.components.SplashScreen
+import com.github.shekohex.whisperpp.ui.settings.SettingsScreen
 import com.github.shekohex.whisperpp.ui.settings.SettingsNavigation
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
 import com.github.shekohex.whisperpp.updater.UpdateCheckWorker
@@ -50,8 +51,10 @@ val SMART_FIX_PROMPT = stringPreferencesKey("smart-fix-prompt")
 
 val HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic-feedback-enabled")
 val SOUND_EFFECTS_ENABLED = booleanPreferencesKey("sound-effects-enabled")
+val SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN = booleanPreferencesKey("secure-field-explanation-dont-show-again")
 
 val UPDATE_CHANNEL = stringPreferencesKey("update-channel")
+const val EXTRA_SETTINGS_DESTINATION = "settings_destination"
 
 private const val MICROPHONE_PERMISSION_REQUEST_CODE = 200
 private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 201
@@ -81,10 +84,21 @@ class MainActivity : ComponentActivity() {
                         SplashScreen()
                     } else {
                         val showUpdate = intent?.getBooleanExtra(UpdateCheckWorker.EXTRA_SHOW_UPDATE, false) ?: false
-                        SettingsNavigation(dataStore, showUpdate)
+                        val settingsDestination = intent?.getStringExtra(EXTRA_SETTINGS_DESTINATION)
+                        val startRoute = resolveSettingsStartRoute(settingsDestination)
+                        SettingsNavigation(dataStore, showUpdate = showUpdate, startRoute = startRoute)
                     }
                 }
             }
+        }
+    }
+
+    private fun resolveSettingsStartRoute(destination: String?): String {
+        return when (destination) {
+            SettingsScreen.Backend.route -> SettingsScreen.Backend.route
+            SettingsScreen.PostProcessing.route -> SettingsScreen.PostProcessing.route
+            SettingsScreen.Keyboard.route -> SettingsScreen.Keyboard.route
+            else -> SettingsScreen.Main.route
         }
     }
 

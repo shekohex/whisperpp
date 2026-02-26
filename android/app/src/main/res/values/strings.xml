@@ -35,6 +35,15 @@
     <string name="btn_previous_ime_hint">Switch To Previous Input Method</string>
     <string name="btn_settings_hint">Open Settings</string>
     <string name="generate_logcat">Generate Recent Logcat</string>
+    <string name="secure_field_sending_stopped">Secure field: sending stopped</string>
+    <string name="secure_field_sheet_title">External sending is disabled</string>
+    <string name="secure_field_sheet_description">Whisper++ blocks dictation and Smart Fix in this field to protect private input.</string>
+    <string name="secure_field_reason_password">Reason: password-like field</string>
+    <string name="secure_field_reason_otp">Reason: one-time code field</string>
+    <string name="secure_field_reason_no_personalized_learning">Reason: field requested no personalized learning</string>
+    <string name="secure_field_reason_unknown">Reason: secure field</string>
+    <string name="secure_field_sheet_open_settings">Open Privacy &amp; Safety settings</string>
+    <string name="secure_field_sheet_dont_show_again">Don’t show again</string>
 
     <!-- Warning and Error Messages -->
     <string name="error_endpoint_unset">Error: Endpoint is not set in settings.</string>
