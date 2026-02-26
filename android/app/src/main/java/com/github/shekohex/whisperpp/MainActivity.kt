@@ -99,6 +99,7 @@ class MainActivity : ComponentActivity() {
             SettingsScreen.Backend.route -> SettingsScreen.Backend.route
             SettingsScreen.PostProcessing.route -> SettingsScreen.PostProcessing.route
             SettingsScreen.Keyboard.route -> SettingsScreen.Keyboard.route
+            SettingsScreen.PrivacySafety.route -> SettingsScreen.PrivacySafety.route
             else -> SettingsScreen.Main.route
         }
     }

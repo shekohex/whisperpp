@@ -61,6 +61,7 @@ sealed class SettingsScreen(val route: String) {
     object Backend : SettingsScreen("backend")
     object PostProcessing : SettingsScreen("post_processing")
     object Keyboard : SettingsScreen("keyboard")
+    object PrivacySafety : SettingsScreen("privacy_safety")
     object ProviderEdit : SettingsScreen("provider_edit?id={id}") {
         fun createRoute(id: String? = null) = "provider_edit?id=${id ?: ""}"
     }
@@ -80,6 +81,7 @@ fun SettingsNavigation(
         SettingsScreen.Backend.route,
         SettingsScreen.PostProcessing.route,
         SettingsScreen.Keyboard.route,
+        SettingsScreen.PrivacySafety.route,
         SettingsScreen.Main.route -> startRoute
         else -> SettingsScreen.Main.route
     }
@@ -108,6 +110,9 @@ fun SettingsNavigation(
         }
         composable(SettingsScreen.Keyboard.route) {
             KeyboardSettingsScreen(dataStore, navController)
+        }
+        composable(SettingsScreen.PrivacySafety.route) {
+            PrivacySafetyScreen(dataStore, navController)
         }
         composable(
             route = SettingsScreen.ProviderEdit.route,
@@ -268,6 +273,12 @@ fun MainSettingsScreen(
                         title = "Keyboard Behavior",
                         subtitle = "Haptics, Auto-start, etc.",
                         onClick = { navController.navigate(SettingsScreen.Keyboard.route) }
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.Security,
+                        title = "Privacy & Safety",
+                        subtitle = "Secure fields and app send rules",
+                        onClick = { navController.navigate(SettingsScreen.PrivacySafety.route) }
                     )
                 }
             }
