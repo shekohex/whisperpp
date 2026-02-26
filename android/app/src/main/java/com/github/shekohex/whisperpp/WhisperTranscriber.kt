@@ -25,10 +25,12 @@ import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import kotlinx.coroutines.*
 import okhttp3.*
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.logging.HttpLoggingInterceptor
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 import com.github.liuyueyi.quick.transfer.ChineseUtils
 import org.json.JSONObject
@@ -36,12 +38,21 @@ import org.json.JSONObject
 class WhisperTranscriber {
     private val TAG = "WhisperTranscriber"
     private var currentTranscriptionJob: Job? = null
+    private var inFlightCall: Call? = null
     
     private val loggingInterceptor = HttpLoggingInterceptor { message ->
         Log.d("HTTP_Whisper", message)
     }.apply {
-        level = HttpLoggingInterceptor.Level.HEADERS
+        level = HttpLoggingInterceptor.Level.NONE
         redactHeader("Authorization")
+    }
+
+    fun setNetworkLoggingEnabled(enabled: Boolean) {
+        loggingInterceptor.level = if (enabled) {
+            HttpLoggingInterceptor.Level.HEADERS
+        } else {
+            HttpLoggingInterceptor.Level.NONE
+        }
     }
 
     private fun getClient(timeout: Int): OkHttpClient {
@@ -51,6 +62,12 @@ class WhisperTranscriber {
             .readTimeout(timeout.toLong(), TimeUnit.MILLISECONDS)
             .writeTimeout(timeout.toLong(), TimeUnit.MILLISECONDS)
             .build()
+    }
+
+    private fun buildSafeHttpError(provider: ServiceProvider, statusCode: Int, request: Request): String {
+        val providerName = provider.name.ifBlank { provider.type.name }
+        val host = provider.endpoint.toHttpUrlOrNull()?.host ?: request.url.host
+        return "$providerName request failed (HTTP $statusCode, host: $host)"
     }
 
     fun startAsync(
@@ -93,15 +110,28 @@ class WhisperTranscriber {
                 fullPrompt,
                 temperature
             )
-            val response = client.newCall(request).execute()
+            val call = client.newCall(request)
+            inFlightCall = call
 
-            // If request is not successful, or response code is weird
-            if (!response.isSuccessful || response.code / 100 != 2) {
-                throw Exception(response.body!!.string().replace('\n', ' '))
+            val (rawResponseBody, contentType) = try {
+                call.execute().use { response ->
+                    if (!response.isSuccessful || response.code / 100 != 2) {
+                        throw IOException(buildSafeHttpError(provider, response.code, request))
+                    }
+                    Pair(response.body?.string()?.trim().orEmpty(), response.header("Content-Type"))
+                }
+            } catch (e: IOException) {
+                if (call.isCanceled() || !currentCoroutineContext().isActive) {
+                    throw CancellationException("Whisper request cancelled")
+                }
+                throw e
+            } finally {
+                if (inFlightCall === call) {
+                    inFlightCall = null
+                }
             }
 
-            var rawText = response.body!!.string().trim()
-            val contentType = response.header("Content-Type")
+            var rawText = rawResponseBody
 
             // Check for JSON response (either by header or content)
             if (contentType?.contains("application/json") == true || rawText.startsWith("{")) {
@@ -147,6 +177,8 @@ class WhisperTranscriber {
                     return@withContext Pair(null, null)
                 } catch (e: java.net.SocketTimeoutException) {
                     return@withContext Pair(null, "Request timed out")
+                } catch (e: IOException) {
+                    return@withContext Pair(null, e.message ?: "Request failed")
                 } catch (e: Exception) {
                     return@withContext Pair(null, e.message ?: "Unknown error")
                 }
@@ -172,6 +204,8 @@ class WhisperTranscriber {
 
     private fun registerTranscriptionJob(job: Job?) {
         currentTranscriptionJob?.cancel()
+        inFlightCall?.cancel()
+        inFlightCall = null
         currentTranscriptionJob = job
     }
 
