@@ -109,49 +109,49 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UI-01 | TBD | Pending |
-| SET-01 | TBD | Pending |
-| SET-02 | TBD | Pending |
-| PROV-01 | TBD | Pending |
-| PROV-02 | TBD | Pending |
-| PROV-03 | TBD | Pending |
-| PROV-04 | TBD | Pending |
-| PROV-05 | TBD | Pending |
-| PROV-06 | TBD | Pending |
-| DICT-01 | TBD | Pending |
-| DICT-02 | TBD | Pending |
-| DICT-03 | TBD | Pending |
-| DICT-04 | TBD | Pending |
-| DICT-05 | TBD | Pending |
-| DICT-06 | TBD | Pending |
-| DICT-07 | TBD | Pending |
-| ENH-01 | TBD | Pending |
-| ENH-02 | TBD | Pending |
-| ENH-03 | TBD | Pending |
-| ENH-04 | TBD | Pending |
-| ENH-05 | TBD | Pending |
-| PROF-01 | TBD | Pending |
-| PROF-02 | TBD | Pending |
-| PROF-03 | TBD | Pending |
-| PROF-04 | TBD | Pending |
-| CMD-01 | TBD | Pending |
-| CMD-02 | TBD | Pending |
-| CMD-03 | TBD | Pending |
-| CMD-04 | TBD | Pending |
-| STATS-01 | TBD | Pending |
-| STATS-02 | TBD | Pending |
-| PRIV-01 | TBD | Pending |
-| PRIV-02 | TBD | Pending |
-| PRIV-03 | TBD | Pending |
-| PRIV-04 | TBD | Pending |
-| PRIV-05 | TBD | Pending |
-| PRIV-06 | TBD | Pending |
+| UI-01 | 6 | Pending |
+| SET-01 | 6 | Pending |
+| SET-02 | 6 | Pending |
+| PROV-01 | 2 | Pending |
+| PROV-02 | 2 | Pending |
+| PROV-03 | 2 | Pending |
+| PROV-04 | 2 | Pending |
+| PROV-05 | 2 | Pending |
+| PROV-06 | 2 | Pending |
+| DICT-01 | 3 | Pending |
+| DICT-02 | 3 | Pending |
+| DICT-03 | 3 | Pending |
+| DICT-04 | 3 | Pending |
+| DICT-05 | 3 | Pending |
+| DICT-06 | 3 | Pending |
+| DICT-07 | 3 | Pending |
+| ENH-01 | 4 | Pending |
+| ENH-02 | 4 | Pending |
+| ENH-03 | 4 | Pending |
+| ENH-04 | 4 | Pending |
+| ENH-05 | 5 | Pending |
+| PROF-01 | 4 | Pending |
+| PROF-02 | 4 | Pending |
+| PROF-03 | 4 | Pending |
+| PROF-04 | 4 | Pending |
+| CMD-01 | 5 | Pending |
+| CMD-02 | 5 | Pending |
+| CMD-03 | 5 | Pending |
+| CMD-04 | 5 | Pending |
+| STATS-01 | 7 | Pending |
+| STATS-02 | 7 | Pending |
+| PRIV-01 | 1 | Pending |
+| PRIV-02 | 1 | Pending |
+| PRIV-03 | 1 | Pending |
+| PRIV-04 | 1 | Pending |
+| PRIV-05 | 1 | Pending |
+| PRIV-06 | 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 37 total
-- Mapped to phases: 0
-- Unmapped: 37
+- Mapped to phases: 37
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-26*
-*Last updated: 2026-02-26 after initial definition*
+*Last updated: 2026-02-26 after roadmap creation*

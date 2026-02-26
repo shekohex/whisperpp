@@ -1,0 +1,123 @@
+# ROADMAP: Whisper++
+
+**Depth:** comprehensive
+**Scope:** v1 requirements only
+**Current focus:** Phase 1
+
+## Overview
+
+Whisper++ is an Android keyboard (IME) that turns speech into text in any app, with optional LLM-based enhancement and a selected-text command mode. v1 focuses on correctness across arbitrary editors, BYO providers/models, reversible transforms, and privacy-first controls.
+
+## Phases
+
+| Phase | Name | Goal | Status |
+|------:|------|------|--------|
+| 1 | Privacy & Safety Controls | Users can control what data is sent and avoid accidental capture/leaks | Pending |
+| 2 | Providers & Models | Users can configure BYO providers/models for STT + text transforms | Pending |
+| 3 | Dictation | Users can dictate reliably with streaming-gated partials, cancellation, and undo | Pending |
+| 4 | Prompts, Profiles & Enhancement | Users get per-app/per-language prompting + safe post-dictation enhancement with undo | Pending |
+| 5 | Command Mode & Presets | Users can transform selected text via voice instructions with clipboard fallback and undo | Pending |
+| 6 | Settings UX + Import/Export | Users can configure and back up/restore all core behavior with polished settings UI | Pending |
+| 7 | Local Analytics Dashboard | Users can view and reset local-only usage analytics and time-saved estimates | Pending |
+
+---
+
+### Phase 1: Privacy & Safety Controls
+
+**Goal:** Users can control what data is sent and avoid accidental capture/leaks.
+
+**Dependencies:** None
+
+**Requirements:** PRIV-01, PRIV-02, PRIV-03, PRIV-04, PRIV-05
+
+**Success Criteria (observable):**
+1. In secure fields (password/OTP/etc), dictation and command mode are unavailable, and the UI explains why.
+2. Users can configure providers without exposing API keys in plaintext UI/logs; keys remain protected across app restarts.
+3. Network/debug logging does not include auth headers or user audio/text payloads by default.
+4. Users can set a per-app send policy to block sending audio/text externally; when blocked, Whisper++ refuses to send and clearly explains the block.
+5. The UI clearly discloses what data is sent (audio/text) and which provider endpoint(s) will receive it.
+
+### Phase 2: Providers & Models
+
+**Goal:** Users can configure BYO providers/models for STT + text transforms.
+
+**Dependencies:** Phase 1
+
+**Requirements:** PROV-01, PROV-02, PROV-03, PROV-04, PROV-05, PROV-06
+
+**Success Criteria (observable):**
+1. Users can add/edit/delete providers (type, base URL, API key) and manage a per-provider model list.
+2. Provider models expose kind (stt/text/multimodal) and indicate whether streaming partials are supported.
+3. Users can choose an STT provider/model for dictation and a (potentially different) text provider/model for enhancement/command mode.
+4. OpenAI-compatible endpoints work for STT and text transforms, and Gemini-compatible endpoints work for text transforms.
+
+### Phase 3: Dictation
+
+**Goal:** Users can dictate reliably with streaming-gated partials, cancellation, and undo.
+
+**Dependencies:** Phase 1, Phase 2
+
+**Requirements:** DICT-01, DICT-02, DICT-03, DICT-04, DICT-05, DICT-06, DICT-07
+
+**Success Criteria (observable):**
+1. Users can start/stop dictation via a mic key with a clear recording state.
+2. If the selected STT model supports streaming, partial transcription updates appear as composing text while speaking.
+3. If streaming is unsupported/disabled, no partials are inserted; only the final transcript is inserted on stop.
+4. Users can cancel dictation and no additional text is inserted after cancel.
+5. Users can select dictation language, undo the last dictation insertion, and results never insert into a different field/app after focus changes.
+
+### Phase 4: Prompts, Profiles & Enhancement
+
+**Goal:** Users get per-app/per-language prompting + safe post-dictation enhancement with undo.
+
+**Dependencies:** Phase 1, Phase 2, Phase 3
+
+**Requirements:** PROF-01, PROF-02, PROF-03, PROF-04, ENH-01, ENH-02, ENH-03, ENH-04
+
+**Success Criteria (observable):**
+1. Users can define a global base prompt and create prompt profiles.
+2. Users can map apps (by package name) to a prompt profile; per-app mapping can override prompt append and chosen STT/text providers/models.
+3. Users can configure per-language defaults (language -> STT and text providers/models) and see them applied when dictating/transforming.
+4. After dictation stops, enhancement runs by default and inserts enhanced text; if enhancement fails, Whisper++ falls back to the raw transcript.
+5. When enhancement succeeds, Whisper++ auto-replaces the dictated segment in place, and users can undo to restore the raw transcript.
+
+### Phase 5: Command Mode & Presets
+
+**Goal:** Users can transform selected text via voice instructions with clipboard fallback and undo.
+
+**Dependencies:** Phase 1, Phase 2, Phase 3, Phase 4
+
+**Requirements:** CMD-01, CMD-02, CMD-03, CMD-04, ENH-05
+
+**Success Criteria (observable):**
+1. Users can enter command mode via a dedicated Command key.
+2. Command mode uses selected text from the editor when available; otherwise it guides the user through a clipboard fallback workflow.
+3. Users can speak an instruction; Whisper++ transcribes it and sends (instruction + selected text) to the selected text model/provider.
+4. Command mode replaces the selection with the result and provides 1-tap undo to restore the original selection.
+5. Users can choose from a preset transform library (>= 3 presets) for both dictation enhancement and selected-text transforms.
+
+### Phase 6: Settings UX + Import/Export
+
+**Goal:** Users can configure and back up/restore all core behavior with polished settings UI.
+
+**Dependencies:** Phase 1, Phase 2, Phase 3, Phase 4, Phase 5
+
+**Requirements:** UI-01, SET-01, SET-02
+
+**Success Criteria (observable):**
+1. Settings UI uses Material 3 components and theming.
+2. Users can configure all core behavior in settings (providers/models, prompts, per-app/per-language overrides, dictation/enhancement/command toggles).
+3. Users can export full settings to a shareable file and import it to restore settings (with clear overwrite/merge behavior).
+
+### Phase 7: Local Analytics Dashboard
+
+**Goal:** Users can view and reset local-only usage analytics and time-saved estimates.
+
+**Dependencies:** Phase 3, Phase 5, Phase 6
+
+**Requirements:** STATS-01, STATS-02, PRIV-06
+
+**Success Criteria (observable):**
+1. Users can view local-only usage stats (dictation minutes, sessions, words dictated, words/min, keystrokes saved).
+2. Settings home includes an analytics dashboard with an estimated time-saved summary.
+3. Users can reset analytics, and analytics are not transmitted by default.
