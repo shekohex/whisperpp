@@ -6,23 +6,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -30,8 +30,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,7 +51,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.navigation.NavHostController
+import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_COMMAND_TEXT
+import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_DICTATION_AUDIO
+import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
+import com.github.shekohex.whisperpp.MODEL
+import com.github.shekohex.whisperpp.SMART_FIX_BACKEND
+import com.github.shekohex.whisperpp.SMART_FIX_MODEL
+import com.github.shekohex.whisperpp.SPEECH_TO_TEXT_BACKEND
+import com.github.shekohex.whisperpp.USE_CONTEXT
+import com.github.shekohex.whisperpp.VERBOSE_NETWORK_LOGS_ENABLED
+import com.github.shekohex.whisperpp.data.SettingsRepository
+import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -66,10 +81,50 @@ private data class PrivacySafetyApp(
 fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val repository = remember { SendPolicyRepository(dataStore) }
-    val rules by repository.getAllRulesFlow().collectAsState(initial = emptyMap())
+    val sendPolicyRepository = remember { SendPolicyRepository(dataStore) }
+    val settingsRepository = remember { SettingsRepository(dataStore) }
+    val rules by sendPolicyRepository.getAllRulesFlow().collectAsState(initial = emptyMap())
+    val providers by settingsRepository.providers.collectAsState(initial = emptyList())
+    val settingsState by dataStore.data.collectAsState(initial = emptyPreferences())
     var searchQuery by remember { mutableStateOf("") }
     var manualPackageName by remember { mutableStateOf("") }
+
+    val activeBackendId = settingsState[SPEECH_TO_TEXT_BACKEND] ?: ""
+    val activeSmartFixBackendId = settingsState[SMART_FIX_BACKEND] ?: ""
+    val useContext = settingsState[USE_CONTEXT] ?: false
+    val verboseNetworkLogsEnabled = settingsState[VERBOSE_NETWORK_LOGS_ENABLED] ?: false
+
+    val dictationProvider = providers.find { it.id == activeBackendId }
+    val smartFixProvider = providers.find { it.id == activeSmartFixBackendId }
+
+    val dictationModelId = (settingsState[MODEL] ?: "").ifBlank {
+        dictationProvider?.models?.firstOrNull()?.id.orEmpty()
+    }
+    val smartFixModelId = (settingsState[SMART_FIX_MODEL] ?: "").ifBlank {
+        smartFixProvider?.models?.firstOrNull()?.id.orEmpty()
+    }
+
+    val dictationDisclosure = remember(dictationProvider, dictationModelId, useContext) {
+        PrivacyDisclosureFormatter.disclosureForDictation(
+            provider = dictationProvider,
+            selectedModelId = dictationModelId,
+            useContext = useContext,
+        )
+    }
+    val enhancementDisclosure = remember(smartFixProvider, smartFixModelId, useContext) {
+        PrivacyDisclosureFormatter.disclosureForEnhancement(
+            provider = smartFixProvider,
+            selectedModelId = smartFixModelId,
+            useContext = useContext,
+        )
+    }
+    val commandDisclosure = remember(smartFixProvider, smartFixModelId, useContext) {
+        PrivacyDisclosureFormatter.disclosureForCommand(
+            provider = smartFixProvider,
+            selectedModelId = smartFixModelId,
+            useContext = useContext,
+        )
+    }
 
     val launcherApps by produceState(initialValue = emptyList<PrivacySafetyApp>(), context) {
         value = withContext(Dispatchers.IO) {
@@ -137,6 +192,72 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(8.dp))
+
+            SettingsGroup(title = "Disclosure") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    DisclosureCard(dictationDisclosure)
+                    DisclosureCard(enhancementDisclosure)
+                    DisclosureCard(commandDisclosure)
+                }
+            }
+
+            SettingsGroup(title = "Diagnostics") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Verbose network logs",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                text = "When enabled, only redacted request headers are logged. Request and response payload bodies are never logged.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = verboseNetworkLogsEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    dataStore.edit { prefs ->
+                                        prefs[VERBOSE_NETWORK_LOGS_ENABLED] = enabled
+                                    }
+                                }
+                            },
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                dataStore.edit { prefs ->
+                                    prefs[DISCLOSURE_SHOWN_DICTATION_AUDIO] = false
+                                    prefs[DISCLOSURE_SHOWN_ENHANCEMENT_TEXT] = false
+                                    prefs[DISCLOSURE_SHOWN_COMMAND_TEXT] = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Reset first-use disclosures")
+                    }
+                }
+            }
 
             SettingsGroup(title = "Per-app send policy") {
                 Column(
@@ -207,7 +328,7 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
                                         checked = !blocked,
                                         onCheckedChange = { allowExternal ->
                                             scope.launch {
-                                                repository.setBlocked(app.packageName, !allowExternal)
+                                                sendPolicyRepository.setBlocked(app.packageName, !allowExternal)
                                             }
                                         },
                                     )
@@ -240,7 +361,7 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
                             val normalizedPackage = manualPackageName.trim()
                             if (normalizedPackage.isNotBlank()) {
                                 scope.launch {
-                                    repository.setBlocked(normalizedPackage, true)
+                                    sendPolicyRepository.setBlocked(normalizedPackage, true)
                                     manualPackageName = ""
                                 }
                             }
@@ -256,6 +377,44 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
             }
 
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
+    }
+}
+
+@Composable
+private fun DisclosureCard(disclosure: PrivacyDisclosureFormatter.ModeDisclosure) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = disclosure.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = disclosure.dataSent,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            disclosure.endpoints.forEach { endpoint ->
+                Text(
+                    text = "Endpoint: ${endpoint.baseUrl}${endpoint.path}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Text(
+                text = disclosure.contextLine,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
