@@ -8,19 +8,19 @@
     "active_profile": "quality",
     "presets": {
       "quality": {
-        "planning": "opencode/glm-4.7-free",
-        "execution": "opencode/glm-4.7-free",
-        "verification": "opencode/glm-4.7-free"
+        "planning": "opencode/gpt-5.2",
+        "execution": "opencode/gpt-5.2",
+        "verification": "opencode/gpt-5.2"
       },
       "balanced": {
-        "planning": "opencode/glm-4.7-free",
-        "execution": "opencode/minimax-m2.1-free",
-        "verification": "opencode/glm-4.7-free"
+        "planning": "opencode/gpt-5.2",
+        "execution": "opencode/gpt-5.2",
+        "verification": "opencode/gpt-5.2"
       },
       "budget": {
-        "planning": "opencode/minimax-m2.1-free",
-        "execution": "opencode/grok-code",
-        "verification": "opencode/minimax-m2.1-free"
+        "planning": "opencode/gpt-5.2",
+        "execution": "opencode/gpt-5.2",
+        "verification": "opencode/gpt-5.2"
       }
     },
     "custom_overrides": {
