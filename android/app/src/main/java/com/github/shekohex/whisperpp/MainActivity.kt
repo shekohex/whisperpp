@@ -52,6 +52,7 @@ val SMART_FIX_PROMPT = stringPreferencesKey("smart-fix-prompt")
 val HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic-feedback-enabled")
 val SOUND_EFFECTS_ENABLED = booleanPreferencesKey("sound-effects-enabled")
 val SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN = booleanPreferencesKey("secure-field-explanation-dont-show-again")
+val PER_APP_SEND_POLICY_JSON = stringPreferencesKey("per-app-send-policy-json")
 
 val UPDATE_CHANNEL = stringPreferencesKey("update-channel")
 const val EXTRA_SETTINGS_DESTINATION = "settings_destination"
