@@ -2,7 +2,7 @@
 
 **Depth:** comprehensive
 **Scope:** v1 requirements only
-**Current focus:** Phase 1
+**Current focus:** Phase 2
 
 ## Overview
 
@@ -12,7 +12,7 @@ Whisper++ is an Android keyboard (IME) that turns speech into text in any app, w
 
 | Phase | Name | Goal | Status |
 |------:|------|------|--------|
-| 1 | Privacy & Safety Controls | Users can control what data is sent and avoid accidental capture/leaks | Pending |
+| 1 | Privacy & Safety Controls | Users can control what data is sent and avoid accidental capture/leaks | Complete |
 | 2 | Providers & Models | Users can configure BYO providers/models for STT + text transforms | Pending |
 | 3 | Dictation | Users can dictate reliably with streaming-gated partials, cancellation, and undo | Pending |
 | 4 | Prompts, Profiles & Enhancement | Users get per-app/per-language prompting + safe post-dictation enhancement with undo | Pending |
@@ -40,11 +40,11 @@ Whisper++ is an Android keyboard (IME) that turns speech into text in any app, w
 **Plans:** 5 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Harden networking (redacted logs, safe errors, true cancellation)
-- [ ] 01-02-PLAN.md — Secure-field detection + IME send gate + disabled UI with explanation
-- [ ] 01-03-PLAN.md — Keystore-backed API key storage + remove plaintext persistence/export
-- [ ] 01-04-PLAN.md — Per-app send policy UI + enforcement (block external sending per app)
-- [ ] 01-05-PLAN.md — Privacy disclosures (settings + first-use) + redacted verbose logging toggle
+- [x] 01-01-PLAN.md — Harden networking (redacted logs, safe errors, true cancellation)
+- [x] 01-02-PLAN.md — Secure-field detection + IME send gate + disabled UI with explanation
+- [x] 01-03-PLAN.md — Keystore-backed API key storage + remove plaintext persistence/export
+- [x] 01-04-PLAN.md — Per-app send policy UI + enforcement (block external sending per app)
+- [x] 01-05-PLAN.md — Privacy disclosures (settings + first-use) + redacted verbose logging toggle
 
 ### Phase 2: Providers & Models
 

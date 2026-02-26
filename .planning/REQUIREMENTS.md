@@ -140,11 +140,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CMD-04 | 5 | Pending |
 | STATS-01 | 7 | Pending |
 | STATS-02 | 7 | Pending |
-| PRIV-01 | 1 | Pending |
-| PRIV-02 | 1 | Pending |
-| PRIV-03 | 1 | Pending |
-| PRIV-04 | 1 | Pending |
-| PRIV-05 | 1 | Pending |
+| PRIV-01 | 1 | Complete |
+| PRIV-02 | 1 | Complete |
+| PRIV-03 | 1 | Complete |
+| PRIV-04 | 1 | Complete |
+| PRIV-05 | 1 | Complete |
 | PRIV-06 | 7 | Pending |
 
 **Coverage:**
