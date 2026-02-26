@@ -6,8 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -30,7 +32,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
@@ -85,7 +86,17 @@ fun KeyboardScreen(
     val isSwipingUp = swipeUpProgress > 0.05f
     val isRecordingState = state == KeyboardState.Recording || state == KeyboardState.RecordingLocked
     val externalSendingBlocked = externalSendBlockedReason != null || externalSendBlockedByAppPolicy
-    var showSecureFieldSheet by remember { mutableStateOf(false) }
+    val canShowBlockedExplanation = externalSendingBlocked && (externalSendBlockedByAppPolicy || showSecureFieldExplanation)
+    val copy = remember(externalSendBlockedReason, externalSendBlockedByAppPolicy, blockedPackageName) {
+        blockedExplanationCopySpec(
+            externalSendBlockedReason = externalSendBlockedReason,
+            externalSendBlockedByAppPolicy = externalSendBlockedByAppPolicy,
+            blockedPackageName = blockedPackageName,
+        )
+    }
+    var showBlockedExplanation by remember { mutableStateOf(false) }
+    var showBlockedExplanationFallback by remember { mutableStateOf(false) }
+    val blockedExplanationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     
     LaunchedEffect(state) {
         if (!isRecordingState) {
@@ -96,83 +107,98 @@ fun KeyboardScreen(
 
     LaunchedEffect(externalSendingBlocked) {
         if (!externalSendingBlocked) {
-            showSecureFieldSheet = false
+            showBlockedExplanation = false
+            showBlockedExplanationFallback = false
         }
     }
 
-    if (showSecureFieldSheet && externalSendingBlocked) {
-        ModalBottomSheet(onDismissRequest = { showSecureFieldSheet = false }) {
-            Column(
+    LaunchedEffect(showBlockedExplanation, canShowBlockedExplanation) {
+        if (!showBlockedExplanation || !canShowBlockedExplanation) {
+            showBlockedExplanationFallback = false
+            if (blockedExplanationSheetState.isVisible) {
+                blockedExplanationSheetState.hide()
+            }
+            return@LaunchedEffect
+        }
+
+        showBlockedExplanationFallback = false
+        val expanded = withTimeoutOrNull(300) {
+            blockedExplanationSheetState.show()
+            while (blockedExplanationSheetState.currentValue != SheetValue.Expanded) {
+                delay(16)
+            }
+            true
+        } == true
+
+        if (!expanded) {
+            blockedExplanationSheetState.hide()
+            showBlockedExplanationFallback = true
+        }
+    }
+
+    if (showBlockedExplanation && canShowBlockedExplanation && !showBlockedExplanationFallback) {
+        ModalBottomSheet(
+            onDismissRequest = { showBlockedExplanation = false },
+            sheetState = blockedExplanationSheetState,
+            windowInsets = WindowInsets(0, 0, 0, 0),
+        ) {
+            BlockedExplanationContent(
+                copy = copy,
+                onOpenSettings = {
+                    showBlockedExplanation = false
+                    showBlockedExplanationFallback = false
+                    onOpenSettingsDestination(PRIVACY_SAFETY_DESTINATION)
+                },
+                onClose = {
+                    showBlockedExplanation = false
+                    showBlockedExplanationFallback = false
+                },
+                onDontShowAgain = {
+                    onDontShowSecureFieldExplanationAgain()
+                    showBlockedExplanation = false
+                    showBlockedExplanationFallback = false
+                },
+                showCloseAction = false,
+            )
+        }
+    }
+
+    if (showBlockedExplanation && canShowBlockedExplanation && showBlockedExplanationFallback) {
+        Popup(
+            alignment = Alignment.BottomCenter,
+            onDismissRequest = {
+                showBlockedExplanation = false
+                showBlockedExplanationFallback = false
+            },
+            properties = PopupProperties(focusable = true, clippingEnabled = false),
+        ) {
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp,
+                shadowElevation = 8.dp,
             ) {
-                val blockedByAppRule = externalSendBlockedByAppPolicy
-                Text(
-                    text = if (blockedByAppRule) {
-                        "External sending is blocked for this app"
-                    } else {
-                        stringResource(R.string.secure_field_sheet_title)
-                    },
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = if (blockedByAppRule) {
-                        "Privacy & Safety contains a per-app rule that blocks external sending for this target app."
-                    } else {
-                        stringResource(R.string.secure_field_sheet_description)
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                ) {
-                    Text(
-                        text = if (blockedByAppRule) {
-                            val packageName = blockedPackageName?.takeIf { it.isNotBlank() }
-                            if (packageName == null) {
-                                "Reason: blocked by a Privacy & Safety app rule"
-                            } else {
-                                "Reason: blocked by a Privacy & Safety app rule for $packageName"
-                            }
-                        } else {
-                            when (externalSendBlockedReason) {
-                                SecureFieldDetector.Reason.PasswordLike -> stringResource(R.string.secure_field_reason_password)
-                                SecureFieldDetector.Reason.OtpLike -> stringResource(R.string.secure_field_reason_otp)
-                                SecureFieldDetector.Reason.NoPersonalizedLearning -> stringResource(R.string.secure_field_reason_no_personalized_learning)
-                                SecureFieldDetector.Reason.Unknown -> stringResource(R.string.secure_field_reason_unknown)
-                                null -> stringResource(R.string.secure_field_reason_unknown)
-                            }
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                    )
-                }
-                Button(
-                    onClick = {
-                        showSecureFieldSheet = false
+                BlockedExplanationContent(
+                    copy = copy,
+                    onOpenSettings = {
+                        showBlockedExplanation = false
+                        showBlockedExplanationFallback = false
                         onOpenSettingsDestination(PRIVACY_SAFETY_DESTINATION)
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.secure_field_sheet_open_settings))
-                }
-                if (!blockedByAppRule) {
-                    TextButton(
-                        onClick = {
-                            onDontShowSecureFieldExplanationAgain()
-                            showSecureFieldSheet = false
-                        },
-                        modifier = Modifier.align(Alignment.End),
-                    ) {
-                        Text(stringResource(R.string.secure_field_sheet_dont_show_again))
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
+                    onClose = {
+                        showBlockedExplanation = false
+                        showBlockedExplanationFallback = false
+                    },
+                    onDontShowAgain = {
+                        onDontShowSecureFieldExplanationAgain()
+                        showBlockedExplanation = false
+                        showBlockedExplanationFallback = false
+                    },
+                    showCloseAction = true,
+                )
             }
         }
     }
@@ -374,13 +400,87 @@ fun KeyboardScreen(
                     onUnlockAction = onUnlockAction,
                     onBlockedAction = {
                         onBlockedAction()
-                        if (externalSendingBlocked && (externalSendBlockedByAppPolicy || showSecureFieldExplanation)) {
-                            showSecureFieldSheet = true
+                        if (canShowBlockedExplanation) {
+                            showBlockedExplanation = true
+                            showBlockedExplanationFallback = false
                         }
                     },
                 )
             }
         }
+    }
+}
+
+@Composable
+internal fun BlockedExplanationContent(
+    copy: BlockedExplanationCopySpec,
+    onOpenSettings: () -> Unit,
+    onClose: () -> Unit,
+    onDontShowAgain: () -> Unit,
+    showCloseAction: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val reasonText = copy.reasonArg?.let { arg ->
+        stringResource(copy.reasonRes, arg)
+    } ?: stringResource(copy.reasonRes)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(copy.titleRes),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            if (showCloseAction) {
+                IconButton(onClick = onClose) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = null,
+                    )
+                }
+            }
+        }
+        Text(
+            text = stringResource(copy.descriptionRes),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        ) {
+            Text(
+                text = reasonText,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            )
+        }
+        Button(
+            onClick = onOpenSettings,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.secure_field_sheet_open_settings))
+        }
+        if (copy.showDontShowAgain) {
+            TextButton(
+                onClick = onDontShowAgain,
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text(stringResource(R.string.secure_field_sheet_dont_show_again))
+            }
+        }
+        Spacer(Modifier.height(12.dp))
     }
 }
 

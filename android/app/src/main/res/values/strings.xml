@@ -44,6 +44,10 @@
     <string name="secure_field_reason_unknown">Reason: secure field</string>
     <string name="secure_field_sheet_open_settings">Open Privacy &amp; Safety settings</string>
     <string name="secure_field_sheet_dont_show_again">Don’t show again</string>
+    <string name="blocked_app_policy_sheet_title">External sending is blocked for this app</string>
+    <string name="blocked_app_policy_sheet_description">Privacy &amp; Safety contains a per-app rule that blocks external sending for this target app.</string>
+    <string name="blocked_app_policy_reason_generic">Reason: blocked by a Privacy &amp; Safety app rule</string>
+    <string name="blocked_app_policy_reason_for_package">Reason: blocked by a Privacy &amp; Safety app rule for %1$s</string>
 
     <!-- Warning and Error Messages -->
     <string name="error_endpoint_unset">Error: Endpoint is not set in settings.</string>
