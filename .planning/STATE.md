@@ -8,11 +8,11 @@
 ## Current Position
 
 Phase: 1 of 7 (Privacy & Safety Controls)
-Plan: 2 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-26 - Completed 01-02-PLAN.md
+Last activity: 2026-02-26 - Completed 01-03-PLAN.md
 
-Progress: `[████░░░░░░] 40%`
+Progress: `[██████░░░░] 60%`
 
 ## Performance Metrics (targets)
 
@@ -33,6 +33,9 @@ Progress: `[████░░░░░░] 40%`
 - External-send entry points must use a single IME secure-field gate before any network-bound action.
 - Secure-field blocked UX is tap-to-explain only (no proactive banner) with a global don’t-show-again preference.
 - Settings destination requests from IME must route via MainActivity extras and safely fall back to settings main.
+- Provider API keys are runtime-only on `ServiceProvider` and must never serialize into providers JSON/export payloads.
+- Plaintext provider `apiKey` migration uses raw JSON tree parsing with sanitize-then-flag ordering guarded by `PROVIDER_API_KEY_MIGRATION_DONE`.
+- IME dictation and Smart Fix must inject provider API keys from `SecretsStore` at call time via `provider.copy(apiKey=...)`.
 
 ### Blockers
 
@@ -44,6 +47,6 @@ Progress: `[████░░░░░░] 40%`
 
 ## Session Continuity
 
-Last session: 2026-02-26 15:25 UTC
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-02-26 15:44 UTC
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
