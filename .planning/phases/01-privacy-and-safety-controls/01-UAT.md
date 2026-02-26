@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 01-privacy-and-safety-controls
 source:
   - 01-01-SUMMARY.md
@@ -8,7 +8,7 @@ source:
   - 01-04-SUMMARY.md
   - 01-05-SUMMARY.md
 started: 2026-02-26T17:39:08Z
-updated: 2026-02-26T17:59:13Z
+updated: 2026-02-26T18:06:40Z
 ---
 
 ## Current Test
@@ -68,16 +68,29 @@ skipped: 0
   reason: "User reported: Yes, it is locked, but the explination bottom sheet appears and it is empty! no text or conent in it."
   severity: major
   test: 1
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Blocked explanation UI uses ModalBottomSheet in IME-constrained host and opens in a clipped/partial presentation, so content appears empty while block state itself is correct."
+  artifacts:
+    - path: "android/app/src/main/java/com/github/shekohex/whisperpp/ui/keyboard/KeyboardScreen.kt"
+      issue: "Blocked explanation rendered via ModalBottomSheet without explicit expanded sheet-state handling in IME host."
+    - path: "android/app/src/main/java/com/github/shekohex/whisperpp/WhisperInputService.kt"
+      issue: "Block gating state is correctly wired; failure is in shared explanation presentation path."
+  missing:
+    - "Use explicit bottom-sheet state (skipPartiallyExpanded=true) and force expanded/open behavior for blocked explanation."
+    - "Provide IME-safe explanation container fallback if sheet host still clips content."
+    - "Add regression coverage for secure-field blocked explanation content visibility."
+  debug_session: ".planning/debug/uat1-empty-blocked-sheet.md"
 - truth: "After blocking an app in Privacy & Safety, Whisper++ refuses external sending in that app and explains that it is blocked by app policy."
   status: failed
   reason: "User reported: it is locked, but the bottom sheet is empty."
   severity: major
   test: 5
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Same shared blocked-sheet rendering defect as secure-field flow: app-policy block state is set, but explanation ModalBottomSheet presentation in IME appears empty."
+  artifacts:
+    - path: "android/app/src/main/java/com/github/shekohex/whisperpp/ui/keyboard/KeyboardScreen.kt"
+      issue: "App-policy and secure-field explanation share the same blocked-sheet UI path."
+    - path: "android/app/src/main/res/values/strings.xml"
+      issue: "Explanation strings exist; missing text is not caused by empty resources."
+  missing:
+    - "Apply explicit expanded sheet-state handling for app-policy blocked explanation UI."
+    - "Add regression coverage for app-policy blocked explanation content visibility."
+  debug_session: ".planning/debug/uat2-empty-blocked-sheet.md"
