@@ -42,6 +42,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 private const val PRIVACY_SAFETY_DESTINATION = "privacy_safety"
 
+data class FirstUseDisclosureUiState(
+    val title: String,
+    val dataSent: String,
+    val endpointLines: List<String>,
+    val contextLine: String,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KeyboardScreen(
@@ -65,8 +72,12 @@ fun KeyboardScreen(
     externalSendBlockedByAppPolicy: Boolean = false,
     blockedPackageName: String? = null,
     showSecureFieldExplanation: Boolean = true,
+    firstUseDisclosure: FirstUseDisclosureUiState? = null,
     onBlockedAction: () -> Unit = {},
     onDontShowSecureFieldExplanationAgain: () -> Unit = {},
+    onFirstUseDisclosureContinue: () -> Unit = {},
+    onFirstUseDisclosureCancel: () -> Unit = {},
+    onFirstUseDisclosureOpenPrivacySafety: () -> Unit = {},
 ) {
     var swipeProgress by remember { mutableFloatStateOf(0f) }
     var swipeUpProgress by remember { mutableFloatStateOf(0f) }
@@ -160,6 +171,64 @@ fun KeyboardScreen(
                     ) {
                         Text(stringResource(R.string.secure_field_sheet_dont_show_again))
                     }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+    }
+
+    if (firstUseDisclosure != null) {
+        ModalBottomSheet(onDismissRequest = onFirstUseDisclosureCancel) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = firstUseDisclosure.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = firstUseDisclosure.dataSent,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                firstUseDisclosure.endpointLines.forEach { endpointLine ->
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    ) {
+                        Text(
+                            text = endpointLine,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        )
+                    }
+                }
+                Text(
+                    text = firstUseDisclosure.contextLine,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = onFirstUseDisclosureContinue,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Continue")
+                }
+                OutlinedButton(
+                    onClick = onFirstUseDisclosureOpenPrivacySafety,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Open Privacy & Safety")
+                }
+                TextButton(
+                    onClick = onFirstUseDisclosureCancel,
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text("Cancel")
                 }
                 Spacer(Modifier.height(12.dp))
             }

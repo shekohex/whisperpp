@@ -58,23 +58,29 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import com.github.shekohex.whisperpp.recorder.RecorderManager
+import com.github.shekohex.whisperpp.ui.keyboard.FirstUseDisclosureUiState
 import com.github.shekohex.whisperpp.ui.keyboard.KeyboardScreen
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
 import com.github.liuyueyi.quick.transfer.ChineseUtils
 import com.github.liuyueyi.quick.transfer.constants.TransType
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 import java.io.File
 import java.util.Locale
 
@@ -82,6 +88,19 @@ private const val RECORDED_AUDIO_FILENAME_WAV = "recorded.wav"
 private const val AUDIO_MEDIA_TYPE_WAV = "audio/wav"
 private const val IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL = 28
 private const val TAG = "WhisperInputService"
+private const val PRIVACY_SAFETY_DESTINATION = "privacy_safety"
+
+private enum class FirstUseDisclosureMode {
+    DICTATION_AUDIO,
+    ENHANCEMENT_TEXT,
+    COMMAND_TEXT,
+}
+
+private enum class FirstUseDisclosureDecision {
+    CONTINUE,
+    CANCEL,
+    OPEN_SETTINGS,
+}
 
 class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     private val whisperTranscriber: WhisperTranscriber = WhisperTranscriber()
@@ -120,6 +139,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var externalSendBlockedByAppPolicy = mutableStateOf(false)
     private var externalSendBlockedPackageName = mutableStateOf<String?>(null)
     private var secureFieldExplanationDontShowAgain = mutableStateOf(false)
+    private var firstUseDisclosure = mutableStateOf<FirstUseDisclosureUiState?>(null)
+    private var pendingFirstUseDisclosureMode: FirstUseDisclosureMode? = null
+    private var pendingFirstUseDisclosureContinuation: CancellableContinuation<FirstUseDisclosureDecision>? = null
+    private var networkLoggingPreferenceJob: Job? = null
     private var timerJob: Job? = null
     private val activeMediaPlayers = mutableListOf<MediaPlayer>()
 
@@ -136,6 +159,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
         recorderManager = RecorderManager(this)
         smartFixer = SmartFixer(this)
+        networkLoggingPreferenceJob = CoroutineScope(Dispatchers.Main).launch {
+            dataStore.data.map { it[VERBOSE_NETWORK_LOGS_ENABLED] ?: false }.collect { enabled ->
+                whisperTranscriber.setNetworkLoggingEnabled(enabled)
+                smartFixer.setNetworkLoggingEnabled(enabled)
+            }
+        }
     }
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
@@ -173,29 +202,45 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         if (shouldBlockExternalSend()) {
                             null
                         } else {
-                        setKeyboardState(KeyboardState.SmartFixing)
-                        performFeedback()
-                        
-                        val providerId = prefs[SMART_FIX_BACKEND] ?: ""
-                        val modelId = prefs[SMART_FIX_MODEL] ?: ""
-                        val providers = repository.providers.first()
-                        val provider = providers.find { it.id == providerId }
-                        
-                        if (provider != null) {
-                            val providerWithApiKey = provider.copy(
-                                apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
-                            )
-                            val temperature = if (provider.temperature > 0) provider.temperature else prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
-                            val promptTemplate = if (provider.prompt.isNotEmpty()) provider.prompt else prefs[SMART_FIX_PROMPT] ?: ""
+                            val providerId = prefs[SMART_FIX_BACKEND] ?: ""
+                            val providers = repository.providers.first()
+                            val provider = providers.find { it.id == providerId }
 
-                            Log.d(TAG, "Smart Fix using Provider: ${provider.name}, Model: $modelId")
+                            if (provider != null) {
+                                val modelId = (prefs[SMART_FIX_MODEL] ?: "").ifBlank {
+                                    provider.models.firstOrNull()?.id.orEmpty()
+                                }
+                                val useContext = prefs[USE_CONTEXT] ?: false
+                                val disclosure = PrivacyDisclosureFormatter.disclosureForEnhancement(
+                                    provider = provider,
+                                    selectedModelId = modelId,
+                                    useContext = useContext,
+                                )
+                                val disclosureDecision = awaitFirstUseDisclosure(
+                                    mode = FirstUseDisclosureMode.ENHANCEMENT_TEXT,
+                                    disclosure = disclosure,
+                                )
+                                if (disclosureDecision != FirstUseDisclosureDecision.CONTINUE) {
+                                    text
+                                } else {
+                                    setKeyboardState(KeyboardState.SmartFixing)
+                                    performFeedback()
 
-                            withContext(Dispatchers.IO) {
-                                smartFixer.fix(text, contextPrompt, providerWithApiKey, modelId, temperature, promptTemplate)
+                                    val providerWithApiKey = provider.copy(
+                                        apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
+                                    )
+                                    val temperature = if (provider.temperature > 0) provider.temperature else prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
+                                    val promptTemplate = if (provider.prompt.isNotEmpty()) provider.prompt else prefs[SMART_FIX_PROMPT] ?: ""
+
+                                    Log.d(TAG, "Smart Fix using Provider: ${provider.name}, Model: $modelId")
+
+                                    withContext(Dispatchers.IO) {
+                                        smartFixer.fix(text, contextPrompt, providerWithApiKey, modelId, temperature, promptTemplate)
+                                    }
+                                }
+                            } else {
+                                text
                             }
-                        } else {
-                            text
-                        }
                         }
                     } else {
                         text
@@ -361,8 +406,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         externalSendBlockedByAppPolicy = externalSendBlockedByAppPolicy.value,
                         blockedPackageName = externalSendBlockedPackageName.value,
                         showSecureFieldExplanation = !secureFieldExplanationDontShowAgain.value,
+                        firstUseDisclosure = firstUseDisclosure.value,
                         onBlockedAction = { handleBlockedExternalSendAction() },
-                        onDontShowSecureFieldExplanationAgain = { saveSecureFieldDontShowAgain() }
+                        onDontShowSecureFieldExplanationAgain = { saveSecureFieldDontShowAgain() },
+                        onFirstUseDisclosureContinue = { onFirstUseDisclosureContinue() },
+                        onFirstUseDisclosureCancel = { onFirstUseDisclosureCancel() },
+                        onFirstUseDisclosureOpenPrivacySafety = { onFirstUseDisclosureOpenPrivacySafety() },
                     )
                 }
             }
@@ -456,6 +505,87 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         return isExternalSendBlocked()
     }
 
+    private fun disclosurePreferenceKey(mode: FirstUseDisclosureMode): Preferences.Key<Boolean> {
+        return when (mode) {
+            FirstUseDisclosureMode.DICTATION_AUDIO -> DISCLOSURE_SHOWN_DICTATION_AUDIO
+            FirstUseDisclosureMode.ENHANCEMENT_TEXT -> DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
+            FirstUseDisclosureMode.COMMAND_TEXT -> DISCLOSURE_SHOWN_COMMAND_TEXT
+        }
+    }
+
+    private fun mapDisclosureToUiState(
+        disclosure: PrivacyDisclosureFormatter.ModeDisclosure,
+    ): FirstUseDisclosureUiState {
+        return FirstUseDisclosureUiState(
+            title = disclosure.title,
+            dataSent = disclosure.dataSent,
+            endpointLines = disclosure.endpoints.map { endpoint ->
+                "Endpoint: ${endpoint.baseUrl}${endpoint.path}"
+            },
+            contextLine = disclosure.contextLine,
+        )
+    }
+
+    private suspend fun awaitFirstUseDisclosure(
+        mode: FirstUseDisclosureMode,
+        disclosure: PrivacyDisclosureFormatter.ModeDisclosure,
+    ): FirstUseDisclosureDecision {
+        val alreadyShown = dataStore.data.map { prefs ->
+            prefs[disclosurePreferenceKey(mode)] ?: false
+        }.first()
+        if (alreadyShown) {
+            return FirstUseDisclosureDecision.CONTINUE
+        }
+
+        return suspendCancellableCoroutine { continuation ->
+            pendingFirstUseDisclosureContinuation?.let { pending ->
+                if (pending.isActive) {
+                    pending.resume(FirstUseDisclosureDecision.CANCEL)
+                }
+            }
+            pendingFirstUseDisclosureMode = mode
+            pendingFirstUseDisclosureContinuation = continuation
+            firstUseDisclosure.value = mapDisclosureToUiState(disclosure)
+
+            continuation.invokeOnCancellation {
+                if (pendingFirstUseDisclosureContinuation === continuation) {
+                    pendingFirstUseDisclosureContinuation = null
+                    pendingFirstUseDisclosureMode = null
+                    firstUseDisclosure.value = null
+                }
+            }
+        }
+    }
+
+    private fun resolveFirstUseDisclosure(decision: FirstUseDisclosureDecision) {
+        val continuation = pendingFirstUseDisclosureContinuation
+        pendingFirstUseDisclosureContinuation = null
+        pendingFirstUseDisclosureMode = null
+        firstUseDisclosure.value = null
+        if (continuation != null && continuation.isActive) {
+            continuation.resume(decision)
+        }
+    }
+
+    private fun onFirstUseDisclosureContinue() {
+        val mode = pendingFirstUseDisclosureMode ?: return
+        CoroutineScope(Dispatchers.Main).launch {
+            dataStore.edit { prefs ->
+                prefs[disclosurePreferenceKey(mode)] = true
+            }
+            resolveFirstUseDisclosure(FirstUseDisclosureDecision.CONTINUE)
+        }
+    }
+
+    private fun onFirstUseDisclosureCancel() {
+        resolveFirstUseDisclosure(FirstUseDisclosureDecision.CANCEL)
+    }
+
+    private fun onFirstUseDisclosureOpenPrivacySafety() {
+        launchMainActivity(PRIVACY_SAFETY_DESTINATION)
+        resolveFirstUseDisclosure(FirstUseDisclosureDecision.OPEN_SETTINGS)
+    }
+
     private fun onMicAction() {
         if (shouldBlockExternalSend()) {
             handleBlockedExternalSendAction()
@@ -464,8 +594,42 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
         when (keyboardState.value) {
             KeyboardState.Ready -> {
-                performFeedback(customSoundId = R.raw.rec_start)
-                startRecording()
+                CoroutineScope(Dispatchers.Main).launch {
+                    val prefs = dataStore.data.first()
+                    val currentLanguage = prefs[LANGUAGE_CODE] ?: "auto"
+                    val defaultBackendId = prefs[SPEECH_TO_TEXT_BACKEND] ?: ""
+                    val providers = repository.providers.first()
+                    val languageProvider = if (currentLanguage != "auto") {
+                        providers.find { it.languageCode.equals(currentLanguage, ignoreCase = true) }
+                    } else {
+                        null
+                    }
+                    val provider = languageProvider ?: providers.find { it.id == defaultBackendId }
+                    val modelId = if (!provider?.models.isNullOrEmpty()) {
+                        provider?.models?.first()?.id.orEmpty()
+                    } else {
+                        prefs[MODEL] ?: "whisper-1"
+                    }
+                    val useContext = prefs[USE_CONTEXT] ?: false
+                    val disclosure = PrivacyDisclosureFormatter.disclosureForDictation(
+                        provider = provider,
+                        selectedModelId = modelId,
+                        useContext = useContext,
+                    )
+                    val disclosureDecision = awaitFirstUseDisclosure(
+                        mode = FirstUseDisclosureMode.DICTATION_AUDIO,
+                        disclosure = disclosure,
+                    )
+                    if (disclosureDecision != FirstUseDisclosureDecision.CONTINUE) {
+                        return@launch
+                    }
+                    if (shouldBlockExternalSend()) {
+                        setKeyboardState(KeyboardState.Ready)
+                        return@launch
+                    }
+                    performFeedback(customSoundId = R.raw.rec_start)
+                    startRecording()
+                }
             }
             KeyboardState.Recording -> {
                 performFeedback(customSoundId = R.raw.rec_pause)
@@ -742,6 +906,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     override fun onWindowHidden() {
         super.onWindowHidden()
         Log.d(TAG, "onWindowHidden: Stopping all active tasks")
+        onFirstUseDisclosureCancel()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         whisperTranscriber.stop()
@@ -766,6 +931,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     override fun onDestroy() {
         super.onDestroy()
+        networkLoggingPreferenceJob?.cancel()
+        onFirstUseDisclosureCancel()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         store.clear()
         whisperTranscriber.stop()
