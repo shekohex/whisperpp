@@ -8,11 +8,11 @@
 ## Current Position
 
 Phase: 1 of 7 (Privacy & Safety Controls)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-02-26 - Completed 01-03-PLAN.md
+Last activity: 2026-02-26 - Completed 01-04-PLAN.md
 
-Progress: `[██████░░░░] 60%`
+Progress: `[████████░░] 80%`
 
 ## Performance Metrics (targets)
 
@@ -36,6 +36,9 @@ Progress: `[██████░░░░] 60%`
 - Provider API keys are runtime-only on `ServiceProvider` and must never serialize into providers JSON/export payloads.
 - Plaintext provider `apiKey` migration uses raw JSON tree parsing with sanitize-then-flag ordering guarded by `PROVIDER_API_KEY_MIGRATION_DONE`.
 - IME dictation and Smart Fix must inject provider API keys from `SecretsStore` at call time via `provider.copy(apiKey=...)`.
+- Per-app send policy persists as packageName→blocked JSON with default-allow semantics when no rule exists.
+- Privacy & Safety must be addressable as a dedicated settings destination (`privacy_safety`) for IME deep-links.
+- IME external-send blocking must enforce both secure-field and per-app rules, with app-rule-specific blocked explanation.
 
 ### Blockers
 
@@ -47,6 +50,6 @@ Progress: `[██████░░░░] 60%`
 
 ## Session Continuity
 
-Last session: 2026-02-26 15:44 UTC
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-02-26 15:56 UTC
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
