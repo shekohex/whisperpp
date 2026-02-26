@@ -7,11 +7,12 @@
 
 ## Current Position
 
-- **Phase:** 1 — Privacy & Safety Controls
-- **Status:** Not started
-- **Next:** /gsd-plan-phase 1
+Phase: 1 of 7 (Privacy & Safety Controls)
+Plan: 1 of 5 in current phase
+Status: In progress
+Last activity: 2026-02-26 - Completed 01-01-PLAN.md
 
-Progress: `[░░░░░░░░░░] 0%`
+Progress: `[██░░░░░░░░] 20%`
 
 ## Performance Metrics (targets)
 
@@ -26,6 +27,9 @@ Progress: `[░░░░░░░░░░] 0%`
 - Realtime insertion is capability-gated; composing text for partials.
 - Enhancement replaces in place with 1-tap undo; fallback to raw on failure.
 - Command mode uses best-effort selection, with clipboard fallback.
+- Networking errors shown to users are constrained to provider + HTTP code + endpoint host.
+- Provider networking logs default to NONE with an opt-in HEADERS mode (no BODY).
+- Cancellation is treated as benign and must cancel the underlying OkHttp Call.
 
 ### Blockers
 
@@ -37,4 +41,6 @@ Progress: `[░░░░░░░░░░] 0%`
 
 ## Session Continuity
 
-- Keep planning artifacts in `.planning/` aligned with v1 requirements and phase mapping.
+Last session: 2026-02-26 14:57 UTC
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None
