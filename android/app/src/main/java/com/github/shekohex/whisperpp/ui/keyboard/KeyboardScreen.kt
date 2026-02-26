@@ -62,6 +62,8 @@ fun KeyboardScreen(
     onLockAction: () -> Unit = {},
     onUnlockAction: () -> Unit = {},
     externalSendBlockedReason: SecureFieldDetector.Reason? = null,
+    externalSendBlockedByAppPolicy: Boolean = false,
+    blockedPackageName: String? = null,
     showSecureFieldExplanation: Boolean = true,
     onBlockedAction: () -> Unit = {},
     onDontShowSecureFieldExplanationAgain: () -> Unit = {},
@@ -71,7 +73,7 @@ fun KeyboardScreen(
     val isSwiping = swipeProgress > 0.05f
     val isSwipingUp = swipeUpProgress > 0.05f
     val isRecordingState = state == KeyboardState.Recording || state == KeyboardState.RecordingLocked
-    val externalSendingBlocked = externalSendBlockedReason != null
+    val externalSendingBlocked = externalSendBlockedReason != null || externalSendBlockedByAppPolicy
     var showSecureFieldSheet by remember { mutableStateOf(false) }
     
     LaunchedEffect(state) {
@@ -87,7 +89,7 @@ fun KeyboardScreen(
         }
     }
 
-    if (showSecureFieldSheet && externalSendBlockedReason != null) {
+    if (showSecureFieldSheet && externalSendingBlocked) {
         ModalBottomSheet(onDismissRequest = { showSecureFieldSheet = false }) {
             Column(
                 modifier = Modifier
@@ -95,13 +97,22 @@ fun KeyboardScreen(
                     .padding(horizontal = 20.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                val blockedByAppRule = externalSendBlockedByAppPolicy
                 Text(
-                    text = stringResource(R.string.secure_field_sheet_title),
+                    text = if (blockedByAppRule) {
+                        "External sending is blocked for this app"
+                    } else {
+                        stringResource(R.string.secure_field_sheet_title)
+                    },
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = stringResource(R.string.secure_field_sheet_description),
+                    text = if (blockedByAppRule) {
+                        "Privacy & Safety contains a per-app rule that blocks external sending for this target app."
+                    } else {
+                        stringResource(R.string.secure_field_sheet_description)
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -110,11 +121,21 @@ fun KeyboardScreen(
                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
                 ) {
                     Text(
-                        text = when (externalSendBlockedReason) {
-                            SecureFieldDetector.Reason.PasswordLike -> stringResource(R.string.secure_field_reason_password)
-                            SecureFieldDetector.Reason.OtpLike -> stringResource(R.string.secure_field_reason_otp)
-                            SecureFieldDetector.Reason.NoPersonalizedLearning -> stringResource(R.string.secure_field_reason_no_personalized_learning)
-                            SecureFieldDetector.Reason.Unknown -> stringResource(R.string.secure_field_reason_unknown)
+                        text = if (blockedByAppRule) {
+                            val packageName = blockedPackageName?.takeIf { it.isNotBlank() }
+                            if (packageName == null) {
+                                "Reason: blocked by a Privacy & Safety app rule"
+                            } else {
+                                "Reason: blocked by a Privacy & Safety app rule for $packageName"
+                            }
+                        } else {
+                            when (externalSendBlockedReason) {
+                                SecureFieldDetector.Reason.PasswordLike -> stringResource(R.string.secure_field_reason_password)
+                                SecureFieldDetector.Reason.OtpLike -> stringResource(R.string.secure_field_reason_otp)
+                                SecureFieldDetector.Reason.NoPersonalizedLearning -> stringResource(R.string.secure_field_reason_no_personalized_learning)
+                                SecureFieldDetector.Reason.Unknown -> stringResource(R.string.secure_field_reason_unknown)
+                                null -> stringResource(R.string.secure_field_reason_unknown)
+                            }
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -129,14 +150,16 @@ fun KeyboardScreen(
                 ) {
                     Text(stringResource(R.string.secure_field_sheet_open_settings))
                 }
-                TextButton(
-                    onClick = {
-                        onDontShowSecureFieldExplanationAgain()
-                        showSecureFieldSheet = false
-                    },
-                    modifier = Modifier.align(Alignment.End),
-                ) {
-                    Text(stringResource(R.string.secure_field_sheet_dont_show_again))
+                if (!blockedByAppRule) {
+                    TextButton(
+                        onClick = {
+                            onDontShowSecureFieldExplanationAgain()
+                            showSecureFieldSheet = false
+                        },
+                        modifier = Modifier.align(Alignment.End),
+                    ) {
+                        Text(stringResource(R.string.secure_field_sheet_dont_show_again))
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
             }
@@ -282,7 +305,7 @@ fun KeyboardScreen(
                     onUnlockAction = onUnlockAction,
                     onBlockedAction = {
                         onBlockedAction()
-                        if (externalSendingBlocked && showSecureFieldExplanation) {
+                        if (externalSendingBlocked && (externalSendBlockedByAppPolicy || showSecureFieldExplanation)) {
                             showSecureFieldSheet = true
                         }
                     },

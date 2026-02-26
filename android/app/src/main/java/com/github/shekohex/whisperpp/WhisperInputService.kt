@@ -58,6 +58,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import com.github.shekohex.whisperpp.recorder.RecorderManager
@@ -92,6 +93,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     
     private lateinit var repository: SettingsRepository
     private lateinit var secretsStore: SecretsStore
+    private lateinit var sendPolicyRepository: SendPolicyRepository
 
     // Lifecycle & SavedState & ViewModelStore
     private val lifecycleRegistry = LifecycleRegistry(this)
@@ -115,6 +117,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var recordingTimeMs = mutableStateOf(0L)
     private var showLongPressHint = mutableStateOf(false)
     private var externalSendBlockReason = mutableStateOf<SecureFieldDetector.Reason?>(null)
+    private var externalSendBlockedByAppPolicy = mutableStateOf(false)
+    private var externalSendBlockedPackageName = mutableStateOf<String?>(null)
     private var secureFieldExplanationDontShowAgain = mutableStateOf(false)
     private var timerJob: Job? = null
     private val activeMediaPlayers = mutableListOf<MediaPlayer>()
@@ -126,6 +130,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
         repository = SettingsRepository(dataStore)
         secretsStore = SecretsStore(this)
+        sendPolicyRepository = SendPolicyRepository(dataStore)
         runBlocking {
             repository.migrateProviderApiKeysIfNeeded(this@WhisperInputService)
         }
@@ -136,16 +141,16 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         refreshExternalSendBlock(attribute)
-        if (externalSendBlockReason.value != null && isExternalSendingActive()) {
-            stopExternalSendingForSecureField()
+        if (isExternalSendBlocked() && isExternalSendingActive()) {
+            stopExternalSendingForBlockedPolicy()
         }
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         refreshExternalSendBlock(info)
-        if (externalSendBlockReason.value != null && isExternalSendingActive()) {
-            stopExternalSendingForSecureField()
+        if (isExternalSendBlocked() && isExternalSendingActive()) {
+            stopExternalSendingForBlockedPolicy()
         }
     }
 
@@ -353,6 +358,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         onLockAction = { lockRecording() },
                         onUnlockAction = { unlockRecording() },
                         externalSendBlockedReason = externalSendBlockReason.value,
+                        externalSendBlockedByAppPolicy = externalSendBlockedByAppPolicy.value,
+                        blockedPackageName = externalSendBlockedPackageName.value,
                         showSecureFieldExplanation = !secureFieldExplanationDontShowAgain.value,
                         onBlockedAction = { handleBlockedExternalSendAction() },
                         onDontShowSecureFieldExplanationAgain = { saveSecureFieldDontShowAgain() }
@@ -385,6 +392,22 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private fun refreshExternalSendBlock(editorInfo: EditorInfo?) {
         externalSendBlockReason.value = currentExternalSendBlock(editorInfo)?.reason
+        val packageName = editorInfo?.packageName?.trim().orEmpty().ifBlank { null }
+        val blockedByPolicy = if (packageName == null) {
+            false
+        } else {
+            runCatching {
+                runBlocking {
+                    sendPolicyRepository.isBlockedFlow(packageName).first()
+                }
+            }.getOrDefault(false)
+        }
+        externalSendBlockedByAppPolicy.value = blockedByPolicy
+        externalSendBlockedPackageName.value = if (blockedByPolicy) packageName else null
+    }
+
+    private fun isExternalSendBlocked(): Boolean {
+        return externalSendBlockReason.value != null || externalSendBlockedByAppPolicy.value
     }
 
     private fun isExternalSendingActive(): Boolean {
@@ -399,7 +422,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
     }
 
-    private fun stopExternalSendingForSecureField() {
+    private fun stopExternalSendingForBlockedPolicy() {
         recorderManager?.stop()
         stopTimer()
         recordingTimeMs.value = 0L
@@ -407,7 +430,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         whisperTranscriber.stop()
         smartFixer.cancel()
         setKeyboardState(KeyboardState.Ready)
-        Toast.makeText(this, getString(R.string.secure_field_sending_stopped), Toast.LENGTH_SHORT).show()
+        val notice = if (externalSendBlockedByAppPolicy.value) {
+            "External sending blocked for this app"
+        } else {
+            getString(R.string.secure_field_sending_stopped)
+        }
+        Toast.makeText(this, notice, Toast.LENGTH_SHORT).show()
     }
 
     private fun handleBlockedExternalSendAction() {
@@ -424,9 +452,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun shouldBlockExternalSend(): Boolean {
-        val block = currentExternalSendBlock()
-        externalSendBlockReason.value = block?.reason
-        return block != null
+        refreshExternalSendBlock(currentInputEditorInfo)
+        return isExternalSendBlocked()
     }
 
     private fun onMicAction() {
