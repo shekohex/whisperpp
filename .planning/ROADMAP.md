@@ -37,7 +37,7 @@ Whisper++ is an Android keyboard (IME) that turns speech into text in any app, w
 4. Users can set a per-app send policy to block sending audio/text externally; when blocked, Whisper++ refuses to send and clearly explains the block.
 5. The UI clearly discloses what data is sent (audio/text) and which provider endpoint(s) will receive it.
 
-**Plans:** 5 plans
+**Plans:** 6 plans
 
 Plans:
 - [x] 01-01-PLAN.md — Harden networking (redacted logs, safe errors, true cancellation)
@@ -45,6 +45,7 @@ Plans:
 - [x] 01-03-PLAN.md — Keystore-backed API key storage + remove plaintext persistence/export
 - [x] 01-04-PLAN.md — Per-app send policy UI + enforcement (block external sending per app)
 - [x] 01-05-PLAN.md — Privacy disclosures (settings + first-use) + redacted verbose logging toggle
+- [x] 01-06-PLAN.md — IME-safe blocked explanation (secure-field + app-policy) gap closure
 
 ### Phase 2: Providers & Models
 

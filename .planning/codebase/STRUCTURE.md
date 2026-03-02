@@ -37,6 +37,8 @@
 - Key files:
   - Settings screens + nav graph: `android/app/src/main/java/com/github/shekohex/whisperpp/ui/settings/SettingsScreen.kt`
   - Keyboard UI: `android/app/src/main/java/com/github/shekohex/whisperpp/ui/keyboard/KeyboardScreen.kt`
+  - Blocked explanation host: `android/app/src/main/java/com/github/shekohex/whisperpp/ui/keyboard/BlockedExplanationActivity.kt`
+  - Blocked explanation copy spec: `android/app/src/main/java/com/github/shekohex/whisperpp/ui/keyboard/BlockedExplanationCopySpec.kt`
   - Shared components: `android/app/src/main/java/com/github/shekohex/whisperpp/ui/components/*`
   - Theme: `android/app/src/main/java/com/github/shekohex/whisperpp/ui/theme/*`
 
@@ -87,7 +89,7 @@
 ## Key File Locations
 
 **Entry Points:**
-- `android/app/src/main/AndroidManifest.xml`: Declares `MainActivity`, IME service `.WhisperInputService`, FileProvider, update receiver.
+- `android/app/src/main/AndroidManifest.xml`: Declares `MainActivity`, `BlockedExplanationActivity`, IME service `.WhisperInputService`, FileProvider, update receiver.
 - `android/app/src/main/java/com/github/shekohex/whisperpp/MainActivity.kt`: Launcher activity + `Context.dataStore` definition + preference keys.
 - `android/app/src/main/java/com/github/shekohex/whisperpp/WhisperInputService.kt`: IME service; hosts Compose keyboard UI and coordinates record/transcribe.
 - `android/app/src/main/java/com/github/shekohex/whisperpp/updater/UpdateCheckWorker.kt`: Periodic update checks + notification.

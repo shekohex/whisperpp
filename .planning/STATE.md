@@ -38,6 +38,7 @@ Progress: `[░░░░░░░░░░] 0%`
 - Per-app send policy persists as packageName→blocked JSON with default-allow semantics when no rule exists.
 - Privacy & Safety must be addressable as a dedicated settings destination (`privacy_safety`) for IME deep-links.
 - IME external-send blocking must enforce both secure-field and per-app rules, with app-rule-specific blocked explanation.
+- Blocked explanation fallback uses a dedicated activity host when in-IME sheet rendering is unreliable.
 - Privacy disclosures must be generated from live provider config (base URL + endpoint path) via a shared formatter.
 - First-use disclosure gating is mode-specific (`dictation`, `enhancement`, `command`) and resettable from Privacy & Safety.
 - Verbose diagnostics logging is user-togglable but constrained to redacted HEADERS logging only.
@@ -52,6 +53,6 @@ Progress: `[░░░░░░░░░░] 0%`
 
 ## Session Continuity
 
-Last session: 2026-02-26 18:30 UTC
-Stopped at: Phase 1 verified (passed)
+Last session: 2026-03-02 14:57 UTC
+Stopped at: Completed 01-06-PLAN.md
 Resume file: None
