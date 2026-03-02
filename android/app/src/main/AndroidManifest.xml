@@ -70,6 +70,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.keyboard.BlockedExplanationActivity"
+            android:exported="false"
+            android:excludeFromRecents="true" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

@@ -1,5 +1,7 @@
 package com.github.shekohex.whisperpp.ui.keyboard
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -24,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -80,6 +83,7 @@ fun KeyboardScreen(
     onFirstUseDisclosureCancel: () -> Unit = {},
     onFirstUseDisclosureOpenPrivacySafety: () -> Unit = {},
 ) {
+    val context = LocalContext.current
     var swipeProgress by remember { mutableFloatStateOf(0f) }
     var swipeUpProgress by remember { mutableFloatStateOf(0f) }
     val isSwiping = swipeProgress > 0.05f
@@ -401,14 +405,36 @@ fun KeyboardScreen(
                     onBlockedAction = {
                         onBlockedAction()
                         if (canShowBlockedExplanation) {
-                            showBlockedExplanation = true
-                            showBlockedExplanationFallback = false
+                            val openedDetached = startBlockedExplanationActivity(
+                                context = context,
+                                externalSendBlockedReason = externalSendBlockedReason,
+                                externalSendBlockedByAppPolicy = externalSendBlockedByAppPolicy,
+                                blockedPackageName = blockedPackageName,
+                            )
+                            if (!openedDetached) {
+                                showBlockedExplanation = true
+                                showBlockedExplanationFallback = false
+                            }
                         }
                     },
                 )
             }
         }
     }
+}
+
+private fun startBlockedExplanationActivity(
+    context: Context,
+    externalSendBlockedReason: SecureFieldDetector.Reason?,
+    externalSendBlockedByAppPolicy: Boolean,
+    blockedPackageName: String?,
+): Boolean {
+    val intent = Intent(context, BlockedExplanationActivity::class.java)
+        .putExtra(BlockedExplanationActivity.EXTRA_EXTERNAL_SEND_BLOCKED_BY_APP_POLICY, externalSendBlockedByAppPolicy)
+        .putExtra(BlockedExplanationActivity.EXTRA_EXTERNAL_SEND_BLOCKED_PACKAGE_NAME, blockedPackageName)
+        .putExtra(BlockedExplanationActivity.EXTRA_EXTERNAL_SEND_BLOCKED_REASON, externalSendBlockedReason?.name)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    return runCatching { context.startActivity(intent) }.isSuccess
 }
 
 @Composable
