@@ -61,6 +61,15 @@ Plans:
 3. Users can choose an STT provider/model for dictation and a (potentially different) text provider/model for enhancement/command mode.
 4. OpenAI-compatible endpoints work for STT and text transforms, and Gemini-compatible endpoints work for text transforms.
 
+**Plans:** 5 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Provider/model schema v2 + migration + disclosure derivation tests
+- [ ] 02-02-PLAN.md — Provider edit UX rules + model metadata editor (kind + streaming)
+- [ ] 02-03-PLAN.md — Active STT/text selections + command override + setup-needed banner
+- [ ] 02-04-PLAN.md — Runtime wiring for selections + base-URL routing (OpenAI STT/text, Gemini text)
+- [ ] 02-05-PLAN.md — Provider Test actions + optional model import with raw response UI
+
 ### Phase 3: Dictation
 
 **Goal:** Users can dictate reliably with streaming-gated partials, cancellation, and undo.
