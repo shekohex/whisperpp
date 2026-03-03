@@ -96,9 +96,17 @@ Each task was committed atomically:
 - **Verification:** `./android/gradlew -p android :app:assembleDebug` and `./android/gradlew -p android testDebugUnitTest`
 - **Committed in:** `b466c0e`
 
+**2. [Rule 2 - Missing Critical] Clipboard fallback for non-editable focus (TYPE_NULL)**
+- **Found during:** task 2 (clipboard fallback correctness)
+- **Issue:** `EditorInfo.inputType == 0` indicates no text field; inserting would be unsafe/unreliable.
+- **Fix:** Treat TYPE_NULL as no-field and force clipboard fallback.
+- **Files modified:** android/app/src/main/java/com/github/shekohex/whisperpp/dictation/DictationController.kt
+- **Verification:** `./android/gradlew -p android :app:assembleDebug` and `./android/gradlew -p android testDebugUnitTest`
+- **Committed in:** `d3add9b`
+
 ---
 
-**Total deviations:** 1 auto-fixed (1 missing critical)
+**Total deviations:** 2 auto-fixed (2 missing critical)
 **Impact on plan:** Required for privacy/battery correctness; no scope creep.
 
 ## Issues Encountered
