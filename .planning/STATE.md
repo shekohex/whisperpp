@@ -4,11 +4,11 @@
 
 **Current Phase:** 02
 **Current Phase Name:** Providers & Models
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Current Plan:** 5
 **Total Plans in Phase:** 5
 
-**Progress:** [█████████░] 91%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -18,6 +18,7 @@
 | Phase 02-providers-models P02 | 10 min | 2 tasks | 1 files |
 | Phase 02-providers-models P03 | 16 min | 3 tasks | 5 files |
 | Phase 02-providers-models P04 | 3 min | 3 tasks | 3 files |
+| Phase 02-providers-models P05 | 6h 32m | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -45,6 +46,8 @@
 - Verbose diagnostics logging is user-togglable but constrained to redacted HEADERS logging only.
 - [Phase 02-providers-models]: Kept JSON field name endpoint for compatibility; semantics are now base URL
 - [Phase 02-providers-models]: Default auth mode is API_KEY except WHISPER_ASR which defaults to NO_AUTH
+- [Phase 02]: Gemini Smart Fix uses x-goog-api-key header (no key= in URL)
+- [Phase 02]: Provider diagnostics show raw response in UI with redaction; never log bodies
 
 ### Blockers
 
@@ -56,6 +59,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-03T04:20:18.180Z
-**Stopped At:** Completed 02-04-PLAN.md
+**Last session:** 2026-03-03T11:15:14.814Z
+**Stopped At:** Completed 02-providers-models-05-PLAN.md
 **Resume file:** None
