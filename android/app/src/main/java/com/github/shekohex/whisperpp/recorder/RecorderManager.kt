@@ -217,10 +217,12 @@ class RecorderManager(context: Context) {
     }
 
     fun pause() {
+        runCatching { audioRecord?.stop() }
         isPaused.set(true)
     }
 
     fun resume() {
+        runCatching { audioRecord?.startRecording() }
         isPaused.set(false)
     }
 
