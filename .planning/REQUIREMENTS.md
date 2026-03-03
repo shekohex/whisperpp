@@ -19,8 +19,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **PROV-02**: Provider models include kind (stt/text/multimodal) + capability flags (at minimum: streaming partials supported)
 - [x] **PROV-03**: User can choose an STT model/provider for dictation
 - [x] **PROV-04**: User can choose a text model/provider for enhancement + command mode (can differ from STT)
-- [ ] **PROV-05**: OpenAI-compatible endpoints can be used for STT and text transforms (user-configured base URL)
-- [ ] **PROV-06**: Gemini-compatible endpoints can be used for text transforms (user-configured base URL)
+- [x] **PROV-05**: OpenAI-compatible endpoints can be used for STT and text transforms (user-configured base URL)
+- [x] **PROV-06**: Gemini-compatible endpoints can be used for text transforms (user-configured base URL)
 
 ### Dictation
 
@@ -116,8 +116,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROV-02 | 2 | Complete |
 | PROV-03 | 2 | Complete |
 | PROV-04 | 2 | Complete |
-| PROV-05 | 2 | Pending |
-| PROV-06 | 2 | Pending |
+| PROV-05 | 2 | Complete |
+| PROV-06 | 2 | Complete |
 | DICT-01 | 3 | Pending |
 | DICT-02 | 3 | Pending |
 | DICT-03 | 3 | Pending |
