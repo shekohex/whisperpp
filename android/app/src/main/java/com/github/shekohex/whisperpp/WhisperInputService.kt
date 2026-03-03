@@ -155,7 +155,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         secretsStore = SecretsStore(this)
         sendPolicyRepository = SendPolicyRepository(dataStore)
         runBlocking {
-            repository.migrateProviderApiKeysIfNeeded(this@WhisperInputService)
+            repository.migrateProviderSchemaV2IfNeeded(this@WhisperInputService)
         }
         recorderManager = RecorderManager(this)
         smartFixer = SmartFixer(this)

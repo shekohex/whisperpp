@@ -18,6 +18,7 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -25,6 +26,7 @@ import java.util.Locale
 val PROVIDERS_JSON = stringPreferencesKey("providers_json")
 val PROFILES_JSON = stringPreferencesKey("profiles_json")
 val PROVIDER_API_KEY_MIGRATION_DONE = booleanPreferencesKey("provider_api_key_migration_done")
+val PROVIDER_SCHEMA_V2_MIGRATION_DONE = booleanPreferencesKey("provider_schema_v2_migration_done")
 
 data class SettingsExport(
     val version: Int,
@@ -84,8 +86,30 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                 list?.map { provider ->
                     // Migration/Sanitization: Handle missing fields (nulls) from old JSON
                     // Gson might set non-nullable fields to null if missing in JSON.
+                    val safeType = (provider.type as? ProviderType) ?: ProviderType.CUSTOM
+                    val safeEndpoint = (provider.endpoint as? String) ?: ""
+                    val safeModels = ((provider.models as? List<ModelConfig>) ?: emptyList()).map { model ->
+                        val inferredKind = (model.kind as? ModelKind)
+                            ?: inferModelKindFromLegacyEndpoint(safeType, safeEndpoint)
+                        model.copy(
+                            id = (model.id as? String) ?: "",
+                            name = (model.name as? String) ?: "",
+                            isThinking = (model.isThinking as? Boolean) ?: false,
+                            kind = inferredKind,
+                            streamingPartialsSupported = (model.streamingPartialsSupported as? Boolean) ?: false,
+                        )
+                    }
+                    val safeAuthMode = (provider.authMode as? ProviderAuthMode) ?: when (safeType) {
+                        ProviderType.WHISPER_ASR -> ProviderAuthMode.NO_AUTH
+                        else -> ProviderAuthMode.API_KEY
+                    }
                     provider.copy(
-                        models = (provider.models as? List<ModelConfig>) ?: emptyList(),
+                        id = (provider.id as? String) ?: "",
+                        name = (provider.name as? String) ?: "",
+                        type = safeType,
+                        endpoint = safeEndpoint,
+                        authMode = safeAuthMode,
+                        models = safeModels,
                         prompt = (provider.prompt as? String) ?: "",
                         languageCode = (provider.languageCode as? String) ?: "auto",
                         timeout = (provider.timeout as? Number)?.toInt() ?: 10000,
@@ -165,27 +189,39 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    private fun extractProviderArray(rootElement: JsonElement): JsonArray? {
-        if (rootElement.isJsonArray) {
-            return rootElement.asJsonArray
-        }
-        if (!rootElement.isJsonObject) {
-            return null
+    suspend fun migrateProviderSchemaV2IfNeeded(context: Context) {
+        val migrationDone = dataStore.data.map { prefs ->
+            prefs[PROVIDER_SCHEMA_V2_MIGRATION_DONE] ?: false
+        }.first()
+
+        if (migrationDone) {
+            return
         }
 
-        val rootObject = rootElement.asJsonObject
-        rootObject.get("providers")?.let { providersElement ->
-            if (providersElement.isJsonArray) {
-                return providersElement.asJsonArray
+        migrateProviderApiKeysIfNeeded(context)
+
+        val prefs = dataStore.data.first()
+        val rawProvidersJson = prefs[PROVIDERS_JSON]
+
+        if (rawProvidersJson.isNullOrBlank()) {
+            dataStore.edit { mutablePrefs ->
+                mutablePrefs[PROVIDER_SCHEMA_V2_MIGRATION_DONE] = true
             }
+            return
         }
 
-        rootObject.entrySet().forEach { entry ->
-            if (entry.value.isJsonArray) {
-                return entry.value.asJsonArray
-            }
+        val migratedJson = try {
+            migrateProvidersJsonToSchemaV2(rawProvidersJson)
+        } catch (_: Exception) {
+            return
         }
-        return null
+
+        dataStore.edit { mutablePrefs ->
+            if (!migratedJson.isNullOrBlank()) {
+                mutablePrefs[PROVIDERS_JSON] = migratedJson
+            }
+            mutablePrefs[PROVIDER_SCHEMA_V2_MIGRATION_DONE] = true
+        }
     }
     
     val profiles: Flow<List<LanguageProfile>> = dataStore.data.map { prefs ->
@@ -289,5 +325,167 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         } catch (e: Exception) {
             ImportResult.Error("Failed to import: ${e.message}")
         }
+    }
+}
+
+internal fun extractProviderArray(rootElement: JsonElement): JsonArray? {
+    if (rootElement.isJsonArray) {
+        return rootElement.asJsonArray
+    }
+    if (!rootElement.isJsonObject) {
+        return null
+    }
+
+    val rootObject = rootElement.asJsonObject
+    rootObject.get("providers")?.let { providersElement ->
+        if (providersElement.isJsonArray) {
+            return providersElement.asJsonArray
+        }
+    }
+
+    rootObject.entrySet().forEach { entry ->
+        if (entry.value.isJsonArray) {
+            return entry.value.asJsonArray
+        }
+    }
+    return null
+}
+
+private fun rewriteEndpointToBaseUrlIfNeeded(endpoint: String): String {
+    val trimmed = endpoint.trim()
+    val parsed = trimmed.toHttpUrlOrNull() ?: return endpoint
+    val segments = parsed.pathSegments.filter { it.isNotBlank() }
+
+    val openAiBaseSegments = when {
+        segments.size >= 2 && segments.takeLast(2) == listOf("audio", "transcriptions") -> segments.dropLast(2)
+        segments.size >= 2 && segments.takeLast(2) == listOf("chat", "completions") -> segments.dropLast(2)
+        else -> null
+    }
+    if (openAiBaseSegments != null && openAiBaseSegments.isNotEmpty()) {
+        val basePath = "/" + openAiBaseSegments.joinToString("/")
+        return parsed.newBuilder().encodedPath(basePath).query(null).fragment(null).build().toString()
+    }
+
+    if (trimmed.contains(":generateContent")) {
+        val v1betaIndex = segments.indexOf("v1beta")
+        if (v1betaIndex != -1) {
+            val baseSegments = segments.take(v1betaIndex + 1)
+            val basePath = "/" + baseSegments.joinToString("/")
+            return parsed.newBuilder().encodedPath(basePath).query(null).fragment(null).build().toString()
+        }
+    }
+
+    return endpoint
+}
+
+private fun inferModelKindFromLegacyEndpoint(providerType: ProviderType, legacyEndpoint: String): ModelKind {
+    if (providerType == ProviderType.WHISPER_ASR) {
+        return ModelKind.STT
+    }
+    if (providerType == ProviderType.GEMINI) {
+        return ModelKind.MULTIMODAL
+    }
+
+    val parsed = legacyEndpoint.trim().toHttpUrlOrNull()
+    val segments = parsed?.pathSegments?.filter { it.isNotBlank() }.orEmpty()
+    return if (segments.size >= 2 && segments.takeLast(2) == listOf("audio", "transcriptions")) {
+        ModelKind.STT
+    } else {
+        ModelKind.TEXT
+    }
+}
+
+internal fun migrateProvidersJsonToSchemaV2(rawProvidersJson: String): String? {
+    val rootElement = JsonParser.parseString(rawProvidersJson)
+    val providerArray = extractProviderArray(rootElement) ?: return null
+    var changed = false
+
+    providerArray.forEach providerLoop@ { providerElement ->
+        if (!providerElement.isJsonObject) {
+            return@providerLoop
+        }
+
+        val providerObject = providerElement.asJsonObject
+        val providerType = providerObject.get("type")
+            ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+            ?.asString
+            ?.trim()
+            ?.let { raw -> runCatching { ProviderType.valueOf(raw) }.getOrNull() }
+            ?: ProviderType.CUSTOM
+
+        val legacyEndpoint = providerObject.get("endpoint")
+            ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+            ?.asString
+            ?.trim()
+            .orEmpty()
+
+        if (legacyEndpoint.isNotBlank()) {
+            val rewritten = rewriteEndpointToBaseUrlIfNeeded(legacyEndpoint)
+            if (rewritten != legacyEndpoint) {
+                providerObject.addProperty("endpoint", rewritten)
+                changed = true
+            }
+        }
+
+        val authModeElement = providerObject.get("authMode")
+        val authModeRaw = authModeElement
+            ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+            ?.asString
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+        val hasValidAuthMode = authModeRaw != null && runCatching {
+            ProviderAuthMode.valueOf(authModeRaw)
+        }.isSuccess
+        if (!hasValidAuthMode) {
+            val defaultAuthMode = if (providerType == ProviderType.WHISPER_ASR) {
+                ProviderAuthMode.NO_AUTH
+            } else {
+                ProviderAuthMode.API_KEY
+            }
+            providerObject.addProperty("authMode", defaultAuthMode.name)
+            changed = true
+        }
+
+        providerObject.get("models")?.let { modelsElement ->
+            if (modelsElement.isJsonArray) {
+                val modelsArray = modelsElement.asJsonArray
+                modelsArray.forEach modelLoop@ { modelElement ->
+                    if (!modelElement.isJsonObject) {
+                        return@modelLoop
+                    }
+                    val modelObject = modelElement.asJsonObject
+
+                    val kindElement = modelObject.get("kind")
+                    val kindRaw = kindElement
+                        ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+                        ?.asString
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                    val hasValidKind = kindRaw != null && runCatching {
+                        ModelKind.valueOf(kindRaw)
+                    }.isSuccess
+                    if (!hasValidKind) {
+                        val inferredKind = inferModelKindFromLegacyEndpoint(providerType, legacyEndpoint)
+                        modelObject.addProperty("kind", inferredKind.name)
+                        changed = true
+                    }
+
+                    val streamingElement = modelObject.get("streamingPartialsSupported")
+                    val hasValidStreamingFlag = streamingElement?.let {
+                        it.isJsonPrimitive && it.asJsonPrimitive.isBoolean
+                    } == true
+                    if (!hasValidStreamingFlag) {
+                        modelObject.addProperty("streamingPartialsSupported", false)
+                        changed = true
+                    }
+                }
+            }
+        }
+    }
+
+    return if (changed) {
+        Gson().toJson(rootElement)
+    } else {
+        null
     }
 }

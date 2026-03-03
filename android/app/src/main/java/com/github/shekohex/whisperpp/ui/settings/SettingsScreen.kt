@@ -87,7 +87,7 @@ fun SettingsNavigation(
     }
 
     LaunchedEffect(Unit) {
-        repository.migrateProviderApiKeysIfNeeded(context)
+        repository.migrateProviderSchemaV2IfNeeded(context)
         migrationReady = true
     }
 
