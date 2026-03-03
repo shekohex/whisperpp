@@ -9,11 +9,11 @@
 
 ## Build
 
-- Debug APK: `JAVA_HOME="/Users/shady/Library/Java/JavaVirtualMachines/jbr-17.0.9/Contents/Home" ./android/gradlew assembleDebug`
-- Release APK (unsigned): `JAVA_HOME="/Users/shady/Library/Java/JavaVirtualMachines/jbr-17.0.9/Contents/Home" ./android/gradlew assembleRelease`
-- Clean: `JAVA_HOME="/Users/shady/Library/Java/JavaVirtualMachines/jbr-17.0.9/Contents/Home" ./android/gradlew clean`
-- Build all variants: `JAVA_HOME="/Users/shady/Library/Java/JavaVirtualMachines/jbr-17.0.9/Contents/Home" ./android/gradlew assemble`
-- List tasks: `JAVA_HOME="/Users/shady/Library/Java/JavaVirtualMachines/jbr-17.0.9/Contents/Home" ./android/gradlew tasks`
+- Debug APK: `./android/gradlew assembleDebug`
+- Release APK (unsigned): `./android/gradlew assembleRelease`
+- Clean: `./android/gradlew clean`
+- Build all variants: `./android/gradlew assemble`
+- List tasks: `./android/gradlew tasks`
 
 ## Lint
 
@@ -153,7 +153,6 @@ When the user asks for a new release, follow this protocol:
 
 - Do not log sensitive data (API keys, tokens, user audio).
 - Validate URLs and file paths before use.
-- Use HTTPS endpoints only.
 
 ## Performance
 
@@ -180,61 +179,5 @@ When the user asks for a new release, follow this protocol:
 ## PTY Usage
 
 - Use PTY for long-running Gradle tasks to avoid timeouts.
-- Spawn with `JAVA_HOME` set to JDK 17.
 - Read output via `pty_read` and look for `BUILD SUCCESSFUL`.
 - Kill and cleanup PTY sessions when done.
-
-## Cursor/Copilot Rules
-
-- No `.cursor/rules`, `.cursorrules`, or `.github/copilot-instructions.md` found.
-
-## Notes
-
-- Use JDK 17 for CLI Gradle; JDK 25 fails parsing version `25.0.1`.
-- Example: `JAVA_HOME="/Users/shady/Library/Java/JavaVirtualMachines/jbr-17.0.9/Contents/Home" ./android/gradlew tasks`.
-- If Gradle tasks fail, run `./android/gradlew --stacktrace` for details.
-- If tasks are missing, check `android/build.gradle.kts` and `android/app/build.gradle.kts`.
-- For tooling setup, use Android Studio with default settings.
-
-## Issue tracking
-
-This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
-
-## Quick Reference
-
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --status in_progress  # Claim work
-bd close <id>         # Complete work
-bd sync               # Sync with git
-```
-
-## Landing the Plane (Session Completion)
-
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
-
-**MANDATORY WORKFLOW:**
-
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
-
-   ```bash
-   git pull --rebase
-   bd sync
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
-
-**CRITICAL RULES:**
-
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
