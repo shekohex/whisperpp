@@ -1125,7 +1125,10 @@ fun ProviderEditScreen(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun ModelEditCard(model: ModelConfig, onUpdate: (ModelConfig) -> Unit, onDelete: () -> Unit) {
+    var kindExpanded by remember { mutableStateOf(false) }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -1149,6 +1152,52 @@ fun ModelEditCard(model: ModelConfig, onUpdate: (ModelConfig) -> Unit, onDelete:
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(8.dp))
+
+            ExposedDropdownMenuBox(
+                expanded = kindExpanded,
+                onExpandedChange = { kindExpanded = !kindExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    readOnly = true,
+                    value = model.kind.name,
+                    onValueChange = {},
+                    label = { Text("Kind") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = kindExpanded) },
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = kindExpanded,
+                    onDismissRequest = { kindExpanded = false }
+                ) {
+                    ModelKind.values().forEach { kind ->
+                        DropdownMenuItem(
+                            text = { Text(kind.name) },
+                            onClick = {
+                                val updated = if (kind == ModelKind.TEXT) {
+                                    model.copy(kind = kind, streamingPartialsSupported = false)
+                                } else {
+                                    model.copy(kind = kind)
+                                }
+                                onUpdate(updated)
+                                kindExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            if (model.kind == ModelKind.STT || model.kind == ModelKind.MULTIMODAL) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = model.streamingPartialsSupported,
+                        onCheckedChange = { onUpdate(model.copy(streamingPartialsSupported = it)) }
+                    )
+                    Text("Streaming partials supported")
+                }
+            }
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(
                     checked = model.isThinking,
