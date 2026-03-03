@@ -19,10 +19,23 @@ enum class ThinkingType {
     BUDGET, LEVEL
 }
 
+enum class ModelKind {
+    STT,
+    TEXT,
+    MULTIMODAL,
+}
+
+enum class ProviderAuthMode {
+    API_KEY,
+    NO_AUTH,
+}
+
 data class ModelConfig(
     val id: String,
     val name: String,
-    val isThinking: Boolean = false
+    val isThinking: Boolean = false,
+    val kind: ModelKind = ModelKind.TEXT,
+    val streamingPartialsSupported: Boolean = false,
 )
 
 data class ServiceProvider(
@@ -30,6 +43,7 @@ data class ServiceProvider(
     val name: String,
     val type: ProviderType,
     val endpoint: String,
+    val authMode: ProviderAuthMode = ProviderAuthMode.API_KEY,
     @Transient val apiKey: String = "",
     val models: List<ModelConfig>,
     // Configuration
