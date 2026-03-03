@@ -3,6 +3,7 @@ package com.github.shekohex.whisperpp
 import android.content.Context
 import android.util.Log
 import com.github.shekohex.whisperpp.data.ProviderType
+import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.data.ThinkingType
 import kotlinx.coroutines.CancellationException
@@ -19,9 +20,10 @@ import java.util.concurrent.TimeUnit
 class SmartFixer(private val context: Context) {
     private val TAG = "SmartFixer"
     private var inFlightCall: Call? = null
-    
+     
     private val loggingInterceptor = HttpLoggingInterceptor { message ->
-        Log.d("HTTP_SmartFixer", message)
+        val sanitized = message.replace(Regex("([?&]key=)[^&\\s]+"), "${'$'}1REDACTED")
+        Log.d("HTTP_SmartFixer", sanitized)
     }.apply {
         level = HttpLoggingInterceptor.Level.NONE
         redactHeader("Authorization")
@@ -61,8 +63,13 @@ class SmartFixer(private val context: Context) {
         promptTemplate: String
     ): String {
         if (text.isBlank()) return text
-        if (provider.endpoint.isBlank() || provider.apiKey.isBlank() || modelId.isBlank()) {
-            val error = "Smart Fix configuration incomplete (Endpoint, API Key, or Model missing)"
+        if (provider.endpoint.isBlank() || modelId.isBlank()) {
+            val error = "Smart Fix configuration incomplete (Endpoint or Model missing)"
+            Log.w(TAG, error)
+            return text
+        }
+        if (provider.authMode == ProviderAuthMode.API_KEY && provider.apiKey.isBlank()) {
+            val error = "Smart Fix configuration incomplete (API Key missing)"
             Log.w(TAG, error)
             return text
         }
@@ -135,7 +142,8 @@ class SmartFixer(private val context: Context) {
     }
 
     private fun callOpenAI(provider: ServiceProvider, model: String, temperature: Float, prompt: String): String {
-        Log.d(TAG, "Calling OpenAI at ${provider.endpoint} with model $model")
+        val url = deriveOpenAiChatUrl(provider).toString()
+        Log.d(TAG, "Calling OpenAI at $url with model $model")
         val json = JSONObject().apply {
             put("model", model)
             put("messages", JSONArray().apply {
@@ -155,13 +163,18 @@ class SmartFixer(private val context: Context) {
         }
 
         val request = Request.Builder()
-            .url(provider.endpoint)
-            .addHeader("Authorization", "Bearer ${provider.apiKey}")
+            .url(url)
             .addHeader("Content-Type", "application/json")
             .post(json.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
-        val body = executeRequest(request, provider)
+        val requestWithAuth = if (provider.authMode == ProviderAuthMode.API_KEY) {
+            request.newBuilder().addHeader("Authorization", "Bearer ${provider.apiKey}").build()
+        } else {
+            request
+        }
+
+        val body = executeRequest(requestWithAuth, provider)
         val jsonResponse = JSONObject(body)
         return jsonResponse.getJSONArray("choices")
             .getJSONObject(0)
@@ -170,14 +183,13 @@ class SmartFixer(private val context: Context) {
     }
 
     private fun callGoogle(provider: ServiceProvider, model: String, temperature: Float, prompt: String): String {
-        Log.d(TAG, "Calling Google Gemini at ${provider.endpoint} with model $model")
-        val apiAction = "generateContent"
-        
-        var url = provider.endpoint
-        if (!url.contains(":$apiAction") && model.isNotEmpty()) {
-            url = if (url.endsWith("/")) "${url}models/${model}:$apiAction" 
-                  else "${url}/models/${model}:$apiAction"
+        val baseUrl = deriveGeminiGenerateContentUrl(provider, model)
+        val url = if (provider.authMode == ProviderAuthMode.API_KEY) {
+            baseUrl.newBuilder().addQueryParameter("key", provider.apiKey).build().toString()
+        } else {
+            baseUrl.toString()
         }
+        Log.d(TAG, "Calling Google Gemini at $url with model $model")
 
         val json = JSONObject().apply {
             put("contents", JSONArray().apply {
@@ -208,7 +220,6 @@ class SmartFixer(private val context: Context) {
 
         val request = Request.Builder()
             .url(url)
-            .addHeader("x-goog-api-key", provider.apiKey)
             .addHeader("Content-Type", "application/json")
             .post(json.toString().toRequestBody("application/json".toMediaType()))
             .build()
@@ -230,5 +241,26 @@ class SmartFixer(private val context: Context) {
         }
 
         return result.toString().trim()
+    }
+
+    private fun deriveOpenAiChatUrl(provider: ServiceProvider): HttpUrl {
+        val base = provider.endpoint.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid endpoint")
+        val segments = base.pathSegments.filter { it.isNotBlank() }
+        val alreadyDerived = segments.size >= 2 && segments.takeLast(2) == listOf("chat", "completions")
+        return if (alreadyDerived) {
+            base
+        } else {
+            base.newBuilder().addPathSegments("chat/completions").build()
+        }
+    }
+
+    private fun deriveGeminiGenerateContentUrl(provider: ServiceProvider, model: String): HttpUrl {
+        val base = provider.endpoint.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid endpoint")
+        val normalizedPath = base.encodedPath.trim().trimEnd('/')
+        if (normalizedPath.endsWith(":generateContent") && normalizedPath.contains("/models/")) {
+            return base
+        }
+        val normalizedModel = model.trim().removePrefix("models/").trimStart('/')
+        return base.newBuilder().addPathSegments("models").addPathSegment("${normalizedModel}:generateContent").build()
     }
 }
