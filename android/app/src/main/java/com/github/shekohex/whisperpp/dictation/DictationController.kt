@@ -2,6 +2,7 @@ package com.github.shekohex.whisperpp.dictation
 
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.ExtractedTextRequest
+import android.os.SystemClock
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isLocked
 import com.github.shekohex.whisperpp.keyboard.isPaused
@@ -11,6 +12,8 @@ import java.util.ArrayDeque
 class DictationController(
     private val deps: Deps,
 ) {
+    private val partialThrottleMs = 150L
+
     data class Deps(
         val getKeyboardState: () -> KeyboardState,
         val setKeyboardState: (KeyboardState) -> Unit,
@@ -44,6 +47,10 @@ class DictationController(
     private var nextSessionId: Long = 1L
     private var currentFocusKey: FocusKey? = null
     private var activeSession: Session? = null
+
+    private var lastPartialAppliedAtMs: Long = 0L
+    private var lastPartialApplied: String? = null
+    private var pendingPartial: String? = null
 
     private val undoStacks = mutableMapOf<FocusKey, ArrayDeque<DictationUndoEntry>>()
 
@@ -104,6 +111,7 @@ class DictationController(
     fun onHoldStart(streamingPartialsEnabled: Boolean): SendToken? {
         if (deps.getKeyboardState() != KeyboardState.Ready) return null
         val sessionId = nextSessionId++
+        resetPartialTracking()
         val token = SendToken(
             sessionId = sessionId,
             focusKey = currentFocusKey,
@@ -168,6 +176,7 @@ class DictationController(
     fun onCancelConfirmed() {
         val session = activeSession ?: return
         session.cancelled = true
+        resetPartialTracking()
         deps.cancelTranscription()
         deps.stopRecording()
         deps.clearComposing()
@@ -180,14 +189,35 @@ class DictationController(
         if (!shouldAcceptCallback(session, token)) return
         if (!session.streamingPartialsEnabled) return
         if (!isSafeToInsert(token)) return
+        if (text.isBlank()) return
+
+        pendingPartial = text
+
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastPartialAppliedAtMs < partialThrottleMs) return
+
+        val candidate = pendingPartial ?: return
+        if (candidate == lastPartialApplied) return
+
         val ic = deps.getInputConnection() ?: return
-        ic.setComposingText(text, 1)
+        ic.beginBatchEdit()
+        try {
+            ic.setComposingText(candidate, 1)
+        } finally {
+            ic.endBatchEdit()
+        }
+
+        lastPartialAppliedAtMs = now
+        lastPartialApplied = candidate
+        pendingPartial = null
     }
 
     fun onFinalTranscript(token: SendToken, text: String) {
         val session = activeSession ?: return
         if (!shouldAcceptCallback(session, token)) return
         session.pendingTranscript = text
+
+        resetPartialTracking()
 
         if (!isSafeToInsert(token)) {
             deps.copyToClipboard(text)
@@ -214,7 +244,18 @@ class DictationController(
         val focusKey = token.focusKey ?: currentFocusKey
         val selectionBefore = ic.selectionSnapshot()
         val insertionStart = selectionBefore?.let { minOf(it.start, it.end) }
-        val committed = ic.commitText(text, 1)
+
+        ic.beginBatchEdit()
+        val committed = try {
+            val composed = ic.setComposingText(text, 1)
+            val finished = ic.finishComposingText()
+            composed && finished
+        } catch (_: Exception) {
+            false
+        } finally {
+            ic.endBatchEdit()
+        }
+
         val selectionAfter = ic.selectionSnapshot()
 
         if (committed && focusKey != null && selectionBefore != null && insertionStart != null) {
@@ -232,7 +273,6 @@ class DictationController(
             stack.addLast(entry)
         }
 
-        deps.clearComposing()
         deps.setKeyboardState(KeyboardState.Ready)
         activeSession = null
     }
@@ -242,6 +282,12 @@ class DictationController(
         if (!shouldAcceptCallback(session, token)) return
         deps.toast(message)
         deps.setKeyboardState(if (deps.getKeyboardState().isLocked) KeyboardState.PausedLocked else KeyboardState.Paused)
+    }
+
+    private fun resetPartialTracking() {
+        lastPartialAppliedAtMs = 0L
+        lastPartialApplied = null
+        pendingPartial = null
     }
 
     private fun autoPause(showToast: Boolean, toastMessage: String? = null) {
