@@ -50,13 +50,27 @@ import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.*
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.updater.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.text.SimpleDateFormat
+import java.io.File
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.TimeUnit
+import org.json.JSONArray
+import org.json.JSONObject
 
 sealed class SettingsScreen(val route: String) {
     object Main : SettingsScreen("main")
@@ -1105,6 +1119,14 @@ fun ProviderEditScreen(
     val settingsState by dataStore.data.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
 
+    val httpClient = remember {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
+
     val existingProviderId = providerId?.trim().orEmpty().takeIf { it.isNotEmpty() }
     val isEditingExisting = existingProviderId != null
     val isCloning = !isEditingExisting && !cloneFromId.isNullOrBlank()
@@ -1138,6 +1160,22 @@ fun ProviderEditScreen(
     var thinkingType by remember { mutableStateOf(ThinkingType.LEVEL) }
     var thinkingBudget by remember { mutableStateOf(4096) }
     var thinkingLevel by remember { mutableStateOf("medium") }
+
+    var isTestRunning by remember { mutableStateOf(false) }
+    var showRawResponseDialog by remember { mutableStateOf(false) }
+    var rawResponseTitle by remember { mutableStateOf("") }
+    var rawResponseStatus by remember { mutableStateOf<Int?>(null) }
+    var rawResponseBody by remember { mutableStateOf("") }
+    var rawResponseError by remember { mutableStateOf<String?>(null) }
+
+    var useCustomTextTestModel by remember { mutableStateOf(false) }
+    var customTextTestModelId by remember { mutableStateOf("") }
+
+    var useCustomSttTestModel by remember { mutableStateOf(false) }
+    var customSttTestModelId by remember { mutableStateOf("") }
+
+    var sttAudioUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingSttTestAfterPick by remember { mutableStateOf(false) }
     
     // Type Dropdown State
     var typeExpanded by remember { mutableStateOf(false) }
@@ -1303,6 +1341,196 @@ fun ProviderEditScreen(
         ProviderAuthMode.API_KEY -> hasAnyApiKey
     }
     val canSave = isNameValid && isBaseUrlValid && isAuthValid
+
+    fun resolveApiKeyForTests(): String {
+        if (authMode != ProviderAuthMode.API_KEY) {
+            return ""
+        }
+        val typed = apiKeyInput.trim()
+        if (typed.isNotEmpty()) {
+            return typed
+        }
+        val id = existingProviderId ?: return ""
+        return secretsStore.getProviderApiKey(id).orEmpty()
+    }
+
+    fun showRawResult(title: String, status: Int?, body: String, error: String?) {
+        rawResponseTitle = title
+        rawResponseStatus = status
+        rawResponseBody = redactSecretsForUi(body)
+        rawResponseError = error
+        showRawResponseDialog = true
+    }
+
+    suspend fun runTextTest(modelId: String) {
+        val endpointUrl = buildProviderTextTestUrl(
+            providerType = type,
+            baseUrl = baseUrl,
+            modelId = modelId,
+        ) ?: run {
+            showRawResult("Text test", null, "", "Invalid base URL")
+            return
+        }
+
+        val requestBody = if (type == ProviderType.GEMINI) {
+            JSONObject().apply {
+                put(
+                    "contents",
+                    JSONArray().apply {
+                        put(
+                            JSONObject().apply {
+                                put(
+                                    "parts",
+                                    JSONArray().apply {
+                                        put(JSONObject().apply { put("text", "Reply with OK") })
+                                    }
+                                )
+                            }
+                        )
+                    }
+                )
+                put(
+                    "generationConfig",
+                    JSONObject().apply {
+                        put("temperature", 0)
+                        put("maxOutputTokens", 16)
+                    }
+                )
+            }.toString().toRequestBody("application/json".toMediaType())
+        } else {
+            JSONObject().apply {
+                put("model", modelId)
+                put(
+                    "messages",
+                    JSONArray().apply {
+                        put(
+                            JSONObject().apply {
+                                put("role", "user")
+                                put("content", "Reply with OK")
+                            }
+                        )
+                    }
+                )
+                put("temperature", 0)
+                put("max_tokens", 16)
+            }.toString().toRequestBody("application/json".toMediaType())
+        }
+
+        val requestBuilder = Request.Builder()
+            .url(endpointUrl)
+            .addHeader("Content-Type", "application/json")
+            .post(requestBody)
+
+        if (authMode == ProviderAuthMode.API_KEY) {
+            val apiKey = resolveApiKeyForTests()
+            if (apiKey.isNotBlank()) {
+                if (type == ProviderType.GEMINI) {
+                    requestBuilder.addHeader("x-goog-api-key", apiKey)
+                } else {
+                    requestBuilder.addHeader("Authorization", "Bearer $apiKey")
+                }
+            }
+        }
+
+        val request = requestBuilder.build()
+        val (status, body, error) = withContext(Dispatchers.IO) {
+            try {
+                httpClient.newCall(request).execute().use { response ->
+                    Triple(response.code, response.body?.string().orEmpty(), null)
+                }
+            } catch (e: Exception) {
+                Triple(null, "", e.message)
+            }
+        }
+
+        showRawResult("Text test", status, body, error)
+    }
+
+    suspend fun runSttTest(modelId: String, audioUri: Uri) {
+        val endpointUrl = buildProviderSttTestUrl(baseUrl) ?: run {
+            showRawResult("STT test", null, "", "Invalid base URL")
+            return
+        }
+
+        val tempFile = withContext(Dispatchers.IO) {
+            val mimeType = context.contentResolver.getType(audioUri).orEmpty()
+            val file = File.createTempFile("provider_test_", null, context.cacheDir)
+            context.contentResolver.openInputStream(audioUri)?.use { input ->
+                file.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            } ?: throw IllegalStateException("Unable to open audio file")
+            Pair(file, mimeType)
+        }
+
+        val (file, mimeType) = tempFile
+
+        try {
+            val body = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart(
+                    "file",
+                    file.name,
+                    file.asRequestBody(mimeType.toMediaTypeOrNull())
+                )
+                .addFormDataPart("model", modelId)
+                .build()
+
+            val requestBuilder = Request.Builder()
+                .url(endpointUrl)
+                .post(body)
+
+            if (authMode == ProviderAuthMode.API_KEY) {
+                val apiKey = resolveApiKeyForTests()
+                if (apiKey.isNotBlank()) {
+                    requestBuilder.addHeader("Authorization", "Bearer $apiKey")
+                }
+            }
+
+            val request = requestBuilder.build()
+            val (status, rawBody, error) = withContext(Dispatchers.IO) {
+                try {
+                    httpClient.newCall(request).execute().use { response ->
+                        Triple(response.code, response.body?.string().orEmpty(), null)
+                    }
+                } catch (e: Exception) {
+                    Triple(null, "", e.message)
+                }
+            }
+
+            showRawResult("STT test", status, rawBody, error)
+        } finally {
+            withContext(Dispatchers.IO) {
+                runCatching { file.delete() }
+            }
+        }
+    }
+
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        sttAudioUri = uri
+        if (uri != null && pendingSttTestAfterPick) {
+            pendingSttTestAfterPick = false
+            scope.launch {
+                val modelId = if (useCustomSttTestModel || models.firstOrNull { it.kind == ModelKind.STT || it.kind == ModelKind.MULTIMODAL }?.id.isNullOrBlank()) {
+                    customSttTestModelId.trim()
+                } else {
+                    models.firstOrNull { it.kind == ModelKind.STT || it.kind == ModelKind.MULTIMODAL }?.id.orEmpty()
+                }
+                if (modelId.isBlank()) {
+                    showRawResult("STT test", null, "", "Model ID is required")
+                    return@launch
+                }
+                isTestRunning = true
+                try {
+                    runSttTest(modelId, uri)
+                } finally {
+                    isTestRunning = false
+                }
+            }
+        }
+    }
 
     val normalized = remember(baseUrl) { normalizedBaseUrl(baseUrl) }
     val duplicateProvider = remember(providers, type, normalized, existingProviderId) {
@@ -1562,6 +1790,137 @@ fun ProviderEditScreen(
                     }
                 }
             }
+
+            if (isEditingExisting && existingProviderId != null) {
+                HorizontalDivider()
+                Text("Test", style = MaterialTheme.typography.titleMedium)
+
+                val defaultTextModelId = models.firstOrNull {
+                    it.kind == ModelKind.TEXT || it.kind == ModelKind.MULTIMODAL
+                }?.id.orEmpty()
+                val defaultSttModelId = models.firstOrNull {
+                    it.kind == ModelKind.STT || it.kind == ModelKind.MULTIMODAL
+                }?.id.orEmpty()
+
+                val mustUseCustomTextModel = defaultTextModelId.isBlank()
+                val mustUseCustomSttModel = defaultSttModelId.isBlank()
+                val effectiveUseCustomTextModel = useCustomTextTestModel || mustUseCustomTextModel
+                val effectiveUseCustomSttModel = useCustomSttTestModel || mustUseCustomSttModel
+
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            enabled = !isTestRunning,
+                            onClick = {
+                                scope.launch {
+                                    val modelId = if (effectiveUseCustomTextModel) {
+                                        customTextTestModelId.trim()
+                                    } else {
+                                        defaultTextModelId
+                                    }
+                                    if (modelId.isBlank()) {
+                                        showRawResult("Text test", null, "", "Model ID is required")
+                                        return@launch
+                                    }
+                                    isTestRunning = true
+                                    try {
+                                        runTextTest(modelId)
+                                    } finally {
+                                        isTestRunning = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Test Text")
+                        }
+
+                        OutlinedButton(
+                            enabled = !isTestRunning,
+                            onClick = {
+                                val audio = sttAudioUri
+                                if (audio == null) {
+                                    pendingSttTestAfterPick = true
+                                    audioPickerLauncher.launch(arrayOf("audio/*"))
+                                    return@OutlinedButton
+                                }
+
+                                scope.launch {
+                                    val modelId = if (effectiveUseCustomSttModel) {
+                                        customSttTestModelId.trim()
+                                    } else {
+                                        defaultSttModelId
+                                    }
+                                    if (modelId.isBlank()) {
+                                        showRawResult("STT test", null, "", "Model ID is required")
+                                        return@launch
+                                    }
+                                    isTestRunning = true
+                                    try {
+                                        runSttTest(modelId, audio)
+                                    } finally {
+                                        isTestRunning = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Test STT")
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        FilterChip(
+                            selected = effectiveUseCustomTextModel,
+                            enabled = !mustUseCustomTextModel,
+                            onClick = { useCustomTextTestModel = !useCustomTextTestModel },
+                            label = { Text("Test anyway") }
+                        )
+                        FilterChip(
+                            selected = effectiveUseCustomSttModel,
+                            enabled = !mustUseCustomSttModel,
+                            onClick = { useCustomSttTestModel = !useCustomSttTestModel },
+                            label = { Text("Force model") }
+                        )
+                        OutlinedButton(
+                            enabled = !isTestRunning,
+                            onClick = { audioPickerLauncher.launch(arrayOf("audio/*")) },
+                        ) {
+                            Text(if (sttAudioUri == null) "Pick audio" else "Change audio")
+                        }
+                    }
+
+                    if (effectiveUseCustomTextModel) {
+                        OutlinedTextField(
+                            value = customTextTestModelId,
+                            onValueChange = { customTextTestModelId = it },
+                            label = { Text("Text model id") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                        )
+                    }
+
+                    if (effectiveUseCustomSttModel) {
+                        OutlinedTextField(
+                            value = customSttTestModelId,
+                            onValueChange = { customSttTestModelId = it },
+                            label = { Text("STT model id") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                        )
+                    }
+
+                    if (isTestRunning) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text("Running...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
             
             OutlinedTextField(
                 value = timeout.toString(),
@@ -1702,9 +2061,40 @@ fun ProviderEditScreen(
              Spacer(Modifier.height(32.dp))
              Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
          }
-     }
+      }
 
-     if (blockedDeleteModel != null) {
+      if (showRawResponseDialog) {
+          AlertDialog(
+              onDismissRequest = {
+                  showRawResponseDialog = false
+                  rawResponseError = null
+              },
+              title = { Text(rawResponseTitle) },
+              text = {
+                  Column(
+                      modifier = Modifier
+                          .fillMaxWidth()
+                          .verticalScroll(rememberScrollState()),
+                      verticalArrangement = Arrangement.spacedBy(8.dp)
+                  ) {
+                      rawResponseStatus?.let { Text("HTTP $it", style = MaterialTheme.typography.labelMedium) }
+                      rawResponseError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                      if (rawResponseBody.isNotBlank()) {
+                          Text(rawResponseBody, style = MaterialTheme.typography.bodySmall)
+                      } else if (rawResponseError == null) {
+                          Text("(empty response)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                      }
+                  }
+              },
+              confirmButton = {
+                  TextButton(onClick = { showRawResponseDialog = false }) {
+                      Text("Close")
+                  }
+              }
+          )
+      }
+
+      if (blockedDeleteModel != null) {
          AlertDialog(
              onDismissRequest = {
                  blockedDeleteModel = null
@@ -1726,16 +2116,73 @@ fun ProviderEditScreen(
                      Text("Go to selections")
                  }
              },
-             dismissButton = {
-                 TextButton(onClick = {
-                     blockedDeleteModel = null
-                     blockedDeleteModelRefs = emptyList()
-                 }) {
-                     Text("Cancel")
-                 }
-             }
-         )
-     }
+              dismissButton = {
+                  TextButton(onClick = {
+                      blockedDeleteModel = null
+                      blockedDeleteModelRefs = emptyList()
+                  }) {
+                      Text("Cancel")
+                  }
+              }
+          )
+      }
+}
+
+private fun sanitizedBaseUrl(baseUrl: String): HttpUrl? {
+    return baseUrl.trim().toHttpUrlOrNull()
+        ?.newBuilder()
+        ?.query(null)
+        ?.fragment(null)
+        ?.build()
+}
+
+private fun buildProviderTextTestUrl(providerType: ProviderType, baseUrl: String, modelId: String): HttpUrl? {
+    return if (providerType == ProviderType.GEMINI) {
+        buildGeminiGenerateContentUrl(baseUrl, modelId)
+    } else {
+        buildOpenAiChatCompletionsUrl(baseUrl)
+    }
+}
+
+private fun buildProviderSttTestUrl(baseUrl: String): HttpUrl? {
+    return buildOpenAiTranscriptionsUrl(baseUrl)
+}
+
+private fun buildOpenAiChatCompletionsUrl(baseUrl: String): HttpUrl? {
+    val base = sanitizedBaseUrl(baseUrl) ?: return null
+    val segments = base.pathSegments.filter { it.isNotBlank() }
+    val alreadyDerived = segments.size >= 2 && segments.takeLast(2) == listOf("chat", "completions")
+    return if (alreadyDerived) base else base.newBuilder().addPathSegments("chat/completions").build()
+}
+
+private fun buildOpenAiTranscriptionsUrl(baseUrl: String): HttpUrl? {
+    val base = sanitizedBaseUrl(baseUrl) ?: return null
+    val segments = base.pathSegments.filter { it.isNotBlank() }
+    val alreadyDerived = segments.size >= 2 && segments.takeLast(2) == listOf("audio", "transcriptions")
+    return if (alreadyDerived) base else base.newBuilder().addPathSegments("audio/transcriptions").build()
+}
+
+private fun buildGeminiGenerateContentUrl(baseUrl: String, modelId: String): HttpUrl? {
+    val base = sanitizedBaseUrl(baseUrl) ?: return null
+    val normalizedPath = base.encodedPath.trim().trimEnd('/')
+    if (normalizedPath.endsWith(":generateContent") && normalizedPath.contains("/models/")) {
+        return base
+    }
+    val normalizedModel = modelId.trim().removePrefix("models/").trimStart('/')
+    return base.newBuilder()
+        .addPathSegments("models")
+        .addPathSegment("${normalizedModel}:generateContent")
+        .build()
+}
+
+private fun redactSecretsForUi(value: String): String {
+    if (value.isBlank()) {
+        return value
+    }
+    return value
+        .replace(Regex("(?i)(Authorization\\s*:\\s*Bearer\\s+)([^\\s]+)"), "${'$'}1REDACTED")
+        .replace(Regex("(?i)(x-goog-api-key\\s*:\\s*)([^\\s]+)"), "${'$'}1REDACTED")
+        .replace(Regex("([?&]key=)[^&\\s]+"), "${'$'}1REDACTED")
 }
 
 @Composable
