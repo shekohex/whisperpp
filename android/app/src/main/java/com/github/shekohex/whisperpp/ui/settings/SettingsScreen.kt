@@ -51,6 +51,7 @@ import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.updater.*
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,8 +63,12 @@ sealed class SettingsScreen(val route: String) {
     object PostProcessing : SettingsScreen("post_processing")
     object Keyboard : SettingsScreen("keyboard")
     object PrivacySafety : SettingsScreen("privacy_safety")
-    object ProviderEdit : SettingsScreen("provider_edit?id={id}") {
-        fun createRoute(id: String? = null) = "provider_edit?id=${id ?: ""}"
+    object ProviderEdit : SettingsScreen("provider_edit?id={id}&cloneFromId={cloneFromId}") {
+        fun createRoute(id: String? = null, cloneFromId: String? = null): String {
+            val encodedId = Uri.encode(id ?: "")
+            val encodedCloneFromId = Uri.encode(cloneFromId ?: "")
+            return "provider_edit?id=$encodedId&cloneFromId=$encodedCloneFromId"
+        }
     }
 }
 
@@ -116,10 +121,14 @@ fun SettingsNavigation(
         }
         composable(
             route = SettingsScreen.ProviderEdit.route,
-            arguments = listOf(navArgument("id") { nullable = true })
+            arguments = listOf(
+                navArgument("id") { nullable = true },
+                navArgument("cloneFromId") { nullable = true }
+            )
         ) { backStackEntry ->
             val providerId = backStackEntry.arguments?.getString("id")
-            ProviderEditScreen(dataStore, navController, providerId)
+            val cloneFromId = backStackEntry.arguments?.getString("cloneFromId")
+            ProviderEditScreen(dataStore, navController, providerId, cloneFromId)
         }
     }
 }
@@ -511,20 +520,38 @@ fun ProviderCard(provider: ServiceProvider, isActive: Boolean, onSelectActive: (
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHostController, providerId: String?) {
+fun ProviderEditScreen(
+    dataStore: DataStore<Preferences>,
+    navController: NavHostController,
+    providerId: String?,
+    cloneFromId: String?
+) {
     val context = LocalContext.current
     val repository = remember { SettingsRepository(dataStore) }
     val secretsStore = remember { SecretsStore(context) }
     val providers by repository.providers.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
+
+    val existingProviderId = providerId?.trim().orEmpty().takeIf { it.isNotEmpty() }
+    val isEditingExisting = existingProviderId != null
+    val isCloning = !isEditingExisting && !cloneFromId.isNullOrBlank()
+    val effectiveProviderId = remember(existingProviderId, cloneFromId) {
+        existingProviderId ?: UUID.randomUUID().toString()
+    }
     
     // State
     var name by remember { mutableStateOf("") }
+    var nameTouched by remember { mutableStateOf(false) }
     var type by remember { mutableStateOf(ProviderType.OPENAI) }
-    var endpoint by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf("") }
+    var baseUrlTouched by remember { mutableStateOf(false) }
+    var authMode by remember { mutableStateOf(ProviderAuthMode.API_KEY) }
+    var authModeTouched by remember { mutableStateOf(false) }
     var apiKeyInput by remember { mutableStateOf("") }
     var apiKeyLast4 by remember { mutableStateOf<String?>(null) }
     var hasStoredApiKey by remember { mutableStateOf(false) }
+    var cloneApiKeyLast4 by remember { mutableStateOf<String?>(null) }
+    var hasCloneStoredApiKey by remember { mutableStateOf(false) }
     var models by remember { mutableStateOf(listOf<ModelConfig>()) }
     var temperature by remember { mutableStateOf(0.0f) }
     var prompt by remember { mutableStateOf("") }
@@ -555,81 +582,237 @@ fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHost
         "ru" to "Russian"
     )
 
-    // Initialize state when providers load
-    LaunchedEffect(providers, providerId) {
-        if (providerId != null && providerId.isNotEmpty()) {
-            val provider = providers.find { it.id == providerId }
-            if (provider != null) {
-                name = provider.name
-                type = provider.type
-                endpoint = provider.endpoint
-                models = provider.models
-                temperature = provider.temperature
-                prompt = provider.prompt
-                languageCode = provider.languageCode
-                timeout = provider.timeout
-                thinkingEnabled = provider.thinkingEnabled
-                thinkingType = provider.thinkingType
-                thinkingBudget = provider.thinkingBudget
-                thinkingLevel = provider.thinkingLevel
-            }
-        } else if (name.isEmpty()) {
-            name = "New Provider"
+    fun defaultBaseUrlForType(providerType: ProviderType): String {
+        return when (providerType) {
+            ProviderType.OPENAI -> "https://api.openai.com/v1"
+            ProviderType.GEMINI -> "https://generativelanguage.googleapis.com/v1beta"
+            ProviderType.WHISPER_ASR -> "https://YOUR_SERVER_IP:9000/asr"
+            ProviderType.CUSTOM -> ""
+        }
+    }
+
+    fun defaultAuthModeForType(providerType: ProviderType): ProviderAuthMode {
+        return when (providerType) {
+            ProviderType.WHISPER_ASR -> ProviderAuthMode.NO_AUTH
+            else -> ProviderAuthMode.API_KEY
+        }
+    }
+
+    fun defaultNameFor(type: ProviderType, baseUrl: String): String {
+        val host = baseUrl.trim().toHttpUrlOrNull()?.host?.takeIf { it.isNotBlank() }
+        return if (host == null) type.toString() else "${type} $host"
+    }
+
+    fun normalizedBaseUrl(value: String): String? {
+        val parsed = value.trim().toHttpUrlOrNull() ?: return null
+        return parsed
+            .newBuilder()
+            .query(null)
+            .fragment(null)
+            .build()
+            .toString()
+            .trimEnd('/')
+    }
+
+    var initialLoadKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(providers, existingProviderId, cloneFromId) {
+        val loadKey = "${existingProviderId.orEmpty()}|${cloneFromId.orEmpty()}"
+        if (initialLoadKey == loadKey) {
+            return@LaunchedEffect
         }
 
-        val secretsProviderId = providerId?.takeIf { it.isNotBlank() }
-        if (secretsProviderId != null) {
-            val last4 = secretsStore.getProviderApiKeyLast4(secretsProviderId)
+        if (isEditingExisting) {
+            val provider = providers.find { it.id == existingProviderId }
+            if (provider == null) {
+                return@LaunchedEffect
+            }
+            initialLoadKey = loadKey
+            name = provider.name
+            nameTouched = true
+            type = provider.type
+            baseUrl = provider.endpoint
+            baseUrlTouched = true
+            authMode = provider.authMode
+            authModeTouched = true
+            models = provider.models
+            temperature = provider.temperature
+            prompt = provider.prompt
+            languageCode = provider.languageCode
+            timeout = provider.timeout
+            thinkingEnabled = provider.thinkingEnabled
+            thinkingType = provider.thinkingType
+            thinkingBudget = provider.thinkingBudget
+            thinkingLevel = provider.thinkingLevel
+
+            val existingId = existingProviderId ?: return@LaunchedEffect
+            val last4 = secretsStore.getProviderApiKeyLast4(existingId)
             apiKeyLast4 = last4
             hasStoredApiKey = last4 != null
-        } else {
+            cloneApiKeyLast4 = null
+            hasCloneStoredApiKey = false
+            return@LaunchedEffect
+        }
+
+        if (isCloning) {
+            val sourceId = cloneFromId?.trim().orEmpty().takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
+            val sourceProvider = providers.find { it.id == sourceId }
+            if (sourceProvider == null) {
+                return@LaunchedEffect
+            }
+            initialLoadKey = loadKey
+            name = sourceProvider.name
+            nameTouched = true
+            type = sourceProvider.type
+            baseUrl = sourceProvider.endpoint
+            baseUrlTouched = true
+            authMode = sourceProvider.authMode
+            authModeTouched = true
+            models = sourceProvider.models
+            temperature = sourceProvider.temperature
+            prompt = sourceProvider.prompt
+            languageCode = sourceProvider.languageCode
+            timeout = sourceProvider.timeout
+            thinkingEnabled = sourceProvider.thinkingEnabled
+            thinkingType = sourceProvider.thinkingType
+            thinkingBudget = sourceProvider.thinkingBudget
+            thinkingLevel = sourceProvider.thinkingLevel
+
+            val last4 = secretsStore.getProviderApiKeyLast4(sourceId)
+            cloneApiKeyLast4 = last4
+            hasCloneStoredApiKey = last4 != null
             apiKeyLast4 = null
             hasStoredApiKey = false
+            return@LaunchedEffect
+        }
+
+        initialLoadKey = loadKey
+        if (baseUrl.isBlank() && !baseUrlTouched) {
+            baseUrl = defaultBaseUrlForType(type)
+        }
+        if (!authModeTouched) {
+            authMode = defaultAuthModeForType(type)
+        }
+        if (name.isBlank() && !nameTouched) {
+            name = defaultNameFor(type, baseUrl)
+        }
+    }
+
+    LaunchedEffect(type, isEditingExisting) {
+        if (isEditingExisting) {
+            return@LaunchedEffect
+        }
+        if (!baseUrlTouched) {
+            baseUrl = defaultBaseUrlForType(type)
+        }
+        if (!authModeTouched) {
+            authMode = defaultAuthModeForType(type)
+        }
+    }
+
+    LaunchedEffect(type, baseUrl, isEditingExisting) {
+        if (isEditingExisting) {
+            return@LaunchedEffect
+        }
+        if (!nameTouched) {
+            name = defaultNameFor(type, baseUrl)
+        }
+    }
+
+    val parsedBaseUrl = remember(baseUrl) { baseUrl.trim().toHttpUrlOrNull() }
+    val isHttpsBaseUrl = parsedBaseUrl?.scheme == "https"
+    val isBaseUrlValid = parsedBaseUrl != null && isHttpsBaseUrl
+    val isNameValid = name.trim().isNotEmpty()
+    val hasAnyApiKey = hasStoredApiKey || apiKeyInput.trim().isNotEmpty() || (isCloning && hasCloneStoredApiKey)
+    val isAuthValid = when (authMode) {
+        ProviderAuthMode.NO_AUTH -> true
+        ProviderAuthMode.API_KEY -> hasAnyApiKey
+    }
+    val canSave = isNameValid && isBaseUrlValid && isAuthValid
+
+    val normalized = remember(baseUrl) { normalizedBaseUrl(baseUrl) }
+    val duplicateProvider = remember(providers, type, normalized, existingProviderId) {
+        if (normalized == null) {
+            null
+        } else {
+            providers.firstOrNull {
+                it.id != existingProviderId && it.type == type && normalizedBaseUrl(it.endpoint) == normalized
+            }
         }
     }
 
     Scaffold(
         topBar = {
             MediumTopAppBar(
-                title = { Text(if (providerId == null) "New Provider" else "Edit Provider") },
+                title = {
+                    Text(
+                        when {
+                            isEditingExisting -> "Edit Provider"
+                            isCloning -> "Duplicate Provider"
+                            else -> "New Provider"
+                        }
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
                 actions = {
-                    TextButton(onClick = {
-                        val newProvider = ServiceProvider(
-                            id = providerId ?: UUID.randomUUID().toString(),
-                            name = name,
-                            type = type,
-                            endpoint = endpoint,
-                             apiKey = "",
-                              models = models,
-                              temperature = temperature,
-                              prompt = prompt,
-                              languageCode = languageCode,
-                             timeout = timeout,
-                             thinkingEnabled = thinkingEnabled,
-                             thinkingType = thinkingType,
-                             thinkingBudget = thinkingBudget,
-                             thinkingLevel = thinkingLevel
-                         )
-                        scope.launch {
-                            val currentList = providers.toMutableList()
-                            val index = currentList.indexOfFirst { it.id == newProvider.id }
-                            if (index >= 0) {
-                                currentList[index] = newProvider
-                            } else {
-                                currentList.add(newProvider)
-                            }
-                            repository.saveProviders(currentList)
-                            if (apiKeyInput.isNotBlank()) {
-                                secretsStore.setProviderApiKey(newProvider.id, apiKeyInput.trim())
-                            }
-                            navController.popBackStack()
+                    if (isEditingExisting && existingProviderId != null) {
+                        TextButton(onClick = {
+                            navController.navigate(SettingsScreen.ProviderEdit.createRoute(id = null, cloneFromId = existingProviderId))
+                        }) {
+                            Text("Duplicate")
                         }
-                    }) {
+                    }
+                    TextButton(
+                        enabled = canSave,
+                        onClick = {
+                            val newProvider = ServiceProvider(
+                                id = effectiveProviderId,
+                                name = name.trim(),
+                                type = type,
+                                endpoint = baseUrl.trim(),
+                                authMode = authMode,
+                                apiKey = "",
+                                models = models,
+                                temperature = temperature,
+                                prompt = prompt,
+                                languageCode = languageCode,
+                                timeout = timeout,
+                                thinkingEnabled = thinkingEnabled,
+                                thinkingType = thinkingType,
+                                thinkingBudget = thinkingBudget,
+                                thinkingLevel = thinkingLevel
+                            )
+                            scope.launch {
+                                val currentList = providers.toMutableList()
+                                val index = currentList.indexOfFirst { it.id == newProvider.id }
+                                if (index >= 0) {
+                                    currentList[index] = newProvider
+                                } else {
+                                    currentList.add(newProvider)
+                                }
+                                repository.saveProviders(currentList)
+
+                                when (authMode) {
+                                    ProviderAuthMode.NO_AUTH -> Unit
+                                    ProviderAuthMode.API_KEY -> {
+                                        if (apiKeyInput.isNotBlank()) {
+                                            secretsStore.setProviderApiKey(newProvider.id, apiKeyInput.trim())
+                                        } else if (isCloning && !cloneFromId.isNullOrBlank()) {
+                                            val sourceKey = secretsStore.getProviderApiKey(cloneFromId.trim()).orEmpty()
+                                            if (sourceKey.isNotBlank()) {
+                                                secretsStore.setProviderApiKey(newProvider.id, sourceKey)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                navController.popBackStack()
+                            }
+                        }
+                    ) {
                         Text("Save")
                     }
                 }
@@ -648,38 +831,50 @@ fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHost
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = {
+                    name = it
+                    nameTouched = true
+                },
                 label = { Text("Provider Name") },
                 modifier = Modifier.fillMaxWidth()
             )
-            
-            // Provider Type Dropdown
-            ExposedDropdownMenuBox(
-                expanded = typeExpanded,
-                onExpandedChange = { typeExpanded = !typeExpanded },
-                modifier = Modifier.fillMaxWidth()
-            ) {
+
+            if (isEditingExisting) {
                 OutlinedTextField(
                     readOnly = true,
                     value = type.toString(),
                     onValueChange = {},
                     label = { Text("Type") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
-                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth()
                 )
-                ExposedDropdownMenu(
+            } else {
+                ExposedDropdownMenuBox(
                     expanded = typeExpanded,
-                    onDismissRequest = { typeExpanded = false }
+                    onExpandedChange = { typeExpanded = !typeExpanded },
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    ProviderType.values().forEach { providerType ->
-                        DropdownMenuItem(
-                            text = { Text(providerType.toString()) },
-                            onClick = {
-                                type = providerType
-                                typeExpanded = false
-                            }
-                        )
+                    OutlinedTextField(
+                        readOnly = true,
+                        value = type.toString(),
+                        onValueChange = {},
+                        label = { Text("Type") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = typeExpanded) },
+                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = typeExpanded,
+                        onDismissRequest = { typeExpanded = false }
+                    ) {
+                        ProviderType.values().forEach { providerType ->
+                            DropdownMenuItem(
+                                text = { Text(providerType.toString()) },
+                                onClick = {
+                                    type = providerType
+                                    typeExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -717,42 +912,79 @@ fun ProviderEditScreen(dataStore: DataStore<Preferences>, navController: NavHost
             }
 
             OutlinedTextField(
-                value = endpoint,
-                onValueChange = { endpoint = it },
-                label = { Text("Endpoint URL") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            
-            Text(
-                text = if (hasStoredApiKey) {
-                    if (apiKeyLast4.isNullOrEmpty()) "API Key: Key set" else "API Key: Key set (ends with $apiKeyLast4)"
-                } else {
-                    "API Key: Not set"
+                value = baseUrl,
+                onValueChange = {
+                    baseUrl = it
+                    baseUrlTouched = true
                 },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            OutlinedTextField(
-                value = apiKeyInput,
-                onValueChange = { apiKeyInput = it },
-                label = { Text(if (hasStoredApiKey) "Replace API Key" else "Set API Key") },
-                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                label = { Text("Base URL") },
+                isError = baseUrl.isNotBlank() && !isBaseUrlValid,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            if (hasStoredApiKey) {
-                OutlinedButton(
+            if (baseUrl.isBlank()) {
+                Text("Base URL is required", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else if (!isBaseUrlValid) {
+                Text("Use a valid https:// URL", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+
+            if (duplicateProvider != null) {
+                Text(
+                    "Duplicate: ${duplicateProvider.name} already uses this type + base URL",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Text("Authentication", style = MaterialTheme.typography.titleMedium)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = authMode == ProviderAuthMode.API_KEY,
                     onClick = {
-                        val secretsProviderId = providerId?.takeIf { it.isNotBlank() } ?: return@OutlinedButton
-                        secretsStore.clearProviderApiKey(secretsProviderId)
-                        apiKeyInput = ""
-                        apiKeyLast4 = null
-                        hasStoredApiKey = false
+                        authMode = ProviderAuthMode.API_KEY
+                        authModeTouched = true
                     },
+                    label = { Text("API Key") }
+                )
+                FilterChip(
+                    selected = authMode == ProviderAuthMode.NO_AUTH,
+                    onClick = {
+                        authMode = ProviderAuthMode.NO_AUTH
+                        authModeTouched = true
+                        apiKeyInput = ""
+                    },
+                    label = { Text("No Auth") }
+                )
+            }
+            
+            if (authMode == ProviderAuthMode.API_KEY) {
+                val keyStatusText = when {
+                    hasStoredApiKey -> if (apiKeyLast4.isNullOrEmpty()) "API Key: Key set" else "API Key: Key set (ends with $apiKeyLast4)"
+                    isCloning && hasCloneStoredApiKey -> if (cloneApiKeyLast4.isNullOrEmpty()) "API Key: Will reuse key" else "API Key: Will reuse key (ends with $cloneApiKeyLast4)"
+                    else -> "API Key: Not set"
+                }
+                Text(keyStatusText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(
+                    value = apiKeyInput,
+                    onValueChange = { apiKeyInput = it },
+                    label = { Text(if (hasStoredApiKey || (isCloning && hasCloneStoredApiKey)) "Replace API Key" else "Set API Key") },
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Clear Stored Key")
+                )
+
+                if (hasStoredApiKey) {
+                    OutlinedButton(
+                        onClick = {
+                            val secretsProviderId = existingProviderId ?: return@OutlinedButton
+                            secretsStore.clearProviderApiKey(secretsProviderId)
+                            apiKeyInput = ""
+                            apiKeyLast4 = null
+                            hasStoredApiKey = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Clear Stored Key")
+                    }
                 }
             }
             
