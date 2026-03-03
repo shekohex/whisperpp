@@ -26,11 +26,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **DICT-01**: User can start/stop dictation via a mic key with clear recording state
 - [ ] **DICT-02**: If the selected STT model supports streaming, partial transcription updates insert as composing text while speaking
-- [ ] **DICT-03**: If streaming is unsupported/disabled, dictation inserts only the final transcript on stop (no partial insertion)
-- [ ] **DICT-04**: User can cancel dictation and no additional text is inserted after cancel
-- [ ] **DICT-05**: User can select dictation language and it is applied to STT requests
+- [x] **DICT-03**: If streaming is unsupported/disabled, dictation inserts only the final transcript on stop (no partial insertion)
+- [x] **DICT-04**: User can cancel dictation and no additional text is inserted after cancel
+- [x] **DICT-05**: User can select dictation language and it is applied to STT requests
 - [ ] **DICT-06**: User can undo the last dictation insertion
-- [ ] **DICT-07**: If editor focus changes during dictation, Whisper++ does not insert late results into a different field/app
+- [x] **DICT-07**: If editor focus changes during dictation, Whisper++ does not insert late results into a different field/app
 
 ### Enhancement & Prompts
 
@@ -120,11 +120,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROV-06 | 2 | Complete |
 | DICT-01 | 3 | Complete |
 | DICT-02 | 3 | Pending |
-| DICT-03 | 3 | Pending |
-| DICT-04 | 3 | Pending |
-| DICT-05 | 3 | Pending |
+| DICT-03 | 3 | Complete |
+| DICT-04 | 3 | Complete |
+| DICT-05 | 3 | Complete |
 | DICT-06 | 3 | Pending |
-| DICT-07 | 3 | Pending |
+| DICT-07 | 3 | Complete |
 | ENH-01 | 4 | Pending |
 | ENH-02 | 4 | Pending |
 | ENH-03 | 4 | Pending |
