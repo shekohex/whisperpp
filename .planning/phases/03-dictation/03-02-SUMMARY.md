@@ -68,7 +68,7 @@ Each task was committed atomically:
 2. **task 2: Rewire WhisperInputService dictation flow to pause on release, explicit send, and auto-pause on lifecycle/focus changes** - `4a7203b` (feat)
 3. **task 3: Apply dictation language selection to STT requests + add unit tests** - `1cd12eb` (feat)
 
-**Plan metadata:** `20aac08` (docs: complete plan)
+**Plan metadata:** `20aac08`, `530a5f0`
 
 ## Self-Check: PASSED
 
