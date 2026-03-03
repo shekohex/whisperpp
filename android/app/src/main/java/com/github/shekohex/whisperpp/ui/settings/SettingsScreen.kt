@@ -1162,6 +1162,8 @@ fun ProviderEditScreen(
     var thinkingLevel by remember { mutableStateOf("medium") }
 
     var isTestRunning by remember { mutableStateOf(false) }
+    var isImportRunning by remember { mutableStateOf(false) }
+    var lastImportSummary by remember { mutableStateOf<String?>(null) }
     var showRawResponseDialog by remember { mutableStateOf(false) }
     var rawResponseTitle by remember { mutableStateOf("") }
     var rawResponseStatus by remember { mutableStateOf<Int?>(null) }
@@ -1176,6 +1178,8 @@ fun ProviderEditScreen(
 
     var sttAudioUri by remember { mutableStateOf<Uri?>(null) }
     var pendingSttTestAfterPick by remember { mutableStateOf(false) }
+
+    val isAnyActionRunning = isTestRunning || isImportRunning
     
     // Type Dropdown State
     var typeExpanded by remember { mutableStateOf(false) }
@@ -1362,6 +1366,26 @@ fun ProviderEditScreen(
         showRawResponseDialog = true
     }
 
+    fun providerFromForm(modelsOverride: List<ModelConfig> = models): ServiceProvider {
+        return ServiceProvider(
+            id = effectiveProviderId,
+            name = name.trim(),
+            type = type,
+            endpoint = baseUrl.trim(),
+            authMode = authMode,
+            apiKey = "",
+            models = modelsOverride,
+            temperature = temperature,
+            prompt = prompt,
+            languageCode = languageCode,
+            timeout = timeout,
+            thinkingEnabled = thinkingEnabled,
+            thinkingType = thinkingType,
+            thinkingBudget = thinkingBudget,
+            thinkingLevel = thinkingLevel,
+        )
+    }
+
     suspend fun runTextTest(modelId: String) {
         val endpointUrl = buildProviderTextTestUrl(
             providerType = type,
@@ -1506,6 +1530,108 @@ fun ProviderEditScreen(
         }
     }
 
+    suspend fun importModels() {
+        val endpointUrl = buildModelsListUrl(baseUrl) ?: run {
+            showRawResult("Import models", null, "", "Invalid base URL")
+            return
+        }
+
+        val requestBuilder = Request.Builder().url(endpointUrl).get()
+        if (authMode == ProviderAuthMode.API_KEY) {
+            val apiKey = resolveApiKeyForTests()
+            if (apiKey.isBlank()) {
+                showRawResult("Import models", null, "", "API key missing")
+                return
+            }
+            if (type == ProviderType.GEMINI) {
+                requestBuilder.addHeader("x-goog-api-key", apiKey)
+            } else {
+                requestBuilder.addHeader("Authorization", "Bearer $apiKey")
+            }
+        }
+
+        val request = requestBuilder.build()
+        val (status, body, error) = withContext(Dispatchers.IO) {
+            try {
+                httpClient.newCall(request).execute().use { response ->
+                    Triple(response.code, response.body?.string().orEmpty(), null)
+                }
+            } catch (e: Exception) {
+                Triple(null, "", e.message)
+            }
+        }
+
+        if (status == null) {
+            showRawResult("Import models", null, body, error ?: "Request failed")
+            return
+        }
+        if (status / 100 != 2) {
+            showRawResult("Import models", status, body, error)
+            return
+        }
+
+        val json = runCatching { JSONObject(body) }.getOrNull()
+        if (json == null) {
+            showRawResult("Import models", status, body, "Invalid JSON response")
+            return
+        }
+
+        val importedModels = if (type == ProviderType.GEMINI) {
+            val modelsArray = json.optJSONArray("models")
+            if (modelsArray == null) {
+                emptyList()
+            } else {
+                (0 until modelsArray.length()).mapNotNull { i ->
+                    val obj = modelsArray.optJSONObject(i) ?: return@mapNotNull null
+                    val rawName = obj.optString("name").trim()
+                    val id = rawName.removePrefix("models/").trimStart('/').trim()
+                    if (id.isBlank()) {
+                        return@mapNotNull null
+                    }
+                    val displayName = obj.optString("displayName").trim()
+                    ModelConfig(
+                        id = id,
+                        name = displayName.ifBlank { id },
+                        kind = ModelKind.MULTIMODAL,
+                        streamingPartialsSupported = false,
+                    )
+                }
+            }
+        } else {
+            val dataArray = json.optJSONArray("data")
+            if (dataArray == null) {
+                emptyList()
+            } else {
+                (0 until dataArray.length()).mapNotNull { i ->
+                    val obj = dataArray.optJSONObject(i) ?: return@mapNotNull null
+                    val id = obj.optString("id").trim()
+                    if (id.isBlank()) {
+                        return@mapNotNull null
+                    }
+                    ModelConfig(
+                        id = id,
+                        name = id,
+                        kind = ModelKind.TEXT,
+                        streamingPartialsSupported = false,
+                    )
+                }
+            }
+        }
+
+        if (importedModels.isEmpty()) {
+            showRawResult("Import models", status, body, "No models found")
+            return
+        }
+
+        val existingIds = models.mapNotNull { it.id.trim().takeIf { id -> id.isNotBlank() } }.toSet()
+        val dedupedImport = importedModels.filter { it.id.trim().isNotBlank() && !existingIds.contains(it.id.trim()) }
+        val updatedModels = models + dedupedImport
+
+        models = updatedModels
+        repository.upsertProvider(providerFromForm(modelsOverride = updatedModels))
+        lastImportSummary = "Imported ${dedupedImport.size} model${if (dedupedImport.size == 1) "" else "s"}"
+    }
+
     val audioPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -1571,32 +1697,25 @@ fun ProviderEditScreen(
                     TextButton(
                         enabled = canSave,
                         onClick = {
-                            val newProvider = ServiceProvider(
-                                id = effectiveProviderId,
-                                name = name.trim(),
-                                type = type,
-                                endpoint = baseUrl.trim(),
-                                authMode = authMode,
-                                apiKey = "",
-                                models = models,
-                                temperature = temperature,
-                                prompt = prompt,
-                                languageCode = languageCode,
-                                timeout = timeout,
-                                thinkingEnabled = thinkingEnabled,
-                                thinkingType = thinkingType,
-                                thinkingBudget = thinkingBudget,
-                                thinkingLevel = thinkingLevel
-                            )
-                            scope.launch {
-                                val currentList = providers.toMutableList()
-                                val index = currentList.indexOfFirst { it.id == newProvider.id }
-                                if (index >= 0) {
-                                    currentList[index] = newProvider
-                                } else {
-                                    currentList.add(newProvider)
-                                }
-                                repository.saveProviders(currentList)
+                                val newProvider = ServiceProvider(
+                                    id = effectiveProviderId,
+                                    name = name.trim(),
+                                    type = type,
+                                    endpoint = baseUrl.trim(),
+                                    authMode = authMode,
+                                    apiKey = "",
+                                    models = models,
+                                    temperature = temperature,
+                                    prompt = prompt,
+                                    languageCode = languageCode,
+                                    timeout = timeout,
+                                    thinkingEnabled = thinkingEnabled,
+                                    thinkingType = thinkingType,
+                                    thinkingBudget = thinkingBudget,
+                                    thinkingLevel = thinkingLevel
+                                )
+                             scope.launch {
+                                 repository.upsertProvider(newProvider)
 
                                 when (authMode) {
                                     ProviderAuthMode.NO_AUTH -> Unit
@@ -1612,10 +1731,10 @@ fun ProviderEditScreen(
                                     }
                                 }
 
-                                navController.popBackStack()
-                            }
-                        }
-                    ) {
+                                 navController.popBackStack()
+                             }
+                         }
+                     ) {
                         Text("Save")
                     }
                 }
@@ -1810,7 +1929,7 @@ fun ProviderEditScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedButton(
-                            enabled = !isTestRunning,
+                            enabled = !isAnyActionRunning,
                             onClick = {
                                 scope.launch {
                                     val modelId = if (effectiveUseCustomTextModel) {
@@ -1836,7 +1955,7 @@ fun ProviderEditScreen(
                         }
 
                         OutlinedButton(
-                            enabled = !isTestRunning,
+                            enabled = !isAnyActionRunning,
                             onClick = {
                                 val audio = sttAudioUri
                                 if (audio == null) {
@@ -1869,6 +1988,23 @@ fun ProviderEditScreen(
                         }
                     }
 
+                    OutlinedButton(
+                        enabled = !isAnyActionRunning && type != ProviderType.WHISPER_ASR,
+                        onClick = {
+                            scope.launch {
+                                isImportRunning = true
+                                try {
+                                    importModels()
+                                } finally {
+                                    isImportRunning = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Import models")
+                    }
+
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         FilterChip(
                             selected = effectiveUseCustomTextModel,
@@ -1883,7 +2019,7 @@ fun ProviderEditScreen(
                             label = { Text("Force model") }
                         )
                         OutlinedButton(
-                            enabled = !isTestRunning,
+                            enabled = !isAnyActionRunning,
                             onClick = { audioPickerLauncher.launch(arrayOf("audio/*")) },
                         ) {
                             Text(if (sttAudioUri == null) "Pick audio" else "Change audio")
@@ -1918,6 +2054,10 @@ fun ProviderEditScreen(
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             Text("Running...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                    }
+
+                    lastImportSummary?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -2146,6 +2286,16 @@ private fun buildProviderTextTestUrl(providerType: ProviderType, baseUrl: String
 
 private fun buildProviderSttTestUrl(baseUrl: String): HttpUrl? {
     return buildOpenAiTranscriptionsUrl(baseUrl)
+}
+
+private fun buildModelsListUrl(baseUrl: String): HttpUrl? {
+    val base = sanitizedBaseUrl(baseUrl) ?: return null
+    val segments = base.pathSegments.filter { it.isNotBlank() }
+    return if (segments.lastOrNull() == "models") {
+        base
+    } else {
+        base.newBuilder().addPathSegment("models").build()
+    }
 }
 
 private fun buildOpenAiChatCompletionsUrl(baseUrl: String): HttpUrl? {

@@ -144,6 +144,22 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    suspend fun upsertProvider(provider: ServiceProvider) {
+        val id = provider.id.trim()
+        if (id.isBlank()) {
+            return
+        }
+
+        val currentList = providers.first().toMutableList()
+        val index = currentList.indexOfFirst { it.id == id }
+        if (index >= 0) {
+            currentList[index] = provider
+        } else {
+            currentList.add(provider)
+        }
+        saveProviders(currentList)
+    }
+
     suspend fun migrateProviderApiKeysIfNeeded(context: Context) {
         val migrationDone = dataStore.data.map { prefs ->
             prefs[PROVIDER_API_KEY_MIGRATION_DONE] ?: false
