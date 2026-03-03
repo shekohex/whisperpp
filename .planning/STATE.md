@@ -4,11 +4,11 @@
 
 **Current Phase:** 03
 **Current Phase Name:** Dictation
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Current Plan:** 4
 **Total Plans in Phase:** 4
 
-**Progress:** [█████████░] 93%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -22,6 +22,7 @@
 | Phase 03-dictation P01 | 5 min | 2 tasks | 3 files |
 | Phase 03-dictation P02 | 32 min | 3 tasks | 6 files |
 | Phase 03-dictation P03 | 9 min | 2 tasks | 4 files |
+| Phase 03-dictation P04 | 25 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -56,6 +57,9 @@
 - [Phase 03]: Non-streaming dictation finalizes only on explicit Send; mic release pauses without inserting
 - [Phase 03]: Undo validates selected text matches inserted transcript before deleting
 - [Phase 03]: Undo quick action visibility is sticky after insertion and cleared on next dictation action
+- [Phase 03]: Gate streaming partials to OpenAI provider + realtime protocol derivable from base URL
+- [Phase 03]: Finalize insertion always uses composing replace path (setComposingText + finishComposingText)
+- [Phase 03]: Best-effort finalize uses last known streaming transcript if non-streaming transcription fails
 
 ### Blockers
 
@@ -67,6 +71,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-03T19:51:12.308Z
-**Stopped At:** Completed 03-dictation-03-PLAN.md
+**Last session:** 2026-03-03T20:18:28.123Z
+**Stopped At:** Completed 03-dictation-04-PLAN.md
 **Resume file:** None
