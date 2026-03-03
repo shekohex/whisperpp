@@ -15,8 +15,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Providers & Models
 
-- [ ] **PROV-01**: User can add/edit/delete providers (type, base URL, API key) and models per provider
-- [ ] **PROV-02**: Provider models include kind (stt/text/multimodal) + capability flags (at minimum: streaming partials supported)
+- [x] **PROV-01**: User can add/edit/delete providers (type, base URL, API key) and models per provider
+- [x] **PROV-02**: Provider models include kind (stt/text/multimodal) + capability flags (at minimum: streaming partials supported)
 - [ ] **PROV-03**: User can choose an STT model/provider for dictation
 - [ ] **PROV-04**: User can choose a text model/provider for enhancement + command mode (can differ from STT)
 - [ ] **PROV-05**: OpenAI-compatible endpoints can be used for STT and text transforms (user-configured base URL)
@@ -112,8 +112,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UI-01 | 6 | Pending |
 | SET-01 | 6 | Pending |
 | SET-02 | 6 | Pending |
-| PROV-01 | 2 | Pending |
-| PROV-02 | 2 | Pending |
+| PROV-01 | 2 | Complete |
+| PROV-02 | 2 | Complete |
 | PROV-03 | 2 | Pending |
 | PROV-04 | 2 | Pending |
 | PROV-05 | 2 | Pending |

@@ -1,22 +1,20 @@
 # STATE: Whisper++
 
-## Project Reference
+**Core value:** Speak anywhere; get accurate, context-appropriate text inserted instantly.
 
-- **Core value:** Speak anywhere; get accurate, context-appropriate text inserted instantly.
-- **Constraints:** Android IME (minSdk 24), BYO OpenAI/Gemini-compatible providers, privacy-first (no sensitive logging/leaks), editor correctness across third-party apps.
+**Current Phase:** 02
+**Current Phase Name:** Providers & Models
+**Status:** Ready to execute
+**Current Plan:** 2
+**Total Plans in Phase:** 5
 
-## Current Position
+**Progress:** [██████░░░░] 64%
 
-Phase: 2 of 7 (Providers & Models)
-Status: Not started
-Next: /gsd-plan-phase 2
+## Performance Metrics
 
-Progress: `[░░░░░░░░░░] 0%`
-
-## Performance Metrics (targets)
-
-- No dictation/command availability in secure fields.
-- No auth headers or user payloads logged by default.
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 02-providers-models P01 | 20 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -42,10 +40,12 @@ Progress: `[░░░░░░░░░░] 0%`
 - Privacy disclosures must be generated from live provider config (base URL + endpoint path) via a shared formatter.
 - First-use disclosure gating is mode-specific (`dictation`, `enhancement`, `command`) and resettable from Privacy & Safety.
 - Verbose diagnostics logging is user-togglable but constrained to redacted HEADERS logging only.
+- [Phase 02-providers-models]: Kept JSON field name endpoint for compatibility; semantics are now base URL
+- [Phase 02-providers-models]: Default auth mode is API_KEY except WHISPER_ASR which defaults to NO_AUTH
 
 ### Blockers
 
-- None recorded.
+None
 
 ### Notes / To Watch
 
@@ -53,6 +53,6 @@ Progress: `[░░░░░░░░░░] 0%`
 
 ## Session Continuity
 
-Last session: 2026-03-02 14:57 UTC
-Stopped at: Completed 01-06-PLAN.md
-Resume file: None
+**Last session:** 2026-03-03T03:25:27.277Z
+**Stopped At:** Completed 02-01-PLAN.md
+**Resume file:** None
