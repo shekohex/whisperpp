@@ -20,6 +20,8 @@
 package com.github.shekohex.whisperpp
 
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.os.IBinder
@@ -57,7 +59,10 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.github.shekohex.whisperpp.data.SettingsRepository
+import com.github.shekohex.whisperpp.dictation.DictationController
+import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.keyboard.isRecording
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
 import com.github.shekohex.whisperpp.privacy.SecretsStore
@@ -146,6 +151,9 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var timerJob: Job? = null
     private val activeMediaPlayers = mutableListOf<MediaPlayer>()
 
+    private var focusInstanceId: Long = 0L
+    private lateinit var dictationController: DictationController
+
     override fun onCreate() {
 
         super.onCreate()
@@ -159,6 +167,24 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
         recorderManager = RecorderManager(this)
         smartFixer = SmartFixer(this)
+
+        dictationController = DictationController(
+            DictationController.Deps(
+                getKeyboardState = { keyboardState.value },
+                setKeyboardState = { setKeyboardState(it) },
+                toast = { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() },
+                copyToClipboard = { copyToClipboard(it) },
+                clearComposing = { clearComposingText() },
+                getInputConnection = { currentInputConnection },
+                isInsertAllowed = { !isExternalSendBlocked() },
+                startRecording = { startRecording() },
+                pauseRecording = { pauseRecording(targetState = it) },
+                resumeRecording = { resumeRecording(targetState = it) },
+                stopRecording = { stopRecordingForSend() },
+                cancelTranscription = { cancelTranscriptionWork() },
+            )
+        )
+
         networkLoggingPreferenceJob = CoroutineScope(Dispatchers.Main).launch {
             dataStore.data.map { it[VERBOSE_NETWORK_LOGS_ENABLED] ?: false }.collect { enabled ->
                 whisperTranscriber.setNetworkLoggingEnabled(enabled)
@@ -169,28 +195,32 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
+        focusInstanceId += 1
+        dictationController.onFocusChanged(FocusKey.from(attribute, focusInstanceId))
         refreshExternalSendBlock(attribute)
         if (isExternalSendBlocked() && isExternalSendingActive()) {
-            stopExternalSendingForBlockedPolicy()
+            dictationController.onWindowHidden(toastMessage = blockedNotice())
         }
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        focusInstanceId += 1
+        dictationController.onFocusChanged(FocusKey.from(info, focusInstanceId))
         refreshExternalSendBlock(info)
         if (isExternalSendBlocked() && isExternalSendingActive()) {
-            stopExternalSendingForBlockedPolicy()
+            dictationController.onWindowHidden(toastMessage = blockedNotice())
         }
     }
 
-    private fun transcriptionCallback(text: String?, contextPrompt: String?) {
+    private fun transcriptionCallback(token: DictationController.SendToken, text: String?, contextPrompt: String?) {
         if (!text.isNullOrEmpty()) {
             Log.d(TAG, "Transcription received length=${text.length}")
             playCustomSound(R.raw.rec_done)
             
             CoroutineScope(Dispatchers.Main).launch {
                 if (shouldBlockExternalSend()) {
-                    setKeyboardState(KeyboardState.Ready)
+                    dictationController.onTranscriptionError(token, blockedNotice())
                     return@launch
                 }
 
@@ -249,46 +279,41 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 }
 
                 if (shouldBlockExternalSend()) {
-                    setKeyboardState(KeyboardState.Ready)
+                    dictationController.onTranscriptionError(token, blockedNotice())
                     return@launch
                 }
                 
                 if (!processedText.isNullOrEmpty()) {
-                    currentInputConnection?.commitText(processedText, 1)
+                    dictationController.onFinalTranscript(token, processedText)
                 }
                 
                 val autoSwitchBack = dataStore.data.map { it[AUTO_SWITCH_BACK] ?: false }.first()
-                if (autoSwitchBack && !processedText.isNullOrEmpty()) {
+                if (autoSwitchBack && !processedText.isNullOrEmpty() && keyboardState.value == KeyboardState.Ready) {
                     delay(150)
                     onSwitchIme()
                 }
-                setKeyboardState(KeyboardState.Ready)
                 performFeedback()
             }
         } else {
-            setKeyboardState(KeyboardState.Ready)
             if (text != null) {
-                Toast.makeText(this, getString(R.string.toast_transcription_empty), Toast.LENGTH_SHORT).show()
+                dictationController.onTranscriptionError(token, getString(R.string.toast_transcription_empty))
                 performFeedback()
             }
         }
     }
 
-    private fun transcriptionExceptionCallback(message: String) {
+    private fun transcriptionExceptionCallback(token: DictationController.SendToken, message: String) {
         Log.e(TAG, "Transcription error: $message")
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-        setKeyboardState(KeyboardState.Ready)
+        dictationController.onTranscriptionError(token, message)
     }
 
-    private fun startTranscription(attachToEnd: String) {
+    private fun startTranscription(token: DictationController.SendToken, attachToEnd: String) {
         if (shouldBlockExternalSend()) {
-            setKeyboardState(KeyboardState.Ready)
+            dictationController.onTranscriptionError(token, blockedNotice())
             return
         }
 
         performFeedback(customSoundId = R.raw.rec_stop)
-        recorderManager?.stop()
-        setKeyboardState(KeyboardState.Transcribing)
 
         CoroutineScope(Dispatchers.Main).launch {
             val prefs = dataStore.data.first()
@@ -301,9 +326,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             val modelId = prefs[ACTIVE_STT_MODEL_ID].orEmpty()
             val provider = providers.find { it.id == providerId }
             if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
-                File(recordedAudioFilename).delete()
-                Toast.makeText(this@WhisperInputService, "Setup required: select STT provider + model in Settings", Toast.LENGTH_SHORT).show()
-                setKeyboardState(KeyboardState.Ready)
+                dictationController.onTranscriptionError(token, "Setup required: select STT provider + model in Settings")
                 return@launch
             }
 
@@ -318,7 +341,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             val timeout = provider.timeout
 
             if (shouldBlockExternalSend()) {
-                setKeyboardState(KeyboardState.Ready)
+                dictationController.onTranscriptionError(token, blockedNotice())
                 return@launch
             }
 
@@ -326,8 +349,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 this@WhisperInputService, recordedAudioFilename, audioMediaType,
                 attachToEnd, contextPrompt, providerWithApiKey, modelId, postprocessing,
                 addTrailingSpace, timeout, staticPrompt, temperature,
-                { transcriptionCallback(it, contextPrompt) },
-                { transcriptionExceptionCallback(it) }
+                { transcriptionCallback(token, it, contextPrompt) },
+                { transcriptionExceptionCallback(token, it) }
             )
         }
     }
@@ -473,12 +496,37 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         whisperTranscriber.stop()
         smartFixer.cancel()
         setKeyboardState(KeyboardState.Ready)
-        val notice = if (externalSendBlockedByAppPolicy.value) {
+        Toast.makeText(this, blockedNotice(), Toast.LENGTH_SHORT).show()
+    }
+
+    private fun blockedNotice(): String {
+        return if (externalSendBlockedByAppPolicy.value) {
             "External sending blocked for this app"
         } else {
             getString(R.string.secure_field_sending_stopped)
         }
-        Toast.makeText(this, notice, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun stopRecordingForSend() {
+        recorderManager?.stop()
+        stopTimer()
+        showLongPressHint.value = false
+    }
+
+    private fun clearComposingText() {
+        val ic = currentInputConnection ?: return
+        ic.beginBatchEdit()
+        try {
+            ic.setComposingText("", 1)
+            ic.finishComposingText()
+        } finally {
+            ic.endBatchEdit()
+        }
+    }
+
+    private fun copyToClipboard(text: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("Whisper++", text))
     }
 
     private fun handleBlockedExternalSendAction() {
@@ -613,28 +661,29 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         return@launch
                     }
                     if (shouldBlockExternalSend()) {
-                        setKeyboardState(KeyboardState.Ready)
                         return@launch
                     }
                     performFeedback(customSoundId = R.raw.rec_start)
-                    startRecording()
+
+                    val model = provider.models.find { it.id == modelId }
+                    dictationController.onHoldStart(streamingPartialsEnabled = model?.streamingPartialsSupported == true)
                 }
             }
             KeyboardState.Recording -> {
                 performFeedback(customSoundId = R.raw.rec_pause)
-                pauseRecording(targetState = KeyboardState.Paused)
+                dictationController.onHoldRelease()
             }
             KeyboardState.RecordingLocked -> {
                 performFeedback(customSoundId = R.raw.rec_pause)
-                pauseRecording(targetState = KeyboardState.PausedLocked)
+                dictationController.onHoldRelease()
             }
             KeyboardState.Paused -> {
                 performFeedback(customSoundId = R.raw.rec_start)
-                resumeRecording(targetState = KeyboardState.Recording)
+                dictationController.onResume()
             }
             KeyboardState.PausedLocked -> {
                 performFeedback(customSoundId = R.raw.rec_start)
-                resumeRecording(targetState = KeyboardState.RecordingLocked)
+                dictationController.onResume()
             }
             else -> Unit
         }
@@ -646,24 +695,31 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             return
         }
 
-        if (keyboardState.value == KeyboardState.Paused || keyboardState.value == KeyboardState.PausedLocked) startTranscription("")
-        else performFeedback()
+        val token = dictationController.onSendRequested() ?: run {
+            performFeedback()
+            return
+        }
+        startTranscription(token, "")
     }
 
     private fun lockRecording() {
-        setKeyboardState(KeyboardState.RecordingLocked)
+        dictationController.onLock()
     }
 
     private fun unlockRecording() {
         performFeedback(customSoundId = R.raw.rec_pause)
-        pauseRecording(targetState = KeyboardState.PausedLocked)
+        dictationController.onUnlock()
     }
 
     private fun onCancelAction() {
         performFeedback(customSoundId = R.raw.rec_pause)
         when (keyboardState.value) {
-            KeyboardState.Recording, KeyboardState.RecordingLocked, KeyboardState.Paused, KeyboardState.PausedLocked -> confirmCancelAction { cancelRecording() }
-            KeyboardState.Transcribing, KeyboardState.SmartFixing -> confirmCancelAction { cancelTranscription() }
+            KeyboardState.Recording,
+            KeyboardState.RecordingLocked,
+            KeyboardState.Paused,
+            KeyboardState.PausedLocked,
+            KeyboardState.Transcribing,
+            KeyboardState.SmartFixing -> confirmCancelAction { dictationController.onCancelConfirmed() }
             else -> Unit
         }
     }
@@ -715,10 +771,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private fun discardRecording() {
         playCustomSound(R.raw.rec_pause)
-        recorderManager!!.stop()
-        stopTimer()
-        recordingTimeMs.value = 0L
-        setKeyboardState(KeyboardState.Ready)
+        dictationController.onCancelConfirmed()
     }
 
     private fun startTimer() {
@@ -737,10 +790,9 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         timerJob = null
     }
 
-    private fun cancelTranscription() {
+    private fun cancelTranscriptionWork() {
         whisperTranscriber.stop()
         smartFixer.cancel()
-        setKeyboardState(KeyboardState.Ready)
     }
 
     private fun confirmCancelAction(onConfirm: () -> Unit) {
@@ -802,6 +854,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun onDeleteText() {
+        if (keyboardState.value.isRecording) {
+            performFeedback(isDelete = true)
+            return
+        }
         performFeedback(isDelete = true)
         val ic = currentInputConnection ?: return
         if (TextUtils.isEmpty(ic.getSelectedText(0))) sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
@@ -891,16 +947,21 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     override fun onWindowHidden() {
         super.onWindowHidden()
-        Log.d(TAG, "onWindowHidden: Stopping all active tasks")
+        Log.d(TAG, "onWindowHidden")
         onFirstUseDisclosureCancel()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
-        whisperTranscriber.stop()
-        smartFixer.cancel()
-        recorderManager?.stop()
-        stopTimer()
         releaseAllMediaPlayers()
-        if (keyboardState.value != KeyboardState.Ready) setKeyboardState(KeyboardState.Ready)
+
+        if (isExternalSendingActive()) {
+            dictationController.onWindowHidden(toastMessage = "Dictation paused")
+        } else {
+            whisperTranscriber.stop()
+            smartFixer.cancel()
+            recorderManager?.stop()
+            stopTimer()
+            if (keyboardState.value != KeyboardState.Ready) setKeyboardState(KeyboardState.Ready)
+        }
     }
 
     private fun releaseAllMediaPlayers() {

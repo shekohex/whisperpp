@@ -16,6 +16,7 @@ class DictationController(
         val copyToClipboard: (String) -> Unit,
         val clearComposing: () -> Unit,
         val getInputConnection: () -> InputConnection?,
+        val isInsertAllowed: () -> Boolean,
         val startRecording: () -> Unit,
         val pauseRecording: (KeyboardState) -> Unit,
         val resumeRecording: (KeyboardState) -> Unit,
@@ -46,7 +47,7 @@ class DictationController(
         if (activeSession == null) return
 
         val state = deps.getKeyboardState()
-        if (state.isRecording) {
+        if (state != KeyboardState.Ready && !state.isPaused) {
             autoPause(showToast = false)
         }
     }
@@ -186,6 +187,7 @@ class DictationController(
     }
 
     private fun isSafeToInsert(token: SendToken): Boolean {
+        if (!deps.isInsertAllowed()) return false
         val expected = activeSession?.focusKeyAtSend ?: activeSession?.focusKeyAtStart
         return expected != null && expected == token.focusKey && expected == currentFocusKey
     }
