@@ -42,10 +42,12 @@ class WhisperTranscriber {
     private var inFlightCall: Call? = null
     
     private val loggingInterceptor = HttpLoggingInterceptor { message ->
-        Log.d("HTTP_Whisper", message)
+        val sanitized = message.replace(Regex("([?&]key=)[^&\\s]+"), "${'$'}1REDACTED")
+        Log.d("HTTP_Whisper", sanitized)
     }.apply {
         level = HttpLoggingInterceptor.Level.NONE
         redactHeader("Authorization")
+        redactHeader("x-goog-api-key")
     }
 
     fun setNetworkLoggingEnabled(enabled: Boolean) {

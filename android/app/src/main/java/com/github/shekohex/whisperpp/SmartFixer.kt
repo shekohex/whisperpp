@@ -183,12 +183,7 @@ class SmartFixer(private val context: Context) {
     }
 
     private fun callGoogle(provider: ServiceProvider, model: String, temperature: Float, prompt: String): String {
-        val baseUrl = deriveGeminiGenerateContentUrl(provider, model)
-        val url = if (provider.authMode == ProviderAuthMode.API_KEY) {
-            baseUrl.newBuilder().addQueryParameter("key", provider.apiKey).build().toString()
-        } else {
-            baseUrl.toString()
-        }
+        val url = deriveGeminiGenerateContentUrl(provider, model)
         Log.d(TAG, "Calling Google Gemini at $url with model $model")
 
         val json = JSONObject().apply {
@@ -221,6 +216,11 @@ class SmartFixer(private val context: Context) {
         val request = Request.Builder()
             .url(url)
             .addHeader("Content-Type", "application/json")
+            .apply {
+                if (provider.authMode == ProviderAuthMode.API_KEY) {
+                    addHeader("x-goog-api-key", provider.apiKey)
+                }
+            }
             .post(json.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
