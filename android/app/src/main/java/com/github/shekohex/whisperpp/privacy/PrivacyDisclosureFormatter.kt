@@ -95,11 +95,24 @@ object PrivacyDisclosureFormatter {
             ?: return EndpointDisclosure(baseUrl = "Invalid endpoint", path = "Invalid endpoint")
 
         val baseUrl = toBaseUrl(parsed)
-        val path = when {
-            mode != Mode.DICTATION_AUDIO && provider.type == ProviderType.GEMINI -> {
-                geminiGenerateContentPath(parsed.encodedPath, selectedModelId)
+        val basePath = parsed.encodedPath.ifBlank { "/" }
+        val path = when (mode) {
+            Mode.DICTATION_AUDIO -> {
+                if (provider.type == ProviderType.WHISPER_ASR) {
+                    basePath
+                } else {
+                    appendPath(basePath, "/audio/transcriptions")
+                }
             }
-            else -> parsed.encodedPath.ifBlank { "/" }
+
+            Mode.ENHANCEMENT_TEXT,
+            Mode.COMMAND_TEXT -> {
+                if (provider.type == ProviderType.GEMINI) {
+                    geminiGenerateContentPath(basePath, selectedModelId)
+                } else {
+                    appendPath(basePath, "/chat/completions")
+                }
+            }
         }
 
         return EndpointDisclosure(baseUrl = baseUrl, path = path)
@@ -125,6 +138,16 @@ object PrivacyDisclosureFormatter {
             actionSuffix
         } else {
             "$normalizedBase$actionSuffix"
+        }
+    }
+
+    private fun appendPath(basePath: String, suffix: String): String {
+        val normalizedBase = basePath.trim().ifBlank { "/" }.trimEnd('/')
+        val normalizedSuffix = suffix.trim().trimStart('/')
+        return if (normalizedBase == "/") {
+            "/$normalizedSuffix"
+        } else {
+            "$normalizedBase/$normalizedSuffix"
         }
     }
 }
