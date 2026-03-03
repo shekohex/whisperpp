@@ -58,9 +58,12 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.SettingsRepository
+import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.dictation.DictationController
 import com.github.shekohex.whisperpp.dictation.FocusKey
+import com.github.shekohex.whisperpp.dictation.OpenAiRealtimeSttClient
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isRecording
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
@@ -156,6 +159,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var focusInstanceId: Long = 0L
     private lateinit var dictationController: DictationController
 
+    private var realtimeSttClient: OpenAiRealtimeSttClient? = null
+    private var realtimeToken: DictationController.SendToken? = null
+    private var realtimeFinalTranscript: String? = null
+    private var pendingRealtimeProvider: ServiceProvider? = null
+    private var pendingRealtimeModelId: String? = null
+
     override fun onCreate() {
 
         super.onCreate()
@@ -179,7 +188,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 clearComposing = { clearComposingText() },
                 getInputConnection = { currentInputConnection },
                 isInsertAllowed = { !isExternalSendBlocked() },
-                startRecording = { startRecording() },
+                startRecording = { startRecording(it) },
                 pauseRecording = { pauseRecording(targetState = it) },
                 resumeRecording = { resumeRecording(targetState = it) },
                 stopRecording = { stopRecordingForSend() },
@@ -219,8 +228,17 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun transcriptionCallback(token: DictationController.SendToken, text: String?, contextPrompt: String?) {
-        if (!text.isNullOrEmpty()) {
-            Log.d(TAG, "Transcription received length=${text.length}")
+        val effectiveText = if (!text.isNullOrEmpty()) {
+            text
+        } else {
+            val fallback = realtimeFinalTranscript
+            if (token.streamingPartialsEnabled && !fallback.isNullOrBlank()) fallback else text
+        }
+
+        val rawText = effectiveText?.takeIf { it.isNotBlank() }
+
+        if (rawText != null) {
+            Log.d(TAG, "Transcription received length=${rawText.length}")
             playCustomSound(R.raw.rec_done)
             
             CoroutineScope(Dispatchers.Main).launch {
@@ -268,19 +286,19 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                                     Log.d(TAG, "Smart Fix using Provider: ${provider.name}, Model: $modelId")
 
                                     withContext(Dispatchers.IO) {
-                                        smartFixer.fix(text, contextPrompt, providerWithApiKey, modelId, temperature, promptTemplate)
+                                        smartFixer.fix(rawText, contextPrompt, providerWithApiKey, modelId, temperature, promptTemplate)
                                     }
                                 }
                             } else {
-                                text
+                                rawText
                             }
                         }
                     } else {
-                        text
+                        rawText
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Smart Fix failed", e)
-                    text // fallback
+                    rawText // fallback
                 }
 
                 if (shouldBlockExternalSend()) {
@@ -292,6 +310,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                     dictationController.onFinalTranscript(token, processedText)
                     showUndoQuickActionIfAvailable()
                 }
+
+                closeRealtimeSession()
                 
                 val autoSwitchBack = dataStore.data.map { it[AUTO_SWITCH_BACK] ?: false }.first()
                 if (autoSwitchBack && !processedText.isNullOrEmpty() && keyboardState.value == KeyboardState.Ready) {
@@ -305,12 +325,15 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 dictationController.onTranscriptionError(token, getString(R.string.toast_transcription_empty))
                 performFeedback()
             }
+
+            closeRealtimeSession()
         }
     }
 
     private fun transcriptionExceptionCallback(token: DictationController.SendToken, message: String) {
         Log.e(TAG, "Transcription error: $message")
         dictationController.onTranscriptionError(token, message)
+        closeRealtimeSession()
     }
 
     private fun startTranscription(token: DictationController.SendToken, attachToEnd: String) {
@@ -524,6 +547,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         showLongPressHint.value = false
         whisperTranscriber.stop()
         smartFixer.cancel()
+        closeRealtimeSession()
         setKeyboardState(KeyboardState.Ready)
         Toast.makeText(this, blockedNotice(), Toast.LENGTH_SHORT).show()
     }
@@ -540,6 +564,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         recorderManager?.stop()
         stopTimer()
         showLongPressHint.value = false
+        realtimeSttClient?.commitAudio()
     }
 
     private fun clearComposingText() {
@@ -696,8 +721,28 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                     }
                     performFeedback(customSoundId = R.raw.rec_start)
 
+                    closeRealtimeSession()
+
                     val model = provider.models.find { it.id == modelId }
-                    dictationController.onHoldStart(streamingPartialsEnabled = model?.streamingPartialsSupported == true)
+                    val wantsStreaming = model?.streamingPartialsSupported == true
+
+                    val providerWithApiKey = provider.copy(
+                        apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
+                    )
+                    val supportsStreaming = wantsStreaming && supportsOpenAiRealtime(providerWithApiKey)
+
+                    if (wantsStreaming && !supportsStreaming) {
+                        Toast.makeText(
+                            this@WhisperInputService,
+                            "Streaming partials not supported for this provider",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+
+                    pendingRealtimeProvider = if (supportsStreaming) providerWithApiKey else null
+                    pendingRealtimeModelId = if (supportsStreaming) modelId else null
+
+                    realtimeToken = dictationController.onHoldStart(streamingPartialsEnabled = supportsStreaming)
                 }
             }
             KeyboardState.Recording -> {
@@ -759,7 +804,9 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
     }
 
-    private fun startRecording() {
+    private fun startRecording(token: DictationController.SendToken) {
+        realtimeToken = token
+
         if (shouldBlockExternalSend()) {
             setKeyboardState(KeyboardState.Ready)
             return
@@ -774,7 +821,73 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         setKeyboardState(KeyboardState.Recording)
         recordingTimeMs.value = 0L
         startTimer()
-        recorderManager!!.start(recordedAudioFilename)
+
+        if (!token.streamingPartialsEnabled) {
+            closeRealtimeSession()
+            recorderManager!!.start(recordedAudioFilename)
+            return
+        }
+
+        val provider = pendingRealtimeProvider
+        val modelId = pendingRealtimeModelId
+        if (provider == null || modelId.isNullOrBlank() || provider.apiKey.isBlank()) {
+            closeRealtimeSession()
+            recorderManager!!.start(recordedAudioFilename)
+            return
+        }
+
+        val request = OpenAiRealtimeSttClient.buildRequest(
+            providerEndpoint = provider.endpoint,
+            modelId = modelId,
+            apiKey = provider.apiKey,
+        )
+        if (request == null) {
+            closeRealtimeSession()
+            recorderManager!!.start(recordedAudioFilename)
+            return
+        }
+
+        closeRealtimeClient()
+        realtimeFinalTranscript = null
+
+        val client = OpenAiRealtimeSttClient(
+            okHttpClient = OpenAiRealtimeSttClient.defaultOkHttpClient(),
+            request = request,
+            listener = object : OpenAiRealtimeSttClient.Listener {
+                override fun onConnected() = Unit
+
+                override fun onPartialTranscript(text: String) {
+                    val currentToken = realtimeToken ?: return
+                    CoroutineScope(Dispatchers.Main).launch {
+                        dictationController.onPartialTranscript(currentToken, text)
+                    }
+                }
+
+                override fun onFinalTranscript(text: String) {
+                    realtimeFinalTranscript = text
+                }
+
+                override fun onError(message: String) {
+                    Log.e(TAG, "Realtime STT error: $message")
+                }
+
+                override fun onClosed() {
+                    realtimeSttClient = null
+                }
+            },
+        )
+
+        realtimeSttClient = client
+        client.connect()
+
+        recorderManager!!.start(
+            recordedAudioFilename,
+            RecorderManager.StartOptions(
+                onPcmChunk = { chunk ->
+                    realtimeSttClient?.sendPcm16le(chunk.data)
+                }
+            )
+        )
     }
 
     private fun pauseRecording(targetState: KeyboardState) {
@@ -835,6 +948,28 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private fun cancelTranscriptionWork() {
         whisperTranscriber.stop()
         smartFixer.cancel()
+        closeRealtimeSession()
+    }
+
+    private fun supportsOpenAiRealtime(provider: ServiceProvider): Boolean {
+        if (provider.type != ProviderType.OPENAI) return false
+        if (provider.endpoint.isBlank()) return false
+        if (provider.apiKey.isBlank()) return false
+        return OpenAiRealtimeSttClient.buildRequest(provider.endpoint, "test", provider.apiKey) != null
+    }
+
+    private fun closeRealtimeClient() {
+        realtimeSttClient?.close()
+        realtimeSttClient = null
+    }
+
+    private fun closeRealtimeSession() {
+        closeRealtimeClient()
+        realtimeToken = null
+        realtimeSttClient = null
+        realtimeFinalTranscript = null
+        pendingRealtimeProvider = null
+        pendingRealtimeModelId = null
     }
 
     private fun confirmCancelAction(onConfirm: () -> Unit) {
@@ -1000,6 +1135,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         } else {
             whisperTranscriber.stop()
             smartFixer.cancel()
+            closeRealtimeSession()
             recorderManager?.stop()
             stopTimer()
             if (keyboardState.value != KeyboardState.Ready) setKeyboardState(KeyboardState.Ready)
@@ -1026,6 +1162,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         store.clear()
         whisperTranscriber.stop()
         smartFixer.cancel()
+        closeRealtimeSession()
         recorderManager?.stop()
         releaseAllMediaPlayers()
     }

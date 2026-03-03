@@ -19,7 +19,7 @@ class DictationController(
         val clearComposing: () -> Unit,
         val getInputConnection: () -> InputConnection?,
         val isInsertAllowed: () -> Boolean,
-        val startRecording: () -> Unit,
+        val startRecording: (SendToken) -> Unit,
         val pauseRecording: (KeyboardState) -> Unit,
         val resumeRecording: (KeyboardState) -> Unit,
         val stopRecording: () -> Unit,
@@ -29,6 +29,7 @@ class DictationController(
     data class SendToken(
         val sessionId: Long,
         val focusKey: FocusKey?,
+        val streamingPartialsEnabled: Boolean,
     )
 
     private data class Session(
@@ -100,15 +101,21 @@ class DictationController(
         autoPause(showToast = toastMessage != null, toastMessage = toastMessage)
     }
 
-    fun onHoldStart(streamingPartialsEnabled: Boolean) {
-        if (deps.getKeyboardState() != KeyboardState.Ready) return
+    fun onHoldStart(streamingPartialsEnabled: Boolean): SendToken? {
+        if (deps.getKeyboardState() != KeyboardState.Ready) return null
         val sessionId = nextSessionId++
+        val token = SendToken(
+            sessionId = sessionId,
+            focusKey = currentFocusKey,
+            streamingPartialsEnabled = streamingPartialsEnabled,
+        )
         activeSession = Session(
             sessionId = sessionId,
             focusKeyAtStart = currentFocusKey,
             streamingPartialsEnabled = streamingPartialsEnabled,
         )
-        deps.startRecording()
+        deps.startRecording(token)
+        return token
     }
 
     fun onHoldRelease() {
@@ -142,7 +149,11 @@ class DictationController(
         if (!state.isPaused) return null
 
         val cached = session.pendingTranscript
-        val token = SendToken(sessionId = session.sessionId, focusKey = currentFocusKey)
+        val token = SendToken(
+            sessionId = session.sessionId,
+            focusKey = currentFocusKey,
+            streamingPartialsEnabled = session.streamingPartialsEnabled,
+        )
         session.focusKeyAtSend = token.focusKey
         if (!cached.isNullOrBlank()) {
             onFinalTranscript(token, cached)
