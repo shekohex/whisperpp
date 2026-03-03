@@ -54,16 +54,19 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.navigation.NavHostController
+import com.github.shekohex.whisperpp.ACTIVE_STT_MODEL_ID
+import com.github.shekohex.whisperpp.ACTIVE_STT_PROVIDER_ID
+import com.github.shekohex.whisperpp.ACTIVE_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.ACTIVE_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.COMMAND_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.COMMAND_TEXT_PROVIDER_ID
 import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_COMMAND_TEXT
 import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_DICTATION_AUDIO
 import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
-import com.github.shekohex.whisperpp.MODEL
-import com.github.shekohex.whisperpp.SMART_FIX_BACKEND
-import com.github.shekohex.whisperpp.SMART_FIX_MODEL
-import com.github.shekohex.whisperpp.SPEECH_TO_TEXT_BACKEND
 import com.github.shekohex.whisperpp.USE_CONTEXT
 import com.github.shekohex.whisperpp.VERBOSE_NETWORK_LOGS_ENABLED
 import com.github.shekohex.whisperpp.data.SettingsRepository
+import com.github.shekohex.whisperpp.data.validateSelections
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
 import kotlinx.coroutines.Dispatchers
@@ -89,39 +92,50 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
     var searchQuery by remember { mutableStateOf("") }
     var manualPackageName by remember { mutableStateOf("") }
 
-    val activeBackendId = settingsState[SPEECH_TO_TEXT_BACKEND] ?: ""
-    val activeSmartFixBackendId = settingsState[SMART_FIX_BACKEND] ?: ""
     val useContext = settingsState[USE_CONTEXT] ?: false
     val verboseNetworkLogsEnabled = settingsState[VERBOSE_NETWORK_LOGS_ENABLED] ?: false
 
-    val dictationProvider = providers.find { it.id == activeBackendId }
-    val smartFixProvider = providers.find { it.id == activeSmartFixBackendId }
+    val sttProviderId = settingsState[ACTIVE_STT_PROVIDER_ID].orEmpty()
+    val sttModelId = settingsState[ACTIVE_STT_MODEL_ID].orEmpty()
+    val textProviderId = settingsState[ACTIVE_TEXT_PROVIDER_ID].orEmpty()
+    val textModelId = settingsState[ACTIVE_TEXT_MODEL_ID].orEmpty()
+    val commandProviderId = settingsState[COMMAND_TEXT_PROVIDER_ID].orEmpty()
+    val commandModelId = settingsState[COMMAND_TEXT_MODEL_ID].orEmpty()
 
-    val dictationModelId = (settingsState[MODEL] ?: "").ifBlank {
-        dictationProvider?.models?.firstOrNull()?.id.orEmpty()
-    }
-    val smartFixModelId = (settingsState[SMART_FIX_MODEL] ?: "").ifBlank {
-        smartFixProvider?.models?.firstOrNull()?.id.orEmpty()
+    val validation = remember(providers, sttProviderId, sttModelId, textProviderId, textModelId, commandProviderId, commandModelId) {
+        validateSelections(
+            providers = providers,
+            sttProviderId = sttProviderId,
+            sttModelId = sttModelId,
+            textProviderId = textProviderId,
+            textModelId = textModelId,
+            commandProviderId = commandProviderId,
+            commandModelId = commandModelId,
+        )
     }
 
-    val dictationDisclosure = remember(dictationProvider, dictationModelId, useContext) {
+    val dictationProvider = providers.find { it.id == validation.effective.stt.providerId }
+    val enhancementProvider = providers.find { it.id == validation.effective.text.providerId }
+    val commandProvider = providers.find { it.id == validation.effective.commandText.providerId }
+
+    val dictationDisclosure = remember(dictationProvider, validation.effective.stt.modelId, useContext) {
         PrivacyDisclosureFormatter.disclosureForDictation(
             provider = dictationProvider,
-            selectedModelId = dictationModelId,
+            selectedModelId = validation.effective.stt.modelId,
             useContext = useContext,
         )
     }
-    val enhancementDisclosure = remember(smartFixProvider, smartFixModelId, useContext) {
+    val enhancementDisclosure = remember(enhancementProvider, validation.effective.text.modelId, useContext) {
         PrivacyDisclosureFormatter.disclosureForEnhancement(
-            provider = smartFixProvider,
-            selectedModelId = smartFixModelId,
+            provider = enhancementProvider,
+            selectedModelId = validation.effective.text.modelId,
             useContext = useContext,
         )
     }
-    val commandDisclosure = remember(smartFixProvider, smartFixModelId, useContext) {
+    val commandDisclosure = remember(commandProvider, validation.effective.commandText.modelId, useContext) {
         PrivacyDisclosureFormatter.disclosureForCommand(
-            provider = smartFixProvider,
-            selectedModelId = smartFixModelId,
+            provider = commandProvider,
+            selectedModelId = validation.effective.commandText.modelId,
             useContext = useContext,
         )
     }
