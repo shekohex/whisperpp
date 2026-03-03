@@ -162,6 +162,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var realtimeSttClient: OpenAiRealtimeSttClient? = null
     private var realtimeToken: DictationController.SendToken? = null
     private var realtimeFinalTranscript: String? = null
+    private var realtimeBestEffortTranscript: String? = null
     private var pendingRealtimeProvider: ServiceProvider? = null
     private var pendingRealtimeModelId: String? = null
 
@@ -332,7 +333,21 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private fun transcriptionExceptionCallback(token: DictationController.SendToken, message: String) {
         Log.e(TAG, "Transcription error: $message")
-        dictationController.onTranscriptionError(token, message)
+        val bestEffort = if (token.streamingPartialsEnabled) {
+            realtimeFinalTranscript ?: realtimeBestEffortTranscript
+        } else {
+            null
+        }
+
+        if (!bestEffort.isNullOrBlank()) {
+            dictationController.onFinalTranscript(token, bestEffort)
+            showUndoQuickActionIfAvailable()
+            performFeedback()
+        } else {
+            dictationController.onTranscriptionError(token, message)
+            performFeedback()
+        }
+
         closeRealtimeSession()
     }
 
@@ -857,6 +872,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 override fun onConnected() = Unit
 
                 override fun onPartialTranscript(text: String) {
+                    realtimeBestEffortTranscript = text
                     val currentToken = realtimeToken ?: return
                     CoroutineScope(Dispatchers.Main).launch {
                         dictationController.onPartialTranscript(currentToken, text)
@@ -864,6 +880,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 }
 
                 override fun onFinalTranscript(text: String) {
+                    realtimeBestEffortTranscript = text
                     realtimeFinalTranscript = text
                 }
 
@@ -968,6 +985,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         realtimeToken = null
         realtimeSttClient = null
         realtimeFinalTranscript = null
+        realtimeBestEffortTranscript = null
         pendingRealtimeProvider = null
         pendingRealtimeModelId = null
     }
