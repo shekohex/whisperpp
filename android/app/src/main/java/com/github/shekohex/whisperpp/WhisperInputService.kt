@@ -140,6 +140,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var shouldOfferImeSwitch = mutableStateOf(false)
     private var recordingTimeMs = mutableStateOf(0L)
     private var showLongPressHint = mutableStateOf(false)
+    private var undoAvailable = mutableStateOf(false)
+    private var undoQuickActionVisible = mutableStateOf(false)
     private var externalSendBlockReason = mutableStateOf<SecureFieldDetector.Reason?>(null)
     private var externalSendBlockedByAppPolicy = mutableStateOf(false)
     private var externalSendBlockedPackageName = mutableStateOf<String?>(null)
@@ -184,6 +186,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 cancelTranscription = { cancelTranscriptionWork() },
             )
         )
+        refreshUndoState()
 
         networkLoggingPreferenceJob = CoroutineScope(Dispatchers.Main).launch {
             dataStore.data.map { it[VERBOSE_NETWORK_LOGS_ENABLED] ?: false }.collect { enabled ->
@@ -197,6 +200,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         super.onStartInput(attribute, restarting)
         focusInstanceId += 1
         dictationController.onFocusChanged(FocusKey.from(attribute, focusInstanceId))
+        showUndoQuickActionIfAvailable()
         refreshExternalSendBlock(attribute)
         if (isExternalSendBlocked() && isExternalSendingActive()) {
             dictationController.onWindowHidden(toastMessage = blockedNotice())
@@ -207,6 +211,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         super.onStartInputView(info, restarting)
         focusInstanceId += 1
         dictationController.onFocusChanged(FocusKey.from(info, focusInstanceId))
+        showUndoQuickActionIfAvailable()
         refreshExternalSendBlock(info)
         if (isExternalSendBlocked() && isExternalSendingActive()) {
             dictationController.onWindowHidden(toastMessage = blockedNotice())
@@ -285,6 +290,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 
                 if (!processedText.isNullOrEmpty()) {
                     dictationController.onFinalTranscript(token, processedText)
+                    showUndoQuickActionIfAvailable()
                 }
                 
                 val autoSwitchBack = dataStore.data.map { it[AUTO_SWITCH_BACK] ?: false }.first()
@@ -408,11 +414,14 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         amplitude = microphoneAmplitude.value,
                         recordingTimeMs = recordingTimeMs.value,
                         showLongPressHint = showLongPressHint.value,
+                        undoAvailable = undoAvailable.value,
+                        undoQuickActionVisible = undoQuickActionVisible.value,
                         onMicAction = { onMicAction() },
                         onCancelAction = { onCancelAction() },
                         onDiscardAction = { discardRecording() },
                         onSendAction = { onSendAction() },
                         onDeleteAction = { onDeleteText() },
+                        onUndoAction = { onUndoAction() },
                         onOpenSettings = { launchMainActivity() },
                         onOpenSettingsDestination = { launchMainActivity(it) },
                         onLanguageClick = { showLanguageMenu(this) },
@@ -449,6 +458,25 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private fun setKeyboardState(state: KeyboardState) {
         keyboardState.value = state
+    }
+
+    private fun refreshUndoState() {
+        val available = dictationController.isUndoAvailable()
+        undoAvailable.value = available
+        if (!available) {
+            undoQuickActionVisible.value = false
+        }
+    }
+
+    private fun showUndoQuickActionIfAvailable() {
+        refreshUndoState()
+        if (undoAvailable.value) {
+            undoQuickActionVisible.value = true
+        }
+    }
+
+    private fun clearUndoQuickAction() {
+        undoQuickActionVisible.value = false
     }
 
     private fun currentExternalSendBlock(editorInfo: EditorInfo? = currentInputEditorInfo): SecureFieldDetector.Result? {
@@ -635,6 +663,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             return
         }
 
+        clearUndoQuickAction()
+
         when (keyboardState.value) {
             KeyboardState.Ready -> {
                 CoroutineScope(Dispatchers.Main).launch {
@@ -696,7 +726,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             return
         }
 
+        clearUndoQuickAction()
+
         val token = dictationController.onSendRequested() ?: run {
+            showUndoQuickActionIfAvailable()
             performFeedback()
             return
         }
@@ -713,6 +746,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun onCancelAction() {
+        clearUndoQuickAction()
         performFeedback(customSoundId = R.raw.rec_pause)
         when (keyboardState.value) {
             KeyboardState.Recording,
@@ -772,7 +806,14 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private fun discardRecording() {
         playCustomSound(R.raw.rec_pause)
+        clearUndoQuickAction()
         dictationController.onCancelConfirmed()
+    }
+
+    private fun onUndoAction() {
+        performFeedback(isDelete = true)
+        dictationController.undoLastInsertion()
+        refreshUndoState()
     }
 
     private fun startTimer() {

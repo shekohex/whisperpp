@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -64,11 +65,14 @@ fun KeyboardScreen(
     amplitude: Int,
     recordingTimeMs: Long,
     showLongPressHint: Boolean,
+    undoAvailable: Boolean = false,
+    undoQuickActionVisible: Boolean = false,
     onMicAction: () -> Unit,
     onCancelAction: () -> Unit,
     onDiscardAction: () -> Unit,
     onSendAction: () -> Unit,
     onDeleteAction: () -> Unit,
+    onUndoAction: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenSettingsDestination: (String) -> Unit = {},
     onLanguageClick: () -> Unit,
@@ -95,6 +99,7 @@ fun KeyboardScreen(
     val isPausedState = state.isPaused
     val externalSendingBlocked = externalSendBlockedReason != null || externalSendBlockedByAppPolicy
     val canShowBlockedExplanation = externalSendingBlocked && (externalSendBlockedByAppPolicy || showSecureFieldExplanation)
+    val showUndoAction = undoAvailable && undoQuickActionVisible
     val copy = remember(externalSendBlockedReason, externalSendBlockedByAppPolicy, blockedPackageName) {
         blockedExplanationCopySpec(
             externalSendBlockedReason = externalSendBlockedReason,
@@ -406,6 +411,16 @@ fun KeyboardScreen(
 
             // Right Cluster
             Row(verticalAlignment = Alignment.CenterVertically) {
+                AnimatedVisibility(visible = showUndoAction) {
+                    IconButton(onClick = onUndoAction) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Undo,
+                            null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
                 AnimatedVisibility(visible = state == KeyboardState.Ready) {
                     BackspaceButton(onDeleteAction)
                 }
