@@ -72,7 +72,7 @@ Auto-fix (required for correctness):
 
 - **[Rule 1 - Bug] Best-effort finalize when streaming drops** - `6558238` (fix)
 
-**Plan metadata:** docs(03-04) metadata commit (see git log)
+**Plan metadata:** `41fc152` (docs)
 
 ## Files Created/Modified
 - `android/app/src/main/java/com/github/shekohex/whisperpp/recorder/RecorderManager.kt` - Optional PCM chunk emission while recording WAV.
