@@ -13,7 +13,7 @@ Whisper++ is an Android keyboard (IME) that turns speech into text in any app, w
 | Phase | Name | Goal | Status |
 |------:|------|------|--------|
 | 1 | Privacy & Safety Controls | Users can control what data is sent and avoid accidental capture/leaks | Complete |
-| 2 | Providers & Models | Users can configure BYO providers/models for STT + text transforms | In Progress |
+| 2 | Providers & Models | Users can configure BYO providers/models for STT + text transforms | Complete |
 | 3 | Dictation | Users can dictate reliably with streaming-gated partials, cancellation, and undo | Pending |
 | 4 | Prompts, Profiles & Enhancement | Users get per-app/per-language prompting + safe post-dictation enhancement with undo | Pending |
 | 5 | Command Mode & Presets | Users can transform selected text via voice instructions with clipboard fallback and undo | Pending |
@@ -68,7 +68,7 @@ Plans:
 - [x] 02-02-PLAN.md — Provider edit UX rules + model metadata editor (kind + streaming)
 - [x] 02-03-PLAN.md — Active STT/text selections + command override + setup-needed banner
 - [x] 02-04-PLAN.md — Runtime wiring for selections + base-URL routing (OpenAI STT/text, Gemini text)
-- [ ] 02-05-PLAN.md — Provider Test actions + optional model import with raw response UI
+- [x] 02-05-PLAN.md — Provider Test actions + optional model import with raw response UI
 
 ### Phase 3: Dictation
 

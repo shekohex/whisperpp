@@ -91,9 +91,17 @@ Each task was committed atomically:
 - **Verification:** `./android/gradlew -p android :app:assembleDebug` succeeds with JDK 17
 - **Committed in:** N/A
 
+**2. [Rule 3 - Blocking] ROADMAP.md phase status required manual update**
+- **Found during:** plan wrap-up (roadmap progress update)
+- **Issue:** Automated roadmap update did not reflect phase completion in ROADMAP.md tables.
+- **Fix:** Marked Phase 2 status as Complete and checked 02-05 plan entry.
+- **Files modified:** .planning/ROADMAP.md
+- **Verification:** ROADMAP.md shows Phase 2 Complete and 02-05 checked
+- **Committed in:** (metadata commit)
+
 ---
 
-**Total deviations:** 1 auto-fixed (1 blocking)
+**Total deviations:** 2 auto-fixed (2 blocking)
 **Impact on plan:** Verification environment fix only; no scope creep.
 
 ## Issues Encountered
