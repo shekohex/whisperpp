@@ -21,6 +21,7 @@ package com.github.shekohex.whisperpp
 
 import android.content.Context
 import android.util.Log
+import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import kotlinx.coroutines.*
@@ -97,6 +98,10 @@ class WhisperTranscriber {
             // Foolproof message
             if (provider.endpoint.isEmpty()) {
                 throw Exception(context.getString(R.string.error_endpoint_unset))
+            }
+
+            if (provider.authMode == ProviderAuthMode.API_KEY && provider.apiKey.isBlank()) {
+                throw Exception(context.getString(R.string.error_apikey_unset))
             }
 
             // Make request
@@ -260,17 +265,30 @@ class WhisperTranscriber {
         }.build()
 
         val requestHeaders: Headers = Headers.Builder().apply {
-            if (provider.apiKey.isNotEmpty()) {
+            if (provider.authMode == ProviderAuthMode.API_KEY) {
                 add("Authorization", "Bearer ${provider.apiKey}")
             }
-            add("Content-Type", "multipart/form-data")
         }.build()
 
         // Build URL with endpoint-specific parameters
         val url = if (provider.type == ProviderType.WHISPER_ASR) {
-             "${provider.endpoint}?encode=true&task=transcribe&language=auto&word_timestamps=false&output=txt"
+            val base = provider.endpoint.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid endpoint")
+            base.newBuilder()
+                .addQueryParameter("encode", "true")
+                .addQueryParameter("task", "transcribe")
+                .addQueryParameter("language", "auto")
+                .addQueryParameter("word_timestamps", "false")
+                .addQueryParameter("output", "txt")
+                .build()
         } else {
-             provider.endpoint
+            val base = provider.endpoint.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid endpoint")
+            val segments = base.pathSegments.filter { it.isNotBlank() }
+            val alreadyDerived = segments.size >= 2 && segments.takeLast(2) == listOf("audio", "transcriptions")
+            if (alreadyDerived) {
+                base
+            } else {
+                base.newBuilder().addPathSegments("audio/transcriptions").build()
+            }
         }
 
         return Request.Builder()
