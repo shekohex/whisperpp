@@ -2,13 +2,13 @@
 
 **Core value:** Speak anywhere; get accurate, context-appropriate text inserted instantly.
 
-**Current Phase:** 02
-**Current Phase Name:** Providers & Models
-**Status:** Milestone complete
-**Current Plan:** Not started
-**Total Plans in Phase:** 5
+**Current Phase:** 03
+**Current Phase Name:** Dictation
+**Status:** Ready to execute
+**Current Plan:** 2
+**Total Plans in Phase:** 4
 
-**Progress:** [██████████] 100%
+**Progress:** [████████░░] 80%
 
 ## Performance Metrics
 
@@ -19,6 +19,7 @@
 | Phase 02-providers-models P03 | 16 min | 3 tasks | 5 files |
 | Phase 02-providers-models P04 | 3 min | 3 tasks | 3 files |
 | Phase 02-providers-models P05 | 6h 32m | 3 tasks | 4 files |
+| Phase 03-dictation P01 | 5 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -48,6 +49,7 @@
 - [Phase 02-providers-models]: Default auth mode is API_KEY except WHISPER_ASR which defaults to NO_AUTH
 - [Phase 02]: Gemini Smart Fix uses x-goog-api-key header (no key= in URL)
 - [Phase 02]: Provider diagnostics show raw response in UI with redaction; never log bodies
+- [Phase 03-dictation]: Release from hold pauses recording (no auto-transcribe)
 
 ### Blockers
 
@@ -59,6 +61,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-03T11:15:14.814Z
-**Stopped At:** Completed 02-providers-models-05-PLAN.md
+**Last session:** 2026-03-03T19:00:30.698Z
+**Stopped At:** Completed 03-dictation-01-PLAN.md
 **Resume file:** None

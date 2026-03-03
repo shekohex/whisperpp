@@ -24,7 +24,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Dictation
 
-- [ ] **DICT-01**: User can start/stop dictation via a mic key with clear recording state
+- [x] **DICT-01**: User can start/stop dictation via a mic key with clear recording state
 - [ ] **DICT-02**: If the selected STT model supports streaming, partial transcription updates insert as composing text while speaking
 - [ ] **DICT-03**: If streaming is unsupported/disabled, dictation inserts only the final transcript on stop (no partial insertion)
 - [ ] **DICT-04**: User can cancel dictation and no additional text is inserted after cancel
@@ -118,7 +118,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROV-04 | 2 | Complete |
 | PROV-05 | 2 | Complete |
 | PROV-06 | 2 | Complete |
-| DICT-01 | 3 | Pending |
+| DICT-01 | 3 | Complete |
 | DICT-02 | 3 | Pending |
 | DICT-03 | 3 | Pending |
 | DICT-04 | 3 | Pending |
