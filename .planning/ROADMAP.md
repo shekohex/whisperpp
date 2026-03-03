@@ -66,7 +66,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Provider/model schema v2 + migration + disclosure derivation tests
 - [x] 02-02-PLAN.md — Provider edit UX rules + model metadata editor (kind + streaming)
-- [ ] 02-03-PLAN.md — Active STT/text selections + command override + setup-needed banner
+- [x] 02-03-PLAN.md — Active STT/text selections + command override + setup-needed banner
 - [ ] 02-04-PLAN.md — Runtime wiring for selections + base-URL routing (OpenAI STT/text, Gemini text)
 - [ ] 02-05-PLAN.md — Provider Test actions + optional model import with raw response UI
 
