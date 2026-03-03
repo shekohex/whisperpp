@@ -1,10 +1,12 @@
 package com.github.shekohex.whisperpp.dictation
 
 import android.view.inputmethod.InputConnection
+import android.view.inputmethod.ExtractedTextRequest
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isLocked
 import com.github.shekohex.whisperpp.keyboard.isPaused
 import com.github.shekohex.whisperpp.keyboard.isRecording
+import java.util.ArrayDeque
 
 class DictationController(
     private val deps: Deps,
@@ -42,6 +44,8 @@ class DictationController(
     private var currentFocusKey: FocusKey? = null
     private var activeSession: Session? = null
 
+    private val undoStacks = mutableMapOf<FocusKey, ArrayDeque<DictationUndoEntry>>()
+
     fun onFocusChanged(newFocusKey: FocusKey?) {
         currentFocusKey = newFocusKey
         if (activeSession == null) return
@@ -49,6 +53,42 @@ class DictationController(
         val state = deps.getKeyboardState()
         if (state != KeyboardState.Ready && !state.isPaused) {
             autoPause(showToast = false)
+        }
+    }
+
+    fun isUndoAvailable(): Boolean {
+        val key = currentFocusKey ?: return false
+        return undoStacks[key]?.isNotEmpty() == true
+    }
+
+    fun undoLastInsertion() {
+        val focusKey = currentFocusKey
+        if (focusKey == null) {
+            deps.toast("Can't undo here")
+            return
+        }
+
+        val stack = undoStacks[focusKey]
+        val entry = stack?.peekLast()
+        if (entry == null) return
+
+        val ic = deps.getInputConnection()
+        if (ic == null) {
+            undoStacks.remove(focusKey)
+            deps.toast("Can't undo here")
+            return
+        }
+
+        val applied = applyUndoSafely(ic, focusKey, entry)
+        if (!applied) {
+            undoStacks.remove(focusKey)
+            deps.toast("Can't undo here")
+            return
+        }
+
+        stack.removeLast()
+        if (stack.isEmpty()) {
+            undoStacks.remove(focusKey)
         }
     }
 
@@ -160,7 +200,27 @@ class DictationController(
             return
         }
 
-        ic.commitText(text, 1)
+        val focusKey = token.focusKey ?: currentFocusKey
+        val selectionBefore = ic.selectionSnapshot()
+        val insertionStart = selectionBefore?.let { minOf(it.start, it.end) }
+        val committed = ic.commitText(text, 1)
+        val selectionAfter = ic.selectionSnapshot()
+
+        if (committed && focusKey != null && selectionBefore != null && insertionStart != null) {
+            val fallbackAfter = DictationUndoEntry.SelectionSnapshot(
+                start = insertionStart + text.length,
+                end = insertionStart + text.length,
+            )
+            val entry = DictationUndoEntry(
+                focusKey = focusKey,
+                insertedText = text,
+                selectionBeforeInsert = selectionBefore,
+                selectionAfterInsert = selectionAfter ?: fallbackAfter,
+            )
+            val stack = undoStacks.getOrPut(focusKey) { ArrayDeque() }
+            stack.addLast(entry)
+        }
+
         deps.clearComposing()
         deps.setKeyboardState(KeyboardState.Ready)
         activeSession = null
@@ -197,5 +257,39 @@ class DictationController(
         if (!deps.isInsertAllowed()) return false
         val expected = activeSession?.focusKeyAtSend ?: activeSession?.focusKeyAtStart
         return expected != null && expected == token.focusKey && expected == currentFocusKey
+    }
+
+    private fun InputConnection.selectionSnapshot(): DictationUndoEntry.SelectionSnapshot? {
+        val extracted = getExtractedText(ExtractedTextRequest(), 0) ?: return null
+        val start = extracted.selectionStart
+        val end = extracted.selectionEnd
+        if (start < 0 || end < 0) return null
+        return DictationUndoEntry.SelectionSnapshot(start = start, end = end)
+    }
+
+    private fun applyUndoSafely(
+        ic: InputConnection,
+        currentFocus: FocusKey,
+        entry: DictationUndoEntry,
+    ): Boolean {
+        if (currentFocus != entry.focusKey) return false
+        if (entry.insertedText.isEmpty()) return false
+
+        val insertionStart = minOf(entry.selectionBeforeInsert.start, entry.selectionBeforeInsert.end)
+        val insertionEnd = insertionStart + entry.insertedText.length
+
+        ic.beginBatchEdit()
+        return try {
+            if (!ic.setSelection(insertionStart, insertionEnd)) return false
+            val selectedText = ic.getSelectedText(0)?.toString() ?: return false
+            if (selectedText != entry.insertedText) return false
+            if (!ic.commitText("", 1)) return false
+            ic.setSelection(entry.selectionBeforeInsert.start, entry.selectionBeforeInsert.end)
+            true
+        } catch (_: Exception) {
+            false
+        } finally {
+            ic.endBatchEdit()
+        }
     }
 }
