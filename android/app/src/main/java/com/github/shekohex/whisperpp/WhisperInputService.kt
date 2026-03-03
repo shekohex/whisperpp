@@ -202,14 +202,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         if (shouldBlockExternalSend()) {
                             null
                         } else {
-                            val providerId = prefs[SMART_FIX_BACKEND] ?: ""
                             val providers = repository.providers.first()
+                            val providerId = prefs[ACTIVE_TEXT_PROVIDER_ID].orEmpty()
+                            val modelId = prefs[ACTIVE_TEXT_MODEL_ID].orEmpty()
                             val provider = providers.find { it.id == providerId }
 
-                            if (provider != null) {
-                                val modelId = (prefs[SMART_FIX_MODEL] ?: "").ifBlank {
-                                    provider.models.firstOrNull()?.id.orEmpty()
-                                }
+                            if (provider != null && modelId.isNotBlank() && provider.models.any { it.id == modelId }) {
                                 val useContext = prefs[USE_CONTEXT] ?: false
                                 val disclosure = PrivacyDisclosureFormatter.disclosureForEnhancement(
                                     provider = provider,
@@ -297,18 +295,14 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             val useContext = prefs[USE_CONTEXT] ?: false
             val contextPrompt = if (useContext) currentInputConnection?.getTextBeforeCursor(500, 0)?.toString() else null
             
-            val currentLanguage = prefs[LANGUAGE_CODE] ?: "auto"
-            val defaultBackendId = prefs[SPEECH_TO_TEXT_BACKEND] ?: ""
             val providers = repository.providers.first()
-            
-            val languageProvider = if (currentLanguage != "auto") {
-                providers.find { it.languageCode.equals(currentLanguage, ignoreCase = true) }
-            } else null
-            
-            val provider = languageProvider ?: providers.find { it.id == defaultBackendId }
-            
-            if (provider == null) {
-                Toast.makeText(this@WhisperInputService, "No Provider Selected", Toast.LENGTH_LONG).show()
+
+            val providerId = prefs[ACTIVE_STT_PROVIDER_ID].orEmpty()
+            val modelId = prefs[ACTIVE_STT_MODEL_ID].orEmpty()
+            val provider = providers.find { it.id == providerId }
+            if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
+                File(recordedAudioFilename).delete()
+                Toast.makeText(this@WhisperInputService, "Setup required: select STT provider + model in Settings", Toast.LENGTH_SHORT).show()
                 setKeyboardState(KeyboardState.Ready)
                 return@launch
             }
@@ -317,7 +311,6 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
             )
             
-            val modelId = if (provider.models.isNotEmpty()) provider.models.first().id else prefs[MODEL] ?: "whisper-1"
             val staticPrompt = if (provider.prompt.isNotEmpty()) provider.prompt else prefs[PROMPT] ?: ""
             val temperature = provider.temperature
             val postprocessing = prefs[POSTPROCESSING] ?: getString(R.string.settings_option_no_conversion)
@@ -596,19 +589,14 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             KeyboardState.Ready -> {
                 CoroutineScope(Dispatchers.Main).launch {
                     val prefs = dataStore.data.first()
-                    val currentLanguage = prefs[LANGUAGE_CODE] ?: "auto"
-                    val defaultBackendId = prefs[SPEECH_TO_TEXT_BACKEND] ?: ""
                     val providers = repository.providers.first()
-                    val languageProvider = if (currentLanguage != "auto") {
-                        providers.find { it.languageCode.equals(currentLanguage, ignoreCase = true) }
-                    } else {
-                        null
-                    }
-                    val provider = languageProvider ?: providers.find { it.id == defaultBackendId }
-                    val modelId = if (!provider?.models.isNullOrEmpty()) {
-                        provider?.models?.first()?.id.orEmpty()
-                    } else {
-                        prefs[MODEL] ?: "whisper-1"
+
+                    val providerId = prefs[ACTIVE_STT_PROVIDER_ID].orEmpty()
+                    val modelId = prefs[ACTIVE_STT_MODEL_ID].orEmpty()
+                    val provider = providers.find { it.id == providerId }
+                    if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
+                        Toast.makeText(this@WhisperInputService, "Setup required: select STT provider + model in Settings", Toast.LENGTH_SHORT).show()
+                        return@launch
                     }
                     val useContext = prefs[USE_CONTEXT] ?: false
                     val disclosure = PrivacyDisclosureFormatter.disclosureForDictation(
