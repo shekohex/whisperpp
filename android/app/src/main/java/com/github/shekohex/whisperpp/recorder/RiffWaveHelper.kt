@@ -40,8 +40,13 @@ object RiffWaveHelper {
         }
     }
 
-    fun headerBytes(totalLength: Int): ByteArray {
+    fun headerBytes(totalLength: Int, sampleRate: Int = 16000): ByteArray {
         require(totalLength >= 44)
+        require(sampleRate > 0)
+        val channels = 1
+        val bitsPerSample = 16
+        val byteRate = sampleRate * channels * bitsPerSample / 8
+        val blockAlign = channels * bitsPerSample / 8
         return ByteBuffer.allocate(44).apply {
             order(ByteOrder.LITTLE_ENDIAN)
 
@@ -64,11 +69,11 @@ object RiffWaveHelper {
 
             putInt(16)
             putShort(1.toShort())
-            putShort(1.toShort())
-            putInt(16000)
-            putInt(32000)
-            putShort(2.toShort())
-            putShort(16.toShort())
+            putShort(channels.toShort())
+            putInt(sampleRate)
+            putInt(byteRate)
+            putShort(blockAlign.toShort())
+            putShort(bitsPerSample.toShort())
 
             put('d'.code.toByte())
             put('a'.code.toByte())

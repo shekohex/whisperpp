@@ -34,17 +34,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.channels.Channel
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.RandomAccessFile
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 
 class RecorderManager(context: Context) {
     companion object {
-        private const val SAMPLE_RATE = 16000
+        private const val DEFAULT_SAMPLE_RATE = 16000
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
         private const val HEADER_SIZE = 44
@@ -60,6 +59,20 @@ class RecorderManager(context: Context) {
     private val isRecording = AtomicBoolean(false)
     private val isPaused = AtomicBoolean(false)
 
+    data class PcmChunk(
+        val data: ByteArray,
+        val sampleRate: Int,
+    )
+
+    data class StartOptions(
+        val sampleRate: Int = DEFAULT_SAMPLE_RATE,
+        val onPcmChunk: ((PcmChunk) -> Unit)? = null,
+    )
+
+    private var currentSampleRate: Int = DEFAULT_SAMPLE_RATE
+    private var pcmChunkChannel: Channel<ByteArray>? = null
+    private var pcmChunkJob: Job? = null
+
     private var onUpdateMicrophoneAmplitude: (Int) -> Unit = { }
     private var microphoneAmplitudeUpdateJob: Job? = null
     private val amplitudeReportPeriod: Long
@@ -71,10 +84,12 @@ class RecorderManager(context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    fun start(filename: String) {
+    fun start(filename: String, options: StartOptions = StartOptions()) {
         stop() // Ensure previous recording is stopped
 
-        val minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+        currentSampleRate = options.sampleRate
+
+        val minBufferSize = AudioRecord.getMinBufferSize(currentSampleRate, CHANNEL_CONFIG, AUDIO_FORMAT)
         if (minBufferSize == AudioRecord.ERROR || minBufferSize == AudioRecord.ERROR_BAD_VALUE) {
             Log.e("RecorderManager", "Invalid buffer size")
             return
@@ -83,7 +98,7 @@ class RecorderManager(context: Context) {
         try {
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                SAMPLE_RATE,
+                currentSampleRate,
                 CHANNEL_CONFIG,
                 AUDIO_FORMAT,
                 minBufferSize * 4
@@ -97,6 +112,19 @@ class RecorderManager(context: Context) {
             audioRecord?.startRecording()
             isRecording.set(true)
             isPaused.set(false)
+
+            val chunkCallback = options.onPcmChunk
+            if (chunkCallback != null) {
+                val channel = Channel<ByteArray>(capacity = 8)
+                pcmChunkChannel = channel
+                pcmChunkJob = CoroutineScope(Dispatchers.Default).launch {
+                    for (chunk in channel) {
+                        runCatching {
+                            chunkCallback(PcmChunk(data = chunk, sampleRate = currentSampleRate))
+                        }
+                    }
+                }
+            }
 
             recordingThread = Thread {
                 writeAudioDataToFile(filename, minBufferSize)
@@ -131,6 +159,7 @@ class RecorderManager(context: Context) {
                 if (read > 0) {
                     os.write(data, 0, read)
                     calculateAmplitude(data, read)
+                    pcmChunkChannel?.trySend(data.copyOfRange(0, read))
                 }
             }
         } catch (e: IOException) {
@@ -151,7 +180,7 @@ class RecorderManager(context: Context) {
             val fileLength = file.length()
             // headerBytes expects Total File Size (Header + Data)
             // fileLength is exactly that.
-            val header = RiffWaveHelper.headerBytes(fileLength.toInt())
+            val header = RiffWaveHelper.headerBytes(fileLength.toInt(), sampleRate = currentSampleRate)
 
             RandomAccessFile(file, "rw").use { raf ->
                 raf.seek(0)
@@ -212,6 +241,11 @@ class RecorderManager(context: Context) {
         
         audioRecord = null
         recordingThread = null
+
+        pcmChunkChannel?.close()
+        pcmChunkChannel = null
+        pcmChunkJob?.cancel()
+        pcmChunkJob = null
         
         microphoneAmplitudeUpdateJob?.cancel()
     }
