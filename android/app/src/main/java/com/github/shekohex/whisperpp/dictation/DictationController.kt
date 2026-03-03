@@ -145,6 +145,13 @@ class DictationController(
             return
         }
 
+        if (token.focusKey?.inputType == 0) {
+            deps.copyToClipboard(text)
+            deps.toast("No field focused; copied to clipboard")
+            deps.setKeyboardState(if (deps.getKeyboardState().isLocked) KeyboardState.PausedLocked else KeyboardState.Paused)
+            return
+        }
+
         val ic = deps.getInputConnection()
         if (ic == null) {
             deps.copyToClipboard(text)
