@@ -93,6 +93,7 @@ fun SettingsNavigation(
 
     LaunchedEffect(Unit) {
         repository.migrateProviderSchemaV2IfNeeded(context)
+        repository.migrateProviderSelectionsV2IfNeeded()
         migrationReady = true
     }
 

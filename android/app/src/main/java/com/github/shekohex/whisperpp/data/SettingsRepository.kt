@@ -2,12 +2,23 @@ package com.github.shekohex.whisperpp.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.github.shekohex.whisperpp.ACTIVE_STT_MODEL_ID
+import com.github.shekohex.whisperpp.ACTIVE_STT_PROVIDER_ID
+import com.github.shekohex.whisperpp.ACTIVE_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.ACTIVE_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.COMMAND_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.COMMAND_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.MODEL
+import com.github.shekohex.whisperpp.SMART_FIX_BACKEND
+import com.github.shekohex.whisperpp.SMART_FIX_MODEL
+import com.github.shekohex.whisperpp.SPEECH_TO_TEXT_BACKEND
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.google.gson.Gson
 import com.google.gson.JsonArray
@@ -27,6 +38,7 @@ val PROVIDERS_JSON = stringPreferencesKey("providers_json")
 val PROFILES_JSON = stringPreferencesKey("profiles_json")
 val PROVIDER_API_KEY_MIGRATION_DONE = booleanPreferencesKey("provider_api_key_migration_done")
 val PROVIDER_SCHEMA_V2_MIGRATION_DONE = booleanPreferencesKey("provider_schema_v2_migration_done")
+val PROVIDER_SELECTIONS_V2_MIGRATION_DONE = booleanPreferencesKey("provider_selections_v2_migration_done")
 
 data class SettingsExport(
     val version: Int,
@@ -223,6 +235,21 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             mutablePrefs[PROVIDER_SCHEMA_V2_MIGRATION_DONE] = true
         }
     }
+
+    suspend fun migrateProviderSelectionsV2IfNeeded() {
+        val migrationDone = dataStore.data.map { prefs ->
+            prefs[PROVIDER_SELECTIONS_V2_MIGRATION_DONE] ?: false
+        }.first()
+
+        if (migrationDone) {
+            return
+        }
+
+        dataStore.edit { prefs ->
+            migrateLegacySelectionsToV2(prefs)
+            prefs[PROVIDER_SELECTIONS_V2_MIGRATION_DONE] = true
+        }
+    }
     
     val profiles: Flow<List<LanguageProfile>> = dataStore.data.map { prefs ->
         val json = prefs[PROFILES_JSON]
@@ -325,6 +352,36 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         } catch (e: Exception) {
             ImportResult.Error("Failed to import: ${e.message}")
         }
+    }
+}
+
+internal fun migrateLegacySelectionsToV2(prefs: MutablePreferences) {
+    val hasAnyNewKey = prefs.contains(ACTIVE_STT_PROVIDER_ID) ||
+        prefs.contains(ACTIVE_STT_MODEL_ID) ||
+        prefs.contains(ACTIVE_TEXT_PROVIDER_ID) ||
+        prefs.contains(ACTIVE_TEXT_MODEL_ID) ||
+        prefs.contains(COMMAND_TEXT_PROVIDER_ID) ||
+        prefs.contains(COMMAND_TEXT_MODEL_ID)
+    if (hasAnyNewKey) {
+        return
+    }
+
+    val legacySttProviderId = prefs[SPEECH_TO_TEXT_BACKEND]?.trim().orEmpty()
+    val legacySttModelId = prefs[MODEL]?.trim().orEmpty()
+    val legacyTextProviderId = prefs[SMART_FIX_BACKEND]?.trim().orEmpty()
+    val legacyTextModelId = prefs[SMART_FIX_MODEL]?.trim().orEmpty()
+
+    if (legacySttProviderId.isNotEmpty()) {
+        prefs[ACTIVE_STT_PROVIDER_ID] = legacySttProviderId
+    }
+    if (legacySttModelId.isNotEmpty()) {
+        prefs[ACTIVE_STT_MODEL_ID] = legacySttModelId
+    }
+    if (legacyTextProviderId.isNotEmpty()) {
+        prefs[ACTIVE_TEXT_PROVIDER_ID] = legacyTextProviderId
+    }
+    if (legacyTextModelId.isNotEmpty()) {
+        prefs[ACTIVE_TEXT_MODEL_ID] = legacyTextModelId
     }
 }
 

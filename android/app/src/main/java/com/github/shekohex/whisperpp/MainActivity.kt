@@ -27,6 +27,12 @@ import kotlinx.coroutines.delay
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 val SPEECH_TO_TEXT_BACKEND = stringPreferencesKey("speech-to-text-backend")
+val ACTIVE_STT_PROVIDER_ID = stringPreferencesKey("active-stt-provider-id")
+val ACTIVE_STT_MODEL_ID = stringPreferencesKey("active-stt-model-id")
+val ACTIVE_TEXT_PROVIDER_ID = stringPreferencesKey("active-text-provider-id")
+val ACTIVE_TEXT_MODEL_ID = stringPreferencesKey("active-text-model-id")
+val COMMAND_TEXT_PROVIDER_ID = stringPreferencesKey("command-text-provider-id")
+val COMMAND_TEXT_MODEL_ID = stringPreferencesKey("command-text-model-id")
 val ENDPOINT = stringPreferencesKey("endpoint")
 val LANGUAGE_CODE = stringPreferencesKey("language-code")
 val API_KEY = stringPreferencesKey("api-key")
