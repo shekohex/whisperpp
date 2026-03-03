@@ -63,6 +63,7 @@ sealed class SettingsScreen(val route: String) {
     object PostProcessing : SettingsScreen("post_processing")
     object Keyboard : SettingsScreen("keyboard")
     object PrivacySafety : SettingsScreen("privacy_safety")
+    object ProviderSelections : SettingsScreen("provider_selections")
     object ProviderEdit : SettingsScreen("provider_edit?id={id}&cloneFromId={cloneFromId}") {
         fun createRoute(id: String? = null, cloneFromId: String? = null): String {
             val encodedId = Uri.encode(id ?: "")
@@ -87,6 +88,7 @@ fun SettingsNavigation(
         SettingsScreen.PostProcessing.route,
         SettingsScreen.Keyboard.route,
         SettingsScreen.PrivacySafety.route,
+        SettingsScreen.ProviderSelections.route,
         SettingsScreen.Main.route -> startRoute
         else -> SettingsScreen.Main.route
     }
@@ -120,6 +122,9 @@ fun SettingsNavigation(
         composable(SettingsScreen.PrivacySafety.route) {
             PrivacySafetyScreen(dataStore, navController)
         }
+        composable(SettingsScreen.ProviderSelections.route) {
+            ProviderSelectionsScreen(dataStore, navController)
+        }
         composable(
             route = SettingsScreen.ProviderEdit.route,
             arguments = listOf(
@@ -149,6 +154,18 @@ fun MainSettingsScreen(
     
     val activeBackendId = settingsState?.get(SPEECH_TO_TEXT_BACKEND)
     val activeBackendName = providers.find { it.id == activeBackendId }?.name ?: "Select Provider"
+
+    val activeSttProviderId = settingsState?.get(ACTIVE_STT_PROVIDER_ID).orEmpty()
+    val activeSttModelId = settingsState?.get(ACTIVE_STT_MODEL_ID).orEmpty()
+    val activeTextProviderId = settingsState?.get(ACTIVE_TEXT_PROVIDER_ID).orEmpty()
+    val activeTextModelId = settingsState?.get(ACTIVE_TEXT_MODEL_ID).orEmpty()
+
+    val sttProviderName = providers.find { it.id == activeSttProviderId }?.name ?: "None"
+    val sttModelName = providers.find { it.id == activeSttProviderId }?.models?.find { it.id == activeSttModelId }?.name
+        ?: activeSttModelId.ifBlank { "None" }
+    val textProviderName = providers.find { it.id == activeTextProviderId }?.name ?: "None"
+    val textModelName = providers.find { it.id == activeTextProviderId }?.models?.find { it.id == activeTextModelId }?.name
+        ?: activeTextModelId.ifBlank { "None" }
 
     var showImportConfirmDialog by remember { mutableStateOf(false) }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
@@ -267,6 +284,12 @@ fun MainSettingsScreen(
             item {
                 SettingsGroup(title = "Configuration") {
                     SettingsItem(
+                        icon = Icons.Default.Tune,
+                        title = "Provider selections",
+                        subtitle = "STT: $sttProviderName / $sttModelName • Text: $textProviderName / $textModelName",
+                        onClick = { navController.navigate(SettingsScreen.ProviderSelections.route) }
+                    )
+                    SettingsItem(
                         icon = Icons.Default.Mic,
                         title = "Transcription Backend",
                         subtitle = activeBackendName,
@@ -331,6 +354,433 @@ fun MainSettingsScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProviderSelectionsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
+    val settingsState by dataStore.data.collectAsState(initial = null)
+    val repository = remember { SettingsRepository(dataStore) }
+    val providers by repository.providers.collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+
+    val sttProviderId = settingsState?.get(ACTIVE_STT_PROVIDER_ID).orEmpty()
+    val sttModelId = settingsState?.get(ACTIVE_STT_MODEL_ID).orEmpty()
+    val textProviderId = settingsState?.get(ACTIVE_TEXT_PROVIDER_ID).orEmpty()
+    val textModelId = settingsState?.get(ACTIVE_TEXT_MODEL_ID).orEmpty()
+    val commandProviderId = settingsState?.get(COMMAND_TEXT_PROVIDER_ID).orEmpty()
+    val commandModelId = settingsState?.get(COMMAND_TEXT_MODEL_ID).orEmpty()
+
+    var sttProviderExpanded by remember { mutableStateOf(false) }
+    var sttModelExpanded by remember { mutableStateOf(false) }
+    var textProviderExpanded by remember { mutableStateOf(false) }
+    var textModelExpanded by remember { mutableStateOf(false) }
+    var commandProviderExpanded by remember { mutableStateOf(false) }
+    var commandModelExpanded by remember { mutableStateOf(false) }
+
+    val sttProvider = providers.find { it.id == sttProviderId }
+    val textProvider = providers.find { it.id == textProviderId }
+    val commandProvider = providers.find { it.id == commandProviderId }
+
+    val isCommandOverrideEnabled = commandProviderId.isNotBlank() || commandModelId.isNotBlank()
+
+    fun isSttCompatible(model: ModelConfig): Boolean {
+        return model.kind == ModelKind.STT || model.kind == ModelKind.MULTIMODAL
+    }
+
+    fun isTextCompatible(model: ModelConfig): Boolean {
+        return model.kind == ModelKind.TEXT || model.kind == ModelKind.MULTIMODAL
+    }
+
+    Scaffold(
+        topBar = {
+            MediumTopAppBar(
+                title = { Text("Provider selections") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                }
+            )
+        },
+        contentWindowInsets = WindowInsets.statusBars
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Spacer(Modifier.height(16.dp))
+
+            SettingsGroup(title = "Dictation (STT)") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ExposedDropdownMenuBox(
+                        expanded = sttProviderExpanded,
+                        onExpandedChange = { sttProviderExpanded = !sttProviderExpanded },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            readOnly = true,
+                            value = sttProvider?.name ?: "None",
+                            onValueChange = {},
+                            label = { Text("Provider") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sttProviderExpanded) },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = sttProviderExpanded,
+                            onDismissRequest = { sttProviderExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("None") },
+                                onClick = {
+                                    scope.launch {
+                                        dataStore.edit {
+                                            it.remove(ACTIVE_STT_PROVIDER_ID)
+                                            it.remove(ACTIVE_STT_MODEL_ID)
+                                        }
+                                    }
+                                    sttProviderExpanded = false
+                                }
+                            )
+                            if (providers.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("No Providers Configured") },
+                                    onClick = { sttProviderExpanded = false }
+                                )
+                            }
+                            providers.forEach { provider ->
+                                DropdownMenuItem(
+                                    text = { Text(provider.name) },
+                                    onClick = {
+                                        scope.launch {
+                                            dataStore.edit {
+                                                it[ACTIVE_STT_PROVIDER_ID] = provider.id
+                                                it.remove(ACTIVE_STT_MODEL_ID)
+                                            }
+                                        }
+                                        sttProviderExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    ExposedDropdownMenuBox(
+                        expanded = sttModelExpanded,
+                        onExpandedChange = { if (sttProvider != null) sttModelExpanded = !sttModelExpanded },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val selectedModel = sttProvider?.models?.firstOrNull { it.id == sttModelId }
+                        val modelLabel = when {
+                            sttProvider == null -> "Select provider first"
+                            selectedModel != null -> selectedModel.name
+                            sttModelId.isNotBlank() -> sttModelId
+                            else -> "Select Model"
+                        }
+                        OutlinedTextField(
+                            readOnly = true,
+                            enabled = sttProvider != null,
+                            value = modelLabel,
+                            onValueChange = {},
+                            label = { Text("Model") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sttModelExpanded) },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = sttModelExpanded,
+                            onDismissRequest = { sttModelExpanded = false }
+                        ) {
+                            val compatibleModels = sttProvider?.models?.filter(::isSttCompatible).orEmpty()
+                            compatibleModels.forEach { model ->
+                                DropdownMenuItem(
+                                    text = { Text(model.name) },
+                                    onClick = {
+                                        scope.launch {
+                                            dataStore.edit { it[ACTIVE_STT_MODEL_ID] = model.id }
+                                        }
+                                        sttModelExpanded = false
+                                    }
+                                )
+                            }
+                            if (compatibleModels.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("No compatible models") },
+                                    onClick = { sttModelExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsGroup(title = "Enhancement (Text)") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ExposedDropdownMenuBox(
+                        expanded = textProviderExpanded,
+                        onExpandedChange = { textProviderExpanded = !textProviderExpanded },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            readOnly = true,
+                            value = textProvider?.name ?: "None",
+                            onValueChange = {},
+                            label = { Text("Provider") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = textProviderExpanded) },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = textProviderExpanded,
+                            onDismissRequest = { textProviderExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("None") },
+                                onClick = {
+                                    scope.launch {
+                                        dataStore.edit {
+                                            it.remove(ACTIVE_TEXT_PROVIDER_ID)
+                                            it.remove(ACTIVE_TEXT_MODEL_ID)
+                                        }
+                                    }
+                                    textProviderExpanded = false
+                                }
+                            )
+                            if (providers.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("No Providers Configured") },
+                                    onClick = { textProviderExpanded = false }
+                                )
+                            }
+                            providers.forEach { provider ->
+                                DropdownMenuItem(
+                                    text = { Text(provider.name) },
+                                    onClick = {
+                                        scope.launch {
+                                            dataStore.edit {
+                                                it[ACTIVE_TEXT_PROVIDER_ID] = provider.id
+                                                it.remove(ACTIVE_TEXT_MODEL_ID)
+                                            }
+                                        }
+                                        textProviderExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    ExposedDropdownMenuBox(
+                        expanded = textModelExpanded,
+                        onExpandedChange = { if (textProvider != null) textModelExpanded = !textModelExpanded },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val selectedModel = textProvider?.models?.firstOrNull { it.id == textModelId }
+                        val modelLabel = when {
+                            textProvider == null -> "Select provider first"
+                            selectedModel != null -> selectedModel.name
+                            textModelId.isNotBlank() -> textModelId
+                            else -> "Select Model"
+                        }
+                        OutlinedTextField(
+                            readOnly = true,
+                            enabled = textProvider != null,
+                            value = modelLabel,
+                            onValueChange = {},
+                            label = { Text("Model") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = textModelExpanded) },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = textModelExpanded,
+                            onDismissRequest = { textModelExpanded = false }
+                        ) {
+                            val compatibleModels = textProvider?.models?.filter(::isTextCompatible).orEmpty()
+                            compatibleModels.forEach { model ->
+                                DropdownMenuItem(
+                                    text = { Text(model.name) },
+                                    onClick = {
+                                        scope.launch {
+                                            dataStore.edit { it[ACTIVE_TEXT_MODEL_ID] = model.id }
+                                        }
+                                        textModelExpanded = false
+                                    }
+                                )
+                            }
+                            if (compatibleModels.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text("No compatible models") },
+                                    onClick = { textModelExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsGroup(title = "Advanced") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Override command selection",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium,
+                            )
+                            Text(
+                                text = "When off, command mode uses the enhancement selection.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = isCommandOverrideEnabled,
+                            onCheckedChange = { enabled ->
+                                if (!enabled) {
+                                    scope.launch {
+                                        dataStore.edit {
+                                            it.remove(COMMAND_TEXT_PROVIDER_ID)
+                                            it.remove(COMMAND_TEXT_MODEL_ID)
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+
+                    AnimatedVisibility(visible = isCommandOverrideEnabled) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ExposedDropdownMenuBox(
+                                expanded = commandProviderExpanded,
+                                onExpandedChange = { commandProviderExpanded = !commandProviderExpanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedTextField(
+                                    readOnly = true,
+                                    value = commandProvider?.name ?: "None",
+                                    onValueChange = {},
+                                    label = { Text("Provider") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = commandProviderExpanded) },
+                                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = commandProviderExpanded,
+                                    onDismissRequest = { commandProviderExpanded = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("None") },
+                                        onClick = {
+                                            scope.launch {
+                                                dataStore.edit {
+                                                    it.remove(COMMAND_TEXT_PROVIDER_ID)
+                                                    it.remove(COMMAND_TEXT_MODEL_ID)
+                                                }
+                                            }
+                                            commandProviderExpanded = false
+                                        }
+                                    )
+                                    if (providers.isEmpty()) {
+                                        DropdownMenuItem(
+                                            text = { Text("No Providers Configured") },
+                                            onClick = { commandProviderExpanded = false }
+                                        )
+                                    }
+                                    providers.forEach { provider ->
+                                        DropdownMenuItem(
+                                            text = { Text(provider.name) },
+                                            onClick = {
+                                                scope.launch {
+                                                    dataStore.edit {
+                                                        it[COMMAND_TEXT_PROVIDER_ID] = provider.id
+                                                        it.remove(COMMAND_TEXT_MODEL_ID)
+                                                    }
+                                                }
+                                                commandProviderExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            ExposedDropdownMenuBox(
+                                expanded = commandModelExpanded,
+                                onExpandedChange = { if (commandProvider != null) commandModelExpanded = !commandModelExpanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                val selectedModel = commandProvider?.models?.firstOrNull { it.id == commandModelId }
+                                val modelLabel = when {
+                                    commandProvider == null -> "Select provider first"
+                                    selectedModel != null -> selectedModel.name
+                                    commandModelId.isNotBlank() -> commandModelId
+                                    else -> "Select Model"
+                                }
+                                OutlinedTextField(
+                                    readOnly = true,
+                                    enabled = commandProvider != null,
+                                    value = modelLabel,
+                                    onValueChange = {},
+                                    label = { Text("Model") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = commandModelExpanded) },
+                                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                                    modifier = Modifier.menuAnchor().fillMaxWidth()
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = commandModelExpanded,
+                                    onDismissRequest = { commandModelExpanded = false }
+                                ) {
+                                    val compatibleModels = commandProvider?.models?.filter(::isTextCompatible).orEmpty()
+                                    compatibleModels.forEach { model ->
+                                        DropdownMenuItem(
+                                            text = { Text(model.name) },
+                                            onClick = {
+                                                scope.launch {
+                                                    dataStore.edit { it[COMMAND_TEXT_MODEL_ID] = model.id }
+                                                }
+                                                commandModelExpanded = false
+                                            }
+                                        )
+                                    }
+                                    if (compatibleModels.isEmpty()) {
+                                        DropdownMenuItem(
+                                            text = { Text("No compatible models") },
+                                            onClick = { commandModelExpanded = false }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
 }
