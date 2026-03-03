@@ -319,6 +319,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             val prefs = dataStore.data.first()
             val useContext = prefs[USE_CONTEXT] ?: false
             val contextPrompt = if (useContext) currentInputConnection?.getTextBeforeCursor(500, 0)?.toString() else null
+            val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
             
             val providers = repository.providers.first()
 
@@ -347,7 +348,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
             whisperTranscriber.startAsync(
                 this@WhisperInputService, recordedAudioFilename, audioMediaType,
-                attachToEnd, contextPrompt, providerWithApiKey, modelId, postprocessing,
+                attachToEnd, contextPrompt, languageCode, providerWithApiKey, modelId, postprocessing,
                 addTrailingSpace, timeout, staticPrompt, temperature,
                 { transcriptionCallback(token, it, contextPrompt) },
                 { transcriptionExceptionCallback(token, it) }

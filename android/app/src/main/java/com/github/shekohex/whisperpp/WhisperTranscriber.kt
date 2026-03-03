@@ -79,6 +79,7 @@ class WhisperTranscriber {
         mediaType: String,
         attachToEnd: String,
         contextPrompt: String?,
+        languageCode: String,
         provider: ServiceProvider,
         modelId: String,
         postprocessing: String,
@@ -115,7 +116,8 @@ class WhisperTranscriber {
                 provider,
                 modelId,
                 fullPrompt,
-                temperature
+                temperature,
+                languageCode,
             )
             val call = client.newCall(request)
             inFlightCall = call
@@ -216,13 +218,14 @@ class WhisperTranscriber {
         currentTranscriptionJob = job
     }
 
-    private fun buildWhisperRequest(
+    internal fun buildWhisperRequest(
         filename: String,
         mediaType: String,
         provider: ServiceProvider,
         modelId: String,
         prompt: String,
-        temperature: Float
+        temperature: Float,
+        languageCode: String,
     ): Request {
         val file: File = File(filename)
         val fileBody: RequestBody = file.asRequestBody(mediaType.toMediaTypeOrNull())
@@ -246,6 +249,10 @@ class WhisperTranscriber {
             if (provider.type == ProviderType.OPENAI || provider.type == ProviderType.CUSTOM) {
                 addFormDataPart("model", modelId)
                 addFormDataPart("response_format", "text")
+                val lang = languageCode.trim()
+                if (lang.isNotEmpty() && lang != "auto") {
+                    addFormDataPart("language", lang)
+                }
                 if (prompt.isNotEmpty()) {
                     addFormDataPart("prompt", prompt)
                 }
@@ -275,10 +282,11 @@ class WhisperTranscriber {
         // Build URL with endpoint-specific parameters
         val url = if (provider.type == ProviderType.WHISPER_ASR) {
             val base = provider.endpoint.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid endpoint")
+            val lang = languageCode.trim().ifEmpty { "auto" }
             base.newBuilder()
                 .addQueryParameter("encode", "true")
                 .addQueryParameter("task", "transcribe")
-                .addQueryParameter("language", "auto")
+                .addQueryParameter("language", lang)
                 .addQueryParameter("word_timestamps", "false")
                 .addQueryParameter("output", "txt")
                 .build()
