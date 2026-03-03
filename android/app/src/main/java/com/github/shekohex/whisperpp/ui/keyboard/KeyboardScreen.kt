@@ -589,6 +589,24 @@ fun StatusContent(state: KeyboardState, amplitude: Int, recordingTimeMs: Long) {
                     modifier = Modifier.animateAlphaLoop()
                 )
             }
+            KeyboardState.PausedLocked -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = formatTime(recordingTimeMs),
+                        color = Color(0xFFFFD600),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        modifier = Modifier.animateAlphaLoop()
+                    )
+                }
+            }
             KeyboardState.Transcribing -> {
                 TranscribingStatus()
             }

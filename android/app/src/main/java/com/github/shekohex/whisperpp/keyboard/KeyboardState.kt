@@ -5,6 +5,7 @@ enum class KeyboardState {
     Recording,
     RecordingLocked,
     Paused,
+    PausedLocked,
     Transcribing,
     SmartFixing,
 }

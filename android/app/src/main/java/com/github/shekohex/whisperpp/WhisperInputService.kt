@@ -457,6 +457,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             KeyboardState.Recording,
             KeyboardState.RecordingLocked,
             KeyboardState.Paused,
+            KeyboardState.PausedLocked,
             KeyboardState.Transcribing,
             KeyboardState.SmartFixing
             -> true
@@ -621,15 +622,19 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             }
             KeyboardState.Recording -> {
                 performFeedback(customSoundId = R.raw.rec_pause)
-                pauseRecording()
+                pauseRecording(targetState = KeyboardState.Paused)
             }
             KeyboardState.RecordingLocked -> {
                 performFeedback(customSoundId = R.raw.rec_pause)
-                pauseRecording()
+                pauseRecording(targetState = KeyboardState.PausedLocked)
             }
             KeyboardState.Paused -> {
                 performFeedback(customSoundId = R.raw.rec_start)
-                resumeRecording()
+                resumeRecording(targetState = KeyboardState.Recording)
+            }
+            KeyboardState.PausedLocked -> {
+                performFeedback(customSoundId = R.raw.rec_start)
+                resumeRecording(targetState = KeyboardState.RecordingLocked)
             }
             else -> Unit
         }
@@ -641,7 +646,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             return
         }
 
-        if (keyboardState.value == KeyboardState.Paused) startTranscription("")
+        if (keyboardState.value == KeyboardState.Paused || keyboardState.value == KeyboardState.PausedLocked) startTranscription("")
         else performFeedback()
     }
 
@@ -651,13 +656,13 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private fun unlockRecording() {
         performFeedback(customSoundId = R.raw.rec_pause)
-        pauseRecording()
+        pauseRecording(targetState = KeyboardState.PausedLocked)
     }
 
     private fun onCancelAction() {
         performFeedback(customSoundId = R.raw.rec_pause)
         when (keyboardState.value) {
-            KeyboardState.Recording, KeyboardState.RecordingLocked, KeyboardState.Paused -> confirmCancelAction { cancelRecording() }
+            KeyboardState.Recording, KeyboardState.RecordingLocked, KeyboardState.Paused, KeyboardState.PausedLocked -> confirmCancelAction { cancelRecording() }
             KeyboardState.Transcribing, KeyboardState.SmartFixing -> confirmCancelAction { cancelTranscription() }
             else -> Unit
         }
@@ -681,7 +686,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         recorderManager!!.start(recordedAudioFilename)
     }
 
-    private fun pauseRecording() {
+    private fun pauseRecording(targetState: KeyboardState) {
         stopTimer()
         if (recordingTimeMs.value < 500L) {
             showLongPressHint.value = true
@@ -695,16 +700,16 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                     startTranscription("")
                 } else {
                     recorderManager!!.pause()
-                    setKeyboardState(KeyboardState.Paused)
+                    setKeyboardState(targetState)
                 }
             }
         }
     }
 
-    private fun resumeRecording() {
+    private fun resumeRecording(targetState: KeyboardState) {
         recorderManager!!.resume()
         startTimer()
-        setKeyboardState(KeyboardState.Recording)
+        setKeyboardState(targetState)
     }
 
     private fun cancelRecording() {
