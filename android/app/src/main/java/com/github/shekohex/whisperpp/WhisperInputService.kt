@@ -694,15 +694,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             recordingTimeMs.value = 0L
             setKeyboardState(KeyboardState.Ready)
         } else {
-            CoroutineScope(Dispatchers.Main).launch {
-                val autoTranscribe = dataStore.data.map { it[AUTO_TRANSCRIBE_ON_PAUSE] ?: true }.first()
-                if (autoTranscribe) {
-                    startTranscription("")
-                } else {
-                    recorderManager!!.pause()
-                    setKeyboardState(targetState)
-                }
-            }
+            recorderManager!!.pause()
+            setKeyboardState(targetState)
         }
     }
 

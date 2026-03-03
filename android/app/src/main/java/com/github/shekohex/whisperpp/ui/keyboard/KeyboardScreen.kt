@@ -40,6 +40,9 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.keyboard.isLocked
+import com.github.shekohex.whisperpp.keyboard.isPaused
+import com.github.shekohex.whisperpp.keyboard.isRecording
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
@@ -88,7 +91,8 @@ fun KeyboardScreen(
     var swipeUpProgress by remember { mutableFloatStateOf(0f) }
     val isSwiping = swipeProgress > 0.05f
     val isSwipingUp = swipeUpProgress > 0.05f
-    val isRecordingState = state == KeyboardState.Recording || state == KeyboardState.RecordingLocked
+    val isRecordingState = state.isRecording
+    val isPausedState = state.isPaused
     val externalSendingBlocked = externalSendBlockedReason != null || externalSendBlockedByAppPolicy
     val canShowBlockedExplanation = externalSendingBlocked && (externalSendBlockedByAppPolicy || showSecureFieldExplanation)
     val copy = remember(externalSendBlockedReason, externalSendBlockedByAppPolicy, blockedPackageName) {
@@ -264,7 +268,23 @@ fun KeyboardScreen(
             }
         }
     }
-    
+
+    val showBlockedExplanationAction: () -> Unit = {
+        onBlockedAction()
+        if (canShowBlockedExplanation) {
+            val openedDetached = startBlockedExplanationActivity(
+                context = context,
+                externalSendBlockedReason = externalSendBlockedReason,
+                externalSendBlockedByAppPolicy = externalSendBlockedByAppPolicy,
+                blockedPackageName = blockedPackageName,
+            )
+            if (!openedDetached) {
+                showBlockedExplanation = true
+                showBlockedExplanationFallback = false
+            }
+        }
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -308,7 +328,7 @@ fun KeyboardScreen(
                             KeyboardState.Recording, KeyboardState.RecordingLocked -> {
                                 RecordingTimer(recordingTimeMs)
                             }
-                            KeyboardState.Paused -> {
+                            KeyboardState.Paused, KeyboardState.PausedLocked -> {
                                 IconButton(onClick = onCancelAction) {
                                     Icon(
                                         Icons.Default.Delete,
@@ -372,7 +392,15 @@ fun KeyboardScreen(
                     enter = fadeIn() + scaleIn(),
                     exit = fadeOut() + scaleOut()
                 ) {
-                    StatusContent(state, amplitude, recordingTimeMs)
+                    if (isPausedState) {
+                        PausedControlsCenter(
+                            state = state,
+                            recordingTimeMs = recordingTimeMs,
+                            onResume = if (externalSendingBlocked) showBlockedExplanationAction else onMicAction,
+                        )
+                    } else {
+                        StatusContent(state, amplitude, recordingTimeMs)
+                    }
                 }
             }
 
@@ -389,35 +417,32 @@ fun KeyboardScreen(
                 }
 
                 Spacer(Modifier.width(8.dp))
-                
-                MainActionButton(
-                    state = state,
-                    externalSendingBlocked = externalSendingBlocked,
-                    showLongPressHint = showLongPressHint,
-                    onSwipeProgress = { swipeProgress = it },
-                    onSwipeUpProgress = { swipeUpProgress = it },
-                    onMicAction = onMicAction,
-                    onDiscardAction = onDiscardAction,
-                    onSendAction = onSendAction,
-                    onDismissHint = onDismissHint,
-                    onLockAction = onLockAction,
-                    onUnlockAction = onUnlockAction,
-                    onBlockedAction = {
-                        onBlockedAction()
-                        if (canShowBlockedExplanation) {
-                            val openedDetached = startBlockedExplanationActivity(
-                                context = context,
-                                externalSendBlockedReason = externalSendBlockedReason,
-                                externalSendBlockedByAppPolicy = externalSendBlockedByAppPolicy,
-                                blockedPackageName = blockedPackageName,
-                            )
-                            if (!openedDetached) {
-                                showBlockedExplanation = true
-                                showBlockedExplanationFallback = false
-                            }
-                        }
-                    },
-                )
+
+                if (isPausedState) {
+                    FilledIconButton(
+                        onClick = if (externalSendingBlocked) showBlockedExplanationAction else onSendAction,
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = null,
+                        )
+                    }
+                } else {
+                    MainActionButton(
+                        state = state,
+                        externalSendingBlocked = externalSendingBlocked,
+                        showLongPressHint = showLongPressHint,
+                        onSwipeProgress = { swipeProgress = it },
+                        onSwipeUpProgress = { swipeUpProgress = it },
+                        onMicAction = onMicAction,
+                        onDiscardAction = onDiscardAction,
+                        onSendAction = onSendAction,
+                        onDismissHint = onDismissHint,
+                        onLockAction = onLockAction,
+                        onUnlockAction = onUnlockAction,
+                        onBlockedAction = showBlockedExplanationAction,
+                    )
+                }
             }
         }
     }
@@ -545,6 +570,55 @@ fun RecordingTimer(millis: Long) {
             color = MaterialTheme.colorScheme.error,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+@Composable
+fun PausedControlsCenter(
+    state: KeyboardState,
+    recordingTimeMs: Long,
+    onResume: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            if (state.isLocked) {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            Icon(
+                Icons.Default.Pause,
+                contentDescription = null,
+                tint = Color(0xFFFFD600),
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = formatTime(recordingTimeMs),
+                color = Color(0xFFFFD600),
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        FilledTonalIconButton(
+            onClick = onResume,
+        ) {
+            Icon(
+                Icons.Default.PlayArrow,
+                contentDescription = null,
+            )
+        }
     }
 }
 
@@ -738,8 +812,8 @@ fun MainActionButton(
 ) {
     val haptic = LocalHapticFeedback.current
     val currentState by rememberUpdatedState(state)
-    val swipeThreshold = 300f
-    val swipeUpThreshold = 200f
+    val swipeThreshold = 420f
+    val swipeUpThreshold = 220f
     
     LaunchedEffect(showLongPressHint) {
         if (showLongPressHint) {
@@ -799,6 +873,68 @@ fun MainActionButton(
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onMicAction()
 
+                    var currentDragX = 0f
+                    var currentDragY = 0f
+                    var didHapticAtThreshold = false
+                    var didHapticAtLockThreshold = false
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+
+                        if (event.type == PointerEventType.Move) {
+                            val dragDelta = change.positionChange()
+                            currentDragX += dragDelta.x
+                            currentDragY += dragDelta.y
+
+                            val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                            val upProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
+
+                            if (leftProgress > upProgress) {
+                                onSwipeProgress(leftProgress)
+                                onSwipeUpProgress(0f)
+
+                                if (leftProgress >= 1f && !didHapticAtThreshold) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    didHapticAtThreshold = true
+                                } else if (leftProgress < 0.9f) {
+                                    didHapticAtThreshold = false
+                                }
+                            } else if (upProgress > 0.05f) {
+                                onSwipeUpProgress(upProgress)
+                                onSwipeProgress(0f)
+
+                                if (upProgress >= 1f && !didHapticAtLockThreshold) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    didHapticAtLockThreshold = true
+                                } else if (upProgress < 0.9f) {
+                                    didHapticAtLockThreshold = false
+                                }
+                            } else {
+                                onSwipeProgress(0f)
+                                onSwipeUpProgress(0f)
+                            }
+                        }
+
+                        if (!change.pressed) {
+                            val finalLeftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
+                            val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
+
+                            if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onDiscardAction()
+                            } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onLockAction()
+                            } else {
+                                onMicAction()
+                            }
+                            onSwipeProgress(0f)
+                            onSwipeUpProgress(0f)
+                            break
+                        }
+                    }
+                } else if (stateAtDown == KeyboardState.Recording) {
                     var currentDragX = 0f
                     var currentDragY = 0f
                     var didHapticAtThreshold = false
