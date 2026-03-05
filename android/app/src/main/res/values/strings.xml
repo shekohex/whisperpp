@@ -50,6 +50,35 @@
     <string name="blocked_app_policy_reason_for_package">Reason: blocked by a Privacy &amp; Safety app rule for %1$s</string>
 
     <string name="command_clipboard_unavailable">Clipboard is empty or unavailable.</string>
+    <string name="command_key_hint">Command</string>
+    <string name="command_cancel">Cancel</string>
+    <string name="command_retry">Retry</string>
+    <string name="command_close">Close</string>
+    <string name="command_stop_listening">Stop</string>
+
+    <string name="command_stage_waiting">Command mode</string>
+    <string name="command_stage_clipboard_confirm">Confirm clipboard text</string>
+    <string name="command_stage_listening">Listening…</string>
+    <string name="command_stage_processing">Processing…</string>
+    <string name="command_stage_done">Done</string>
+    <string name="command_stage_error">Error</string>
+
+    <string name="command_preset_unknown">Preset</string>
+    <string name="command_preset_chip_label">Preset: %1$s</string>
+    <string name="command_undo_chip_label">Undo (%1$ds)</string>
+
+    <string name="command_clipboard_sheet_title">Use clipboard text</string>
+    <string name="command_clipboard_sheet_steps">Select text in the editor, or copy text to the clipboard. Then preview and confirm.</string>
+    <string name="command_clipboard_sheet_recovery">Recovery: select text in the editor or copy text, then try again.</string>
+    <string name="command_clipboard_sheet_preview_label">Preview</string>
+    <string name="command_clipboard_sheet_char_count">Characters: %1$d</string>
+    <string name="command_clipboard_sheet_large_warning">Large clipboard text (%1$d characters). This may take longer.</string>
+    <string name="command_clipboard_sheet_attempts_remaining">Attempts remaining: %1$d</string>
+    <string name="command_clipboard_sheet_continue">Continue</string>
+    <string name="command_clipboard_sheet_refresh">Refresh</string>
+
+    <string name="command_preset_picker_title">Choose preset</string>
+    <string name="command_preset_picker_helper">Preset and spoken instruction both apply. Spoken instruction overrides when conflicting.</string>
     <string name="command_error_focus_changed">Focus changed; command mode cancelled.</string>
     <string name="command_error_permissions">Microphone permission required.</string>
     <string name="command_error_setup_stt">Setup required: select STT provider + model in Settings</string>

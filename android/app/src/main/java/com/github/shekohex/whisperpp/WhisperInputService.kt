@@ -76,6 +76,7 @@ import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.dictation.OpenAiRealtimeSttClient
 import com.github.shekohex.whisperpp.dictation.SkipReason
 import com.github.shekohex.whisperpp.command.CommandController
+import com.github.shekohex.whisperpp.command.CommandStage
 import com.github.shekohex.whisperpp.command.ResolvedSelection
 import com.github.shekohex.whisperpp.command.SelectionResolver
 import com.github.shekohex.whisperpp.command.SelectionSnapshot
@@ -127,15 +128,6 @@ private enum class FirstUseDisclosureDecision {
     CONTINUE,
     CANCEL,
     OPEN_SETTINGS,
-}
-
-private enum class CommandStage {
-    WAITING,
-    CLIPBOARD_CONFIRM,
-    LISTENING,
-    PROCESSING,
-    DONE,
-    ERROR,
 }
 
 class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
@@ -700,6 +692,26 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         onFirstUseDisclosureContinue = { onFirstUseDisclosureContinue() },
                         onFirstUseDisclosureCancel = { onFirstUseDisclosureCancel() },
                         onFirstUseDisclosureOpenPrivacySafety = { onFirstUseDisclosureOpenPrivacySafety() },
+
+                        commandModeActive = isCommandModeActive.value,
+                        commandStage = commandStage.value,
+                        commandErrorMessage = commandErrorMessage.value,
+                        commandUndoAvailable = commandUndoAvailable.value,
+                        commandUndoRemainingMs = commandUndoRemainingMs.value,
+                        commandSelectedPresetId = commandSelectedPresetId.value,
+                        commandClipboardPreview = commandClipboardPreview.value,
+                        commandClipboardCharCount = commandClipboardCharCount.value,
+                        commandClipboardIsLarge = commandClipboardIsLarge.value,
+                        commandClipboardUnavailableReason = commandClipboardUnavailableReason.value,
+                        commandClipboardAttemptsRemaining = commandClipboardAttemptsRemaining.value,
+                        onCommandEnter = { onCommandEnter() },
+                        onCommandCancel = { onCommandCancel() },
+                        onCommandClipboardContinue = { onCommandClipboardContinue() },
+                        onCommandClipboardRetry = { onCommandClipboardRetry() },
+                        onCommandStopListening = { onCommandStopListening() },
+                        onCommandRetry = { onCommandRetryTransform() },
+                        onCommandUndo = { onCommandUndo() },
+                        onCommandPresetSelected = { onCommandPresetSelected(it) },
                     )
                 }
             }
@@ -1412,7 +1424,6 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             return
         }
         if (shouldBlockExternalSend()) {
-            handleBlockedExternalSendAction()
             return
         }
 
@@ -1453,6 +1464,15 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private fun onCommandCancel() {
         cancelCommandMode(showError = false)
+    }
+
+    private fun onCommandPresetSelected(id: String) {
+        val normalized = id.trim()
+        if (normalized.isBlank()) return
+        commandSelectedPresetId.value = normalized
+        CoroutineScope(Dispatchers.Main).launch {
+            repository.setCommandPresetId(normalized)
+        }
     }
 
     private fun onCommandClipboardContinue() {

@@ -40,6 +40,10 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.github.shekohex.whisperpp.R
+import com.github.shekohex.whisperpp.command.CommandStage
+import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
+import com.github.shekohex.whisperpp.data.TRANSFORM_PRESETS
+import com.github.shekohex.whisperpp.data.presetById
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isLocked
 import com.github.shekohex.whisperpp.keyboard.isPaused
@@ -103,6 +107,26 @@ fun KeyboardScreen(
     onFirstUseDisclosureContinue: () -> Unit = {},
     onFirstUseDisclosureCancel: () -> Unit = {},
     onFirstUseDisclosureOpenPrivacySafety: () -> Unit = {},
+
+    commandModeActive: Boolean = false,
+    commandStage: CommandStage = CommandStage.WAITING,
+    commandErrorMessage: String? = null,
+    commandUndoAvailable: Boolean = false,
+    commandUndoRemainingMs: Long = 0L,
+    commandSelectedPresetId: String = TRANSFORM_PRESET_ID_TONE_REWRITE,
+    commandClipboardPreview: String = "",
+    commandClipboardCharCount: Int = 0,
+    commandClipboardIsLarge: Boolean = false,
+    commandClipboardUnavailableReason: String? = null,
+    commandClipboardAttemptsRemaining: Int = 2,
+    onCommandEnter: () -> Unit = {},
+    onCommandCancel: () -> Unit = {},
+    onCommandClipboardContinue: () -> Unit = {},
+    onCommandClipboardRetry: () -> Unit = {},
+    onCommandStopListening: () -> Unit = {},
+    onCommandRetry: () -> Unit = {},
+    onCommandUndo: () -> Unit = {},
+    onCommandPresetSelected: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     var swipeProgress by remember { mutableFloatStateOf(0f) }
@@ -125,6 +149,23 @@ fun KeyboardScreen(
     var showBlockedExplanation by remember { mutableStateOf(false) }
     var showBlockedExplanationFallback by remember { mutableStateOf(false) }
     val blockedExplanationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    var showCommandPresetPicker by remember { mutableStateOf(false) }
+
+    val commandPreset = remember(commandSelectedPresetId) {
+        presetById(commandSelectedPresetId)
+    }
+    val commandPresetLabel = commandPreset?.let { stringResource(it.titleRes) }
+        ?: stringResource(R.string.command_preset_unknown)
+    val showCommandOverlay = commandModeActive || commandStage != CommandStage.WAITING
+    val commandStageLabel = when (commandStage) {
+        CommandStage.WAITING -> stringResource(R.string.command_stage_waiting)
+        CommandStage.CLIPBOARD_CONFIRM -> stringResource(R.string.command_stage_clipboard_confirm)
+        CommandStage.LISTENING -> stringResource(R.string.command_stage_listening)
+        CommandStage.PROCESSING -> stringResource(R.string.command_stage_processing)
+        CommandStage.DONE -> stringResource(R.string.command_stage_done)
+        CommandStage.ERROR -> stringResource(R.string.command_stage_error)
+    }
     
     LaunchedEffect(state) {
         if (!isRecordingState) {
@@ -289,6 +330,178 @@ fun KeyboardScreen(
         }
     }
 
+    if (commandModeActive && commandStage == CommandStage.CLIPBOARD_CONFIRM) {
+        ModalBottomSheet(
+            onDismissRequest = onCommandCancel,
+            windowInsets = WindowInsets(0, 0, 0, 0),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.command_clipboard_sheet_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(R.string.command_clipboard_sheet_steps),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                val unavailable = commandClipboardUnavailableReason
+                if (unavailable != null) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                    ) {
+                        Text(
+                            text = unavailable,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.command_clipboard_sheet_recovery),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                if (commandClipboardPreview.isNotBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.command_clipboard_sheet_preview_label),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = commandClipboardPreview,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                text = stringResource(R.string.command_clipboard_sheet_char_count, commandClipboardCharCount),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
+                if (commandClipboardIsLarge) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.command_clipboard_sheet_large_warning, commandClipboardCharCount),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        )
+                    }
+                }
+
+                Text(
+                    text = stringResource(R.string.command_clipboard_sheet_attempts_remaining, commandClipboardAttemptsRemaining),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Button(
+                    onClick = onCommandClipboardContinue,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.command_clipboard_sheet_continue))
+                }
+                OutlinedButton(
+                    onClick = onCommandClipboardRetry,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.command_clipboard_sheet_refresh))
+                }
+                TextButton(
+                    onClick = onCommandCancel,
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text(stringResource(R.string.command_cancel))
+                }
+
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+    }
+
+    if (showCommandPresetPicker && commandModeActive) {
+        ModalBottomSheet(
+            onDismissRequest = { showCommandPresetPicker = false },
+            windowInsets = WindowInsets(0, 0, 0, 0),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.command_preset_picker_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(R.string.command_preset_picker_helper),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                TRANSFORM_PRESETS.forEach { preset ->
+                    val selected = preset.id == commandSelectedPresetId
+                    ListItem(
+                        headlineContent = { Text(stringResource(preset.titleRes)) },
+                        supportingContent = { Text(stringResource(preset.descriptionRes)) },
+                        leadingContent = {
+                            RadioButton(
+                                selected = selected,
+                                onClick = null,
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable {
+                                onCommandPresetSelected(preset.id)
+                                showCommandPresetPicker = false
+                            },
+                    )
+                }
+
+                TextButton(
+                    onClick = { showCommandPresetPicker = false },
+                    modifier = Modifier.align(Alignment.End),
+                ) {
+                    Text(stringResource(R.string.command_close))
+                }
+
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+    }
+
     val showBlockedExplanationAction: () -> Unit = {
         onBlockedAction()
         if (canShowBlockedExplanation) {
@@ -347,6 +560,92 @@ fun KeyboardScreen(
                             contentDescription = null,
                             tint = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer,
                         )
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = showCommandOverlay,
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                shadowElevation = 2.dp,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = commandStageLabel,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        val errorText = commandErrorMessage
+                        if (!errorText.isNullOrBlank() && commandStage == CommandStage.ERROR) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = errorText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                            )
+                        }
+                    }
+
+                    AssistChip(
+                        onClick = { showCommandPresetPicker = true },
+                        label = { Text(stringResource(R.string.command_preset_chip_label, commandPresetLabel)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        },
+                    )
+
+                    if (commandUndoAvailable) {
+                        AssistChip(
+                            onClick = onCommandUndo,
+                            label = { Text(stringResource(R.string.command_undo_chip_label, formatCommandUndoSeconds(commandUndoRemainingMs))) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Undo,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            },
+                        )
+                    }
+
+                    when (commandStage) {
+                        CommandStage.LISTENING -> {
+                            FilledTonalButton(onClick = onCommandStopListening) {
+                                Text(stringResource(R.string.command_stop_listening))
+                            }
+                        }
+                        CommandStage.ERROR -> {
+                            FilledTonalButton(onClick = onCommandRetry) {
+                                Text(stringResource(R.string.command_retry))
+                            }
+                        }
+                        else -> Unit
+                    }
+
+                    TextButton(onClick = onCommandCancel) {
+                        Text(stringResource(R.string.command_cancel))
                     }
                 }
             }
@@ -498,7 +797,28 @@ fun KeyboardScreen(
                     }
 
                     AnimatedVisibility(visible = state == KeyboardState.Ready) {
-                        BackspaceButton(onDeleteAction)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            FilledTonalIconButton(
+                                onClick = {
+                                    if (externalSendingBlocked) {
+                                        showBlockedExplanationAction()
+                                    } else if (commandModeActive) {
+                                        onCommandCancel()
+                                    } else {
+                                        onCommandEnter()
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoFixHigh,
+                                    contentDescription = stringResource(R.string.command_key_hint),
+                                )
+                            }
+                            BackspaceButton(onDeleteAction)
+                        }
                     }
 
                     AnimatedVisibility(visible = state == KeyboardState.Transcribing || state == KeyboardState.SmartFixing) {
@@ -633,6 +953,12 @@ fun formatTime(millis: Long): String {
     val secs = totalSeconds % 60
     val ms = (millis % 1000) / 10
     return "%02d:%02d.%02d".format(mins, secs, ms)
+}
+
+private fun formatCommandUndoSeconds(remainingMs: Long): Int {
+    if (remainingMs <= 0L) return 0
+    val seconds = (remainingMs + 999L) / 1000L
+    return seconds.toInt().coerceAtLeast(0)
 }
 
 @Composable

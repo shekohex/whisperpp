@@ -7,6 +7,15 @@ data class SelectionSnapshot(
     val end: Int,
 )
 
+enum class CommandStage {
+    WAITING,
+    CLIPBOARD_CONFIRM,
+    LISTENING,
+    PROCESSING,
+    DONE,
+    ERROR,
+}
+
 sealed class ResolvedSelection {
     data class Selected(
         val text: String,
