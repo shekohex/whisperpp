@@ -35,6 +35,13 @@ class DictationController(
         val streamingPartialsEnabled: Boolean,
     )
 
+    data class CapturedDictationSegment(
+        val focusKey: FocusKey,
+        val start: Int,
+        val endAtInsert: Int,
+        val rawText: String,
+    )
+
     private data class Session(
         val sessionId: Long,
         val focusKeyAtStart: FocusKey?,
@@ -53,6 +60,8 @@ class DictationController(
     private var pendingPartial: String? = null
 
     private val undoStacks = mutableMapOf<FocusKey, ArrayDeque<DictationUndoEntry>>()
+
+    private var enhancementUndoEntry: EnhancementUndoEntry? = null
 
     fun onFocusChanged(newFocusKey: FocusKey?) {
         currentFocusKey = newFocusKey
@@ -112,6 +121,7 @@ class DictationController(
         if (deps.getKeyboardState() != KeyboardState.Ready) return null
         val sessionId = nextSessionId++
         resetPartialTracking()
+        enhancementUndoEntry = null
         val token = SendToken(
             sessionId = sessionId,
             focusKey = currentFocusKey,
@@ -213,41 +223,50 @@ class DictationController(
     }
 
     fun onFinalTranscript(token: SendToken, text: String) {
-        val session = activeSession ?: return
-        if (!shouldAcceptCallback(session, token)) return
-        session.pendingTranscript = text
+        insertRawAndCaptureSegment(token, text)
+    }
+
+    fun insertRawAndCaptureSegment(
+        token: SendToken,
+        rawText: String,
+    ): CapturedDictationSegment? {
+        val session = activeSession ?: return null
+        if (!shouldAcceptCallback(session, token)) return null
+        session.pendingTranscript = rawText
 
         resetPartialTracking()
 
         if (!isSafeToInsert(token)) {
-            deps.copyToClipboard(text)
+            deps.copyToClipboard(rawText)
             deps.toast("Focus changed; transcript copied")
             deps.setKeyboardState(if (deps.getKeyboardState().isLocked) KeyboardState.PausedLocked else KeyboardState.Paused)
-            return
+            return null
         }
 
         if (token.focusKey?.inputType == 0) {
-            deps.copyToClipboard(text)
+            deps.copyToClipboard(rawText)
             deps.toast("No field focused; copied to clipboard")
             deps.setKeyboardState(if (deps.getKeyboardState().isLocked) KeyboardState.PausedLocked else KeyboardState.Paused)
-            return
+            return null
         }
 
         val ic = deps.getInputConnection()
         if (ic == null) {
-            deps.copyToClipboard(text)
+            deps.copyToClipboard(rawText)
             deps.toast("No field focused; copied to clipboard")
             deps.setKeyboardState(if (deps.getKeyboardState().isLocked) KeyboardState.PausedLocked else KeyboardState.Paused)
-            return
+            return null
         }
 
         val focusKey = token.focusKey ?: currentFocusKey
         val selectionBefore = ic.selectionSnapshot()
         val insertionStart = selectionBefore?.let { minOf(it.start, it.end) }
 
+        enhancementUndoEntry = null
+
         ic.beginBatchEdit()
         val committed = try {
-            val composed = ic.setComposingText(text, 1)
+            val composed = ic.setComposingText(rawText, 1)
             val finished = ic.finishComposingText()
             composed && finished
         } catch (_: Exception) {
@@ -258,14 +277,25 @@ class DictationController(
 
         val selectionAfter = ic.selectionSnapshot()
 
+        val capturedSegment = if (committed && focusKey != null && insertionStart != null) {
+            CapturedDictationSegment(
+                focusKey = focusKey,
+                start = insertionStart,
+                endAtInsert = insertionStart + rawText.length,
+                rawText = rawText,
+            )
+        } else {
+            null
+        }
+
         if (committed && focusKey != null && selectionBefore != null && insertionStart != null) {
             val fallbackAfter = DictationUndoEntry.SelectionSnapshot(
-                start = insertionStart + text.length,
-                end = insertionStart + text.length,
+                start = insertionStart + rawText.length,
+                end = insertionStart + rawText.length,
             )
             val entry = DictationUndoEntry(
                 focusKey = focusKey,
-                insertedText = text,
+                insertedText = rawText,
                 selectionBeforeInsert = selectionBefore,
                 selectionAfterInsert = selectionAfter ?: fallbackAfter,
             )
@@ -275,6 +305,109 @@ class DictationController(
 
         deps.setKeyboardState(KeyboardState.Ready)
         activeSession = null
+
+        return capturedSegment
+    }
+
+    fun replaceCapturedSegment(
+        captured: CapturedDictationSegment,
+        enhancedText: String,
+    ): Boolean {
+        if (enhancedText.isBlank()) return false
+        if (currentFocusKey != captured.focusKey) return false
+        val ic = deps.getInputConnection() ?: return false
+
+        enhancementUndoEntry = null
+
+        val replacementEnd = captured.start + enhancedText.length
+
+        ic.beginBatchEdit()
+        val replaced = try {
+            if (!ic.setSelection(captured.start, captured.endAtInsert)) {
+                false
+            } else if (!ic.commitText(enhancedText, 1)) {
+                false
+            } else {
+                ic.setSelection(replacementEnd, replacementEnd)
+                true
+            }
+        } catch (_: Exception) {
+            false
+        } finally {
+            ic.endBatchEdit()
+        }
+
+        if (!replaced) return false
+
+        updateLatestDictationUndoForReplacement(captured, enhancedText)
+        enhancementUndoEntry = EnhancementUndoEntry(
+            focusKey = captured.focusKey,
+            start = captured.start,
+            endAtReplace = replacementEnd,
+            rawText = captured.rawText,
+        )
+        return true
+    }
+
+    fun isEnhancementUndoAvailable(): Boolean {
+        val current = currentFocusKey ?: return false
+        val entry = enhancementUndoEntry ?: return false
+        return entry.focusKey == current
+    }
+
+    fun applyEnhancementUndo(): Boolean {
+        val current = currentFocusKey ?: return false
+        val entry = enhancementUndoEntry ?: return false
+        if (entry.focusKey != current) return false
+        val ic = deps.getInputConnection() ?: return false
+
+        val end = entry.start + entry.rawText.length
+
+        ic.beginBatchEdit()
+        val applied = try {
+            if (!ic.setSelection(entry.start, entry.endAtReplace)) {
+                false
+            } else if (!ic.commitText(entry.rawText, 1)) {
+                false
+            } else {
+                ic.setSelection(end, end)
+                true
+            }
+        } catch (_: Exception) {
+            false
+        } finally {
+            ic.endBatchEdit()
+        }
+
+        if (applied) {
+            enhancementUndoEntry = null
+        }
+
+        return applied
+    }
+
+    private fun updateLatestDictationUndoForReplacement(
+        captured: CapturedDictationSegment,
+        enhancedText: String,
+    ) {
+        val stack = undoStacks[captured.focusKey] ?: return
+        val last = stack.peekLast() ?: return
+
+        val insertionStart = minOf(last.selectionBeforeInsert.start, last.selectionBeforeInsert.end)
+        if (insertionStart != captured.start) return
+        if (last.insertedText != captured.rawText) return
+
+        val updatedAfter = DictationUndoEntry.SelectionSnapshot(
+            start = insertionStart + enhancedText.length,
+            end = insertionStart + enhancedText.length,
+        )
+        stack.removeLast()
+        stack.addLast(
+            last.copy(
+                insertedText = enhancedText,
+                selectionAfterInsert = updatedAfter,
+            )
+        )
     }
 
     fun onTranscriptionError(token: SendToken, message: String) {
