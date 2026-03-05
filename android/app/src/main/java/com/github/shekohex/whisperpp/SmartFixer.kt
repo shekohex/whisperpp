@@ -94,17 +94,13 @@ class SmartFixer(private val context: Context) {
             append("\n</TRANSCRIPT>")
         }
 
-        return try {
-            if (provider.type == ProviderType.OPENAI || provider.type == ProviderType.CUSTOM) {
-                callOpenAI(provider, modelId, temperature, fullPrompt)
-            } else if (provider.type == ProviderType.GEMINI) {
-                callGoogle(provider, modelId, temperature, fullPrompt)
-            } else {
-                text
-            }
-        } catch (_: CancellationException) {
-            text
+        if (provider.type == ProviderType.OPENAI || provider.type == ProviderType.CUSTOM) {
+            return callOpenAI(provider, modelId, temperature, fullPrompt)
         }
+        if (provider.type == ProviderType.GEMINI) {
+            return callGoogle(provider, modelId, temperature, fullPrompt)
+        }
+        return text
     }
 
     fun cancel() {

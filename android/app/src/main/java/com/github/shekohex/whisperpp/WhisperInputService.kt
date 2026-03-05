@@ -58,12 +58,21 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.github.shekohex.whisperpp.data.EffectiveRuntimeConfig
+import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.ProviderType
+import com.github.shekohex.whisperpp.data.RuntimeChannel
+import com.github.shekohex.whisperpp.data.RuntimeSelectionResolver
+import com.github.shekohex.whisperpp.data.RuntimeWarning
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.dictation.DictationController
+import com.github.shekohex.whisperpp.dictation.EnhancementOutcome
+import com.github.shekohex.whisperpp.dictation.EnhancementRunner
+import com.github.shekohex.whisperpp.dictation.FailureReason
 import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.dictation.OpenAiRealtimeSttClient
+import com.github.shekohex.whisperpp.dictation.SkipReason
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isRecording
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
@@ -158,6 +167,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private var focusInstanceId: Long = 0L
     private lateinit var dictationController: DictationController
+    private val enhancementRunner = EnhancementRunner()
+
+    private var activeDictationSttProviderId: String? = null
+    private var activeDictationSttModelId: String? = null
 
     private var realtimeSttClient: OpenAiRealtimeSttClient? = null
     private var realtimeToken: DictationController.SendToken? = null
@@ -237,97 +250,219 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
 
         val rawText = effectiveText?.takeIf { it.isNotBlank() }
-
-        if (rawText != null) {
-            Log.d(TAG, "Transcription received length=${rawText.length}")
-            playCustomSound(R.raw.rec_done)
-            
-            CoroutineScope(Dispatchers.Main).launch {
-                if (shouldBlockExternalSend()) {
-                    dictationController.onTranscriptionError(token, blockedNotice())
-                    return@launch
-                }
-
-                val processedText = try {
-                    val prefs = dataStore.data.first()
-                    val smartFixEnabled = prefs[SMART_FIX_ENABLED] ?: false
-                    
-                    if (smartFixEnabled) {
-                        if (shouldBlockExternalSend()) {
-                            null
-                        } else {
-                            val providers = repository.providers.first()
-                            val providerId = prefs[ACTIVE_TEXT_PROVIDER_ID].orEmpty()
-                            val modelId = prefs[ACTIVE_TEXT_MODEL_ID].orEmpty()
-                            val provider = providers.find { it.id == providerId }
-
-                            if (provider != null && modelId.isNotBlank() && provider.models.any { it.id == modelId }) {
-                                val useContext = prefs[USE_CONTEXT] ?: false
-                                val disclosure = PrivacyDisclosureFormatter.disclosureForEnhancement(
-                                    provider = provider,
-                                    selectedModelId = modelId,
-                                    useContext = useContext,
-                                )
-                                val disclosureDecision = awaitFirstUseDisclosure(
-                                    mode = FirstUseDisclosureMode.ENHANCEMENT_TEXT,
-                                    disclosure = disclosure,
-                                )
-                                if (disclosureDecision != FirstUseDisclosureDecision.CONTINUE) {
-                                    text
-                                } else {
-                                    setKeyboardState(KeyboardState.SmartFixing)
-                                    performFeedback()
-
-                                    val providerWithApiKey = provider.copy(
-                                        apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
-                                    )
-                                    val temperature = if (provider.temperature > 0) provider.temperature else prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
-                                    val promptTemplate = if (provider.prompt.isNotEmpty()) provider.prompt else prefs[SMART_FIX_PROMPT] ?: ""
-
-                                    Log.d(TAG, "Smart Fix using Provider: ${provider.name}, Model: $modelId")
-
-                                    withContext(Dispatchers.IO) {
-                                        smartFixer.fix(rawText, contextPrompt, providerWithApiKey, modelId, temperature, promptTemplate)
-                                    }
-                                }
-                            } else {
-                                rawText
-                            }
-                        }
-                    } else {
-                        rawText
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Smart Fix failed", e)
-                    rawText // fallback
-                }
-
-                if (shouldBlockExternalSend()) {
-                    dictationController.onTranscriptionError(token, blockedNotice())
-                    return@launch
-                }
-                
-                if (!processedText.isNullOrEmpty()) {
-                    dictationController.onFinalTranscript(token, processedText)
-                    showUndoQuickActionIfAvailable()
-                }
-
-                closeRealtimeSession()
-                
-                val autoSwitchBack = dataStore.data.map { it[AUTO_SWITCH_BACK] ?: false }.first()
-                if (autoSwitchBack && !processedText.isNullOrEmpty() && keyboardState.value == KeyboardState.Ready) {
-                    delay(150)
-                    onSwitchIme()
-                }
-                performFeedback()
-            }
-        } else {
+        if (rawText == null) {
             if (text != null) {
                 dictationController.onTranscriptionError(token, getString(R.string.toast_transcription_empty))
                 performFeedback()
             }
+            closeRealtimeSession()
+            clearActiveDictationSelection()
+            return
+        }
+
+        Log.d(TAG, "Transcription received length=${rawText.length}")
+        playCustomSound(R.raw.rec_done)
+
+        CoroutineScope(Dispatchers.Main).launch {
+            val prefs = dataStore.data.first()
+            val providers = repository.providers.first()
+            val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
+            val autoSwitchBack = prefs[AUTO_SWITCH_BACK] ?: false
+
+            val captured = dictationController.insertRawAndCaptureSegment(token, rawText)
+            showUndoQuickActionIfAvailable()
 
             closeRealtimeSession()
+            clearActiveDictationSelection()
+
+            if (captured == null) {
+                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
+                    delay(150)
+                    onSwitchIme()
+                }
+                performFeedback()
+                return@launch
+            }
+
+            val smartFixEnabled = prefs[SMART_FIX_ENABLED] ?: false
+            if (!smartFixEnabled || isBlankOrPunctuationOnly(rawText)) {
+                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
+                    delay(150)
+                    onSwitchIme()
+                }
+                performFeedback()
+                return@launch
+            }
+
+            val effective = resolveEffectiveRuntimeConfig(
+                packageName = captured.focusKey.packageName,
+                languageCode = languageCode,
+                prefs = prefs,
+                providers = providers,
+            )
+
+            val textProviderId = effective.textProviderId
+            val textModelId = effective.textModelId
+            val provider = providers.find { it.id == textProviderId }
+            val providerLabel = provider?.name?.trim().orEmpty().ifBlank { textProviderId.ifBlank { "Unknown provider" } }
+            val modelLabel = textModelId.ifBlank { "Unknown model" }
+
+            if (shouldBlockExternalSend()) {
+                Toast.makeText(
+                    this@WhisperInputService,
+                    "Enhancement skipped for $providerLabel ($modelLabel): ${blockedNotice()}",
+                    Toast.LENGTH_SHORT,
+                ).show()
+                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
+                    delay(150)
+                    onSwitchIme()
+                }
+                performFeedback()
+                return@launch
+            }
+
+            val textWarnings = effective.warnings.filter { it.channel == RuntimeChannel.TEXT }
+            if (textWarnings.isNotEmpty()) {
+                Toast.makeText(this@WhisperInputService, formatRuntimeWarnings(textWarnings), Toast.LENGTH_SHORT).show()
+            }
+
+            if (provider == null || textModelId.isBlank() || provider.models.none { it.id == textModelId }) {
+                Toast.makeText(
+                    this@WhisperInputService,
+                    "Enhancement unavailable for ${textProviderId.ifBlank { "Unknown provider" }} (${textModelId.ifBlank { "Unknown model" }})",
+                    Toast.LENGTH_SHORT,
+                ).show()
+                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
+                    delay(150)
+                    onSwitchIme()
+                }
+                performFeedback()
+                return@launch
+            }
+
+            val useContext = prefs[USE_CONTEXT] ?: false
+            val disclosure = PrivacyDisclosureFormatter.disclosureForEnhancement(
+                provider = provider,
+                selectedModelId = textModelId,
+                useContext = useContext,
+            )
+            val disclosureDecision = awaitFirstUseDisclosure(
+                mode = FirstUseDisclosureMode.ENHANCEMENT_TEXT,
+                disclosure = disclosure,
+            )
+            if (disclosureDecision != FirstUseDisclosureDecision.CONTINUE) {
+                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
+                    delay(150)
+                    onSwitchIme()
+                }
+                return@launch
+            }
+
+            if (provider.endpoint.isBlank()) {
+                Toast.makeText(
+                    this@WhisperInputService,
+                    "Enhancement unavailable for ${provider.name} ($textModelId): missing endpoint",
+                    Toast.LENGTH_SHORT,
+                ).show()
+                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
+                    delay(150)
+                    onSwitchIme()
+                }
+                performFeedback()
+                return@launch
+            }
+
+            val providerWithApiKey = provider.copy(
+                apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
+            )
+            if (providerWithApiKey.authMode == ProviderAuthMode.API_KEY && providerWithApiKey.apiKey.isBlank()) {
+                Toast.makeText(
+                    this@WhisperInputService,
+                    "Enhancement unavailable for ${provider.name} ($textModelId): missing API key",
+                    Toast.LENGTH_SHORT,
+                ).show()
+                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
+                    delay(150)
+                    onSwitchIme()
+                }
+                performFeedback()
+                return@launch
+            }
+
+            val temperature = if (provider.temperature > 0) provider.temperature else prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
+            val promptTemplate = effective.prompt
+
+            setKeyboardState(KeyboardState.SmartFixing)
+            performFeedback()
+
+            val outcome = enhancementRunner.run(
+                rawText = rawText,
+                enhance = {
+                    withContext(Dispatchers.IO) {
+                        smartFixer.fix(
+                            text = rawText,
+                            contextInformation = contextPrompt,
+                            provider = providerWithApiKey,
+                            modelId = textModelId,
+                            temperature = temperature,
+                            promptTemplate = promptTemplate,
+                        )
+                    }
+                },
+            )
+
+            if (keyboardState.value == KeyboardState.SmartFixing) {
+                setKeyboardState(KeyboardState.Ready)
+            }
+
+            when (outcome) {
+                is EnhancementOutcome.Succeeded -> {
+                    dictationController.replaceCapturedSegment(captured, outcome.enhancedText)
+                }
+
+                is EnhancementOutcome.Skipped -> {
+                    when (outcome.reason) {
+                        SkipReason.Empty,
+                        SkipReason.PunctuationOnly,
+                        -> Unit
+                    }
+                }
+
+                is EnhancementOutcome.Failed -> {
+                    when (val reason = outcome.reason) {
+                        FailureReason.Cancelled -> Unit
+                        FailureReason.Timeout -> {
+                            Toast.makeText(
+                                this@WhisperInputService,
+                                "Enhancement timed out for ${provider.name} ($textModelId)",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+
+                        is FailureReason.Transient -> {
+                            Toast.makeText(
+                                this@WhisperInputService,
+                                "Enhancement failed for ${provider.name} ($textModelId): ${reason.message}",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+
+                        is FailureReason.NonTransient -> {
+                            Toast.makeText(
+                                this@WhisperInputService,
+                                "Enhancement failed for ${provider.name} ($textModelId): ${reason.message}",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                }
+            }
+
+            if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
+                delay(150)
+                onSwitchIme()
+            }
+            performFeedback()
         }
     }
 
@@ -340,7 +475,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
 
         if (!bestEffort.isNullOrBlank()) {
-            dictationController.onFinalTranscript(token, bestEffort)
+            dictationController.insertRawAndCaptureSegment(token, bestEffort)
             showUndoQuickActionIfAvailable()
             performFeedback()
         } else {
@@ -349,6 +484,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
 
         closeRealtimeSession()
+        clearActiveDictationSelection()
     }
 
     private fun startTranscription(token: DictationController.SendToken, attachToEnd: String) {
@@ -367,11 +503,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             
             val providers = repository.providers.first()
 
-            val providerId = prefs[ACTIVE_STT_PROVIDER_ID].orEmpty()
-            val modelId = prefs[ACTIVE_STT_MODEL_ID].orEmpty()
+            val providerId = activeDictationSttProviderId.orEmpty()
+            val modelId = activeDictationSttModelId.orEmpty()
             val provider = providers.find { it.id == providerId }
             if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
                 dictationController.onTranscriptionError(token, "Setup required: select STT provider + model in Settings")
+                clearActiveDictationSelection()
                 return@launch
             }
 
@@ -515,6 +652,62 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private fun clearUndoQuickAction() {
         undoQuickActionVisible.value = false
+    }
+
+    private fun clearActiveDictationSelection() {
+        activeDictationSttProviderId = null
+        activeDictationSttModelId = null
+    }
+
+    private fun formatRuntimeWarnings(warnings: List<RuntimeWarning>): String {
+        return warnings
+            .map { it.message.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .joinToString(separator = " ")
+    }
+
+    private suspend fun resolveEffectiveRuntimeConfig(
+        packageName: String?,
+        languageCode: String?,
+        prefs: Preferences,
+        providers: List<ServiceProvider>,
+    ): EffectiveRuntimeConfig {
+        val languageDefaults = repository.profiles.first()
+        val appMappings = repository.appPromptMappings.first()
+        val basePrompt = repository.globalBasePrompt.first()
+        val promptProfiles = repository.promptProfiles.first()
+
+        return RuntimeSelectionResolver.resolve(
+            packageName = packageName,
+            languageCode = languageCode,
+            providers = providers,
+            languageDefaults = languageDefaults,
+            appMappings = appMappings,
+            globalSttProviderId = prefs[ACTIVE_STT_PROVIDER_ID].orEmpty(),
+            globalSttModelId = prefs[ACTIVE_STT_MODEL_ID].orEmpty(),
+            globalTextProviderId = prefs[ACTIVE_TEXT_PROVIDER_ID].orEmpty(),
+            globalTextModelId = prefs[ACTIVE_TEXT_MODEL_ID].orEmpty(),
+            basePrompt = basePrompt,
+            profiles = promptProfiles,
+        )
+    }
+
+    private fun isBlankOrPunctuationOnly(text: String): Boolean {
+        if (text.isBlank()) return true
+        return text.all { ch ->
+            ch.isWhitespace() || when (Character.getType(ch.code)) {
+                Character.CONNECTOR_PUNCTUATION.toInt(),
+                Character.DASH_PUNCTUATION.toInt(),
+                Character.START_PUNCTUATION.toInt(),
+                Character.END_PUNCTUATION.toInt(),
+                Character.INITIAL_QUOTE_PUNCTUATION.toInt(),
+                Character.FINAL_QUOTE_PUNCTUATION.toInt(),
+                Character.OTHER_PUNCTUATION.toInt(),
+                -> true
+                else -> false
+            }
+        }
     }
 
     private fun currentExternalSendBlock(editorInfo: EditorInfo? = currentInputEditorInfo): SecureFieldDetector.Result? {
@@ -711,8 +904,20 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                     val prefs = dataStore.data.first()
                     val providers = repository.providers.first()
 
-                    val providerId = prefs[ACTIVE_STT_PROVIDER_ID].orEmpty()
-                    val modelId = prefs[ACTIVE_STT_MODEL_ID].orEmpty()
+                    val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
+                    val effective = resolveEffectiveRuntimeConfig(
+                        packageName = currentInputEditorInfo?.packageName,
+                        languageCode = languageCode,
+                        prefs = prefs,
+                        providers = providers,
+                    )
+                    val sttWarnings = effective.warnings.filter { it.channel == RuntimeChannel.STT }
+                    if (sttWarnings.isNotEmpty()) {
+                        Toast.makeText(this@WhisperInputService, formatRuntimeWarnings(sttWarnings), Toast.LENGTH_SHORT).show()
+                    }
+
+                    val providerId = effective.sttProviderId
+                    val modelId = effective.sttModelId
                     val provider = providers.find { it.id == providerId }
                     if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
                         Toast.makeText(this@WhisperInputService, "Setup required: select STT provider + model in Settings", Toast.LENGTH_SHORT).show()
@@ -737,6 +942,9 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                     performFeedback(customSoundId = R.raw.rec_start)
 
                     closeRealtimeSession()
+
+                    activeDictationSttProviderId = providerId
+                    activeDictationSttModelId = modelId
 
                     val model = provider.models.find { it.id == modelId }
                     val wantsStreaming = model?.streamingPartialsSupported == true
@@ -966,6 +1174,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         whisperTranscriber.stop()
         smartFixer.cancel()
         closeRealtimeSession()
+        clearActiveDictationSelection()
     }
 
     private fun supportsOpenAiRealtime(provider: ServiceProvider): Boolean {
