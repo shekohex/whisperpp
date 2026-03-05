@@ -35,7 +35,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Enhancement & Prompts
 
 - [x] **ENH-01**: After dictation stops, Whisper++ runs enhancement by default and pastes enhanced text (fallback to raw on failure)
-- [ ] **ENH-02**: Enhancement uses an effective prompt = base prompt + per-app prompt append (when configured)
+- [x] **ENH-02**: Enhancement uses an effective prompt = base prompt + per-app prompt append (when configured)
 - [ ] **ENH-03**: When enhancement succeeds, Whisper++ auto-replaces the dictated segment in place
 - [ ] **ENH-04**: User can undo the last enhancement replacement (restores raw transcript)
 - [ ] **ENH-05**: Whisper++ includes a small transform preset library (at least 3) usable for dictation or selected-text transforms
@@ -44,8 +44,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **PROF-01**: User can define a global base prompt
 - [ ] **PROF-02**: User can create prompt profiles and manually map apps (by package name) to a profile
-- [ ] **PROF-03**: Per-app mapping can override prompt append and the chosen STT/text providers/models
-- [ ] **PROF-04**: User can configure per-language defaults (language -> STT model/provider and text model/provider)
+- [x] **PROF-03**: Per-app mapping can override prompt append and the chosen STT/text providers/models
+- [x] **PROF-04**: User can configure per-language defaults (language -> STT model/provider and text model/provider)
 
 ### Command Mode (Selected Text)
 
@@ -126,14 +126,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DICT-06 | 3 | Complete |
 | DICT-07 | 3 | Complete |
 | ENH-01 | 4 | Complete |
-| ENH-02 | 4 | Pending |
+| ENH-02 | 4 | Complete |
 | ENH-03 | 4 | Pending |
 | ENH-04 | 4 | Pending |
 | ENH-05 | 5 | Pending |
 | PROF-01 | 4 | Pending |
 | PROF-02 | 4 | Pending |
-| PROF-03 | 4 | Pending |
-| PROF-04 | 4 | Pending |
+| PROF-03 | 4 | Complete |
+| PROF-04 | 4 | Complete |
 | CMD-01 | 5 | Pending |
 | CMD-02 | 5 | Pending |
 | CMD-03 | 5 | Pending |
