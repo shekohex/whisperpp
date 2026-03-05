@@ -124,6 +124,13 @@
     <string name="settings_smart_fix_prompt_desc">The instruction prompt for the LLM. Leave empty to use default.</string>
     <string name="settings_smart_fix_prompt_hint">Customize the cleanup rules…</string>
 
+    <string name="transform_preset_cleanup_title">Cleanup</string>
+    <string name="transform_preset_cleanup_description">Fix punctuation, capitalization, and typos.</string>
+    <string name="transform_preset_shorten_title">Shorten</string>
+    <string name="transform_preset_shorten_description">Make it shorter while keeping meaning.</string>
+    <string name="transform_preset_tone_rewrite_title">Tone rewrite</string>
+    <string name="transform_preset_tone_rewrite_description">Rewrite in a friendly, professional tone.</string>
+
     <string name="settings_option_yes">Yes</string>
     <string name="settings_option_no">No</string>
     <string name="settings_auto_recording_start">Auto Recording Start</string>
