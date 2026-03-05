@@ -66,6 +66,8 @@ import com.github.shekohex.whisperpp.data.RuntimeSelectionResolver
 import com.github.shekohex.whisperpp.data.RuntimeWarning
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.data.ServiceProvider
+import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
+import com.github.shekohex.whisperpp.data.presetById
 import com.github.shekohex.whisperpp.dictation.DictationController
 import com.github.shekohex.whisperpp.dictation.EnhancementOutcome
 import com.github.shekohex.whisperpp.dictation.EnhancementRunner
@@ -73,6 +75,11 @@ import com.github.shekohex.whisperpp.dictation.FailureReason
 import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.dictation.OpenAiRealtimeSttClient
 import com.github.shekohex.whisperpp.dictation.SkipReason
+import com.github.shekohex.whisperpp.command.CommandController
+import com.github.shekohex.whisperpp.command.ResolvedSelection
+import com.github.shekohex.whisperpp.command.SelectionResolver
+import com.github.shekohex.whisperpp.command.SelectionSnapshot
+import com.github.shekohex.whisperpp.command.TransformPromptBuilder
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isRecording
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
@@ -91,6 +98,7 @@ import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
@@ -119,6 +127,15 @@ private enum class FirstUseDisclosureDecision {
     CONTINUE,
     CANCEL,
     OPEN_SETTINGS,
+}
+
+private enum class CommandStage {
+    WAITING,
+    CLIPBOARD_CONFIRM,
+    LISTENING,
+    PROCESSING,
+    DONE,
+    ERROR,
 }
 
 class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
@@ -169,6 +186,29 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var networkLoggingPreferenceJob: Job? = null
     private var timerJob: Job? = null
     private val activeMediaPlayers = mutableListOf<MediaPlayer>()
+
+    private val commandController = CommandController()
+    private val selectionResolver = SelectionResolver()
+    private var isCommandModeActive = mutableStateOf(false)
+    private var commandStage = mutableStateOf(CommandStage.WAITING)
+    private var commandErrorMessage = mutableStateOf<String?>(null)
+    private var commandUndoAvailable = mutableStateOf(false)
+    private var commandUndoRemainingMs = mutableStateOf(0L)
+    private var commandSelectedPresetId = mutableStateOf(TRANSFORM_PRESET_ID_TONE_REWRITE)
+    private var commandClipboardPreview = mutableStateOf("")
+    private var commandClipboardCharCount = mutableStateOf(0)
+    private var commandClipboardIsLarge = mutableStateOf(false)
+    private var commandClipboardUnavailableReason = mutableStateOf<String?>(null)
+    private var commandClipboardAttemptsRemaining = mutableStateOf(2)
+    private var commandSilenceRetryUsed = false
+
+    private var commandRunFocusKey: FocusKey? = null
+    private var commandSelectionSnapshot: SelectionSnapshot? = null
+    private var commandConfirmedText: String? = null
+    private var commandOriginalTextForUndo: String? = null
+    private var commandSpokenInstruction: String? = null
+    private var commandJob: Job? = null
+    private var commandUndoJob: Job? = null
 
     private var focusInstanceId: Long = 0L
     private lateinit var dictationController: DictationController
@@ -228,6 +268,9 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         super.onStartInput(attribute, restarting)
         focusInstanceId += 1
         dictationController.onFocusChanged(FocusKey.from(attribute, focusInstanceId))
+        if (isCommandModeActive.value) {
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_focus_changed))
+        }
         showUndoQuickActionIfAvailable()
         refreshEnhancementUndoState()
         refreshExternalSendBlock(attribute)
@@ -240,6 +283,9 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         super.onStartInputView(info, restarting)
         focusInstanceId += 1
         dictationController.onFocusChanged(FocusKey.from(info, focusInstanceId))
+        if (isCommandModeActive.value) {
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_focus_changed))
+        }
         showUndoQuickActionIfAvailable()
         refreshEnhancementUndoState()
         refreshExternalSendBlock(info)
@@ -1245,6 +1291,540 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         clearActiveDictationSelection()
     }
 
+    private fun currentFocusKey(): FocusKey? {
+        return FocusKey.from(currentInputEditorInfo, focusInstanceId)
+    }
+
+    private fun refreshCommandUndoState() {
+        val now = System.currentTimeMillis()
+        val entry = commandController.getUndoEntry(now)
+        if (entry == null) {
+            commandUndoAvailable.value = false
+            commandUndoRemainingMs.value = 0L
+            commandUndoJob?.cancel()
+            commandUndoJob = null
+            return
+        }
+        commandUndoAvailable.value = true
+        commandUndoRemainingMs.value = (entry.expiresAtMs - now).coerceAtLeast(0L)
+
+        if (commandUndoJob == null) {
+            commandUndoJob = CoroutineScope(Dispatchers.Main).launch {
+                while (true) {
+                    delay(250)
+                    val nowTick = System.currentTimeMillis()
+                    val tickEntry = commandController.getUndoEntry(nowTick)
+                    if (tickEntry == null) {
+                        commandUndoAvailable.value = false
+                        commandUndoRemainingMs.value = 0L
+                        commandUndoJob = null
+                        return@launch
+                    }
+                    commandUndoAvailable.value = true
+                    commandUndoRemainingMs.value = (tickEntry.expiresAtMs - nowTick).coerceAtLeast(0L)
+                }
+            }
+        }
+    }
+
+    private fun setCommandStage(stage: CommandStage, error: String? = null) {
+        commandStage.value = stage
+        commandErrorMessage.value = error
+    }
+
+    private fun resetCommandRunState() {
+        commandJob?.cancel()
+        commandJob = null
+        recorderManager?.stop()
+        whisperTranscriber.stop()
+        smartFixer.cancel()
+
+        commandRunFocusKey = null
+        commandSelectionSnapshot = null
+        commandConfirmedText = null
+        commandOriginalTextForUndo = null
+        commandSpokenInstruction = null
+        commandSilenceRetryUsed = false
+
+        commandClipboardPreview.value = ""
+        commandClipboardCharCount.value = 0
+        commandClipboardIsLarge.value = false
+        commandClipboardUnavailableReason.value = null
+        commandClipboardAttemptsRemaining.value = 2
+    }
+
+    private fun cancelCommandMode(showError: Boolean, message: String? = null) {
+        resetCommandRunState()
+        isCommandModeActive.value = false
+        if (showError) {
+            setCommandStage(CommandStage.ERROR, message)
+            CoroutineScope(Dispatchers.Main).launch {
+                delay(1600)
+                if (!isCommandModeActive.value) {
+                    setCommandStage(CommandStage.WAITING, null)
+                }
+            }
+        } else {
+            setCommandStage(CommandStage.WAITING, null)
+        }
+    }
+
+    private fun commandClipboardText(): String? {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = clipboard.primaryClip ?: return null
+        if (clip.itemCount <= 0) return null
+        val text = clip.getItemAt(0).coerceToText(this)?.toString()?.trim().orEmpty()
+        return text.takeIf { it.isNotBlank() }
+    }
+
+    private fun refreshCommandClipboardPreview() {
+        val text = commandClipboardText()
+        if (text == null) {
+            commandClipboardPreview.value = ""
+            commandClipboardCharCount.value = 0
+            commandClipboardIsLarge.value = false
+            commandClipboardUnavailableReason.value = getString(R.string.command_clipboard_unavailable)
+            return
+        }
+
+        val count = text.length
+        val snippetLimit = 180
+        val snippet = if (count <= snippetLimit) text else text.substring(0, snippetLimit) + "…"
+        val largeThreshold = 15_000
+        commandClipboardPreview.value = snippet
+        commandClipboardCharCount.value = count
+        commandClipboardIsLarge.value = count >= largeThreshold
+        commandClipboardUnavailableReason.value = null
+    }
+
+    private fun commandCursorSnapshot(): SelectionSnapshot? {
+        val ic = currentInputConnection ?: return null
+        val extracted = ic.getExtractedText(android.view.inputmethod.ExtractedTextRequest(), 0) ?: return null
+        val start = extracted.selectionStart
+        val end = extracted.selectionEnd
+        if (start < 0 || end < 0) return null
+        val cursor = if (start == end) start else end
+        return SelectionSnapshot(start = cursor, end = cursor)
+    }
+
+    private fun onCommandEnter() {
+        if (keyboardState.value != KeyboardState.Ready) {
+            return
+        }
+        if (shouldBlockExternalSend()) {
+            handleBlockedExternalSendAction()
+            return
+        }
+
+        resetCommandRunState()
+        isCommandModeActive.value = true
+        setCommandStage(CommandStage.WAITING, null)
+
+        commandRunFocusKey = currentFocusKey()
+        commandController.startRun(commandRunFocusKey)
+        refreshCommandUndoState()
+
+        CoroutineScope(Dispatchers.Main).launch {
+            commandSelectedPresetId.value = repository.commandPresetId.first().orEmpty().ifBlank { TRANSFORM_PRESET_ID_TONE_REWRITE }
+        }
+
+        val resolved = selectionResolver.resolve(currentInputEditorInfo, currentInputConnection)
+        when (resolved) {
+            is ResolvedSelection.Selected -> {
+                commandSelectionSnapshot = resolved.snapshot
+                commandConfirmedText = resolved.text
+                commandOriginalTextForUndo = resolved.text
+                startCommandListening()
+            }
+
+            is ResolvedSelection.NeedsClipboard -> {
+                commandSelectionSnapshot = resolved.snapshot
+                setCommandStage(CommandStage.CLIPBOARD_CONFIRM, null)
+                refreshCommandClipboardPreview()
+            }
+
+            is ResolvedSelection.None -> {
+                commandSelectionSnapshot = commandCursorSnapshot()
+                setCommandStage(CommandStage.CLIPBOARD_CONFIRM, null)
+                refreshCommandClipboardPreview()
+            }
+        }
+    }
+
+    private fun onCommandCancel() {
+        cancelCommandMode(showError = false)
+    }
+
+    private fun onCommandClipboardContinue() {
+        if (!isCommandModeActive.value) return
+        if (commandStage.value != CommandStage.CLIPBOARD_CONFIRM) return
+
+        val text = commandClipboardText()
+        if (text == null) {
+            val remaining = commandClipboardAttemptsRemaining.value - 1
+            commandClipboardAttemptsRemaining.value = remaining
+            refreshCommandClipboardPreview()
+            if (remaining <= 0) {
+                cancelCommandMode(showError = true, message = getString(R.string.command_error_clipboard_attempts_exhausted))
+            }
+            return
+        }
+
+        commandConfirmedText = text
+        val snapshot = commandSelectionSnapshot
+        commandOriginalTextForUndo = if (snapshot != null && snapshot.start != snapshot.end) text else ""
+        startCommandListening()
+    }
+
+    private fun onCommandClipboardRetry() {
+        if (!isCommandModeActive.value) return
+        if (commandStage.value != CommandStage.CLIPBOARD_CONFIRM) return
+        refreshCommandClipboardPreview()
+    }
+
+    private fun startCommandListening() {
+        if (!isCommandModeActive.value) return
+        if (shouldBlockExternalSend()) {
+            cancelCommandMode(showError = true, message = blockedNotice())
+            return
+        }
+        if (recorderManager?.allPermissionsGranted(this) != true) {
+            launchMainActivity()
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_permissions))
+            return
+        }
+
+        commandSpokenInstruction = null
+        commandSilenceRetryUsed = false
+        setCommandStage(CommandStage.LISTENING, null)
+        recorderManager?.start(recordedAudioFilename)
+    }
+
+    private fun onCommandStopListening() {
+        if (!isCommandModeActive.value) return
+        if (commandStage.value != CommandStage.LISTENING) return
+
+        recorderManager?.stop()
+        setCommandStage(CommandStage.PROCESSING, null)
+
+        commandJob?.cancel()
+        commandJob = CoroutineScope(Dispatchers.Main).launch {
+            val prefs = dataStore.data.first()
+            val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
+            val providers = repository.providers.first()
+
+            val effective = resolveEffectiveRuntimeConfig(
+                packageName = currentInputEditorInfo?.packageName,
+                languageCode = languageCode,
+                prefs = prefs,
+                providers = providers,
+            )
+
+            val providerId = effective.sttProviderId
+            val modelId = effective.sttModelId
+            val provider = providers.find { it.id == providerId }
+            if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
+                cancelCommandMode(showError = true, message = getString(R.string.command_error_setup_stt))
+                return@launch
+            }
+            if (shouldBlockExternalSend()) {
+                cancelCommandMode(showError = true, message = blockedNotice())
+                return@launch
+            }
+
+            val providerWithApiKey = provider.copy(apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty())
+            val staticPrompt = if (providerWithApiKey.prompt.isNotEmpty()) providerWithApiKey.prompt else prefs[PROMPT] ?: ""
+            val temperature = providerWithApiKey.temperature
+            val postprocessing = prefs[POSTPROCESSING] ?: getString(R.string.settings_option_no_conversion)
+            val timeout = providerWithApiKey.timeout
+            val instruction = runCatching {
+                transcribeInstruction(
+                    languageCode = languageCode,
+                    provider = providerWithApiKey,
+                    modelId = modelId,
+                    postprocessing = postprocessing,
+                    timeout = timeout,
+                    staticPrompt = staticPrompt,
+                    temperature = temperature,
+                )
+            }.getOrNull()?.trim().orEmpty()
+
+            if (instruction.isBlank()) {
+                if (!commandSilenceRetryUsed) {
+                    commandSilenceRetryUsed = true
+                    startCommandListening()
+                    return@launch
+                }
+                cancelCommandMode(showError = false)
+                return@launch
+            }
+
+            commandSpokenInstruction = instruction
+            runCommandTransformOrError(instruction)
+        }
+    }
+
+    private suspend fun transcribeInstruction(
+        languageCode: String,
+        provider: ServiceProvider,
+        modelId: String,
+        postprocessing: String,
+        timeout: Int,
+        staticPrompt: String,
+        temperature: Float,
+    ): String? {
+        return suspendCancellableCoroutine { continuation ->
+            var resumed = false
+
+            whisperTranscriber.startAsync(
+                context = this@WhisperInputService,
+                filename = recordedAudioFilename,
+                mediaType = audioMediaType,
+                attachToEnd = "",
+                contextPrompt = null,
+                languageCode = languageCode,
+                provider = provider,
+                modelId = modelId,
+                postprocessing = postprocessing,
+                addTrailingSpace = false,
+                timeout = timeout,
+                staticPrompt = staticPrompt,
+                temperature = temperature,
+                callback = { result ->
+                    if (resumed) return@startAsync
+                    resumed = true
+                    if (continuation.isActive) {
+                        continuation.resume(result)
+                    }
+                },
+                exceptionCallback = { message ->
+                    if (resumed) return@startAsync
+                    resumed = true
+                    if (continuation.isActive) {
+                        continuation.resumeWith(Result.failure(IllegalStateException(message)))
+                    }
+                }
+            )
+
+            continuation.invokeOnCancellation {
+                whisperTranscriber.stop()
+            }
+        }
+    }
+
+    private suspend fun runCommandTransformOrError(spokenInstruction: String) {
+        val confirmedText = commandConfirmedText?.trim().orEmpty()
+        val snapshot = commandSelectionSnapshot
+        val focusKey = commandRunFocusKey
+        if (confirmedText.isBlank() || snapshot == null || focusKey == null) {
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_missing_text))
+            return
+        }
+
+        if (shouldBlockExternalSend()) {
+            cancelCommandMode(showError = true, message = blockedNotice())
+            return
+        }
+
+        val prefs = dataStore.data.first()
+        val providers = repository.providers.first()
+        val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
+        val effective = resolveEffectiveRuntimeConfig(
+            packageName = currentInputEditorInfo?.packageName,
+            languageCode = languageCode,
+            prefs = prefs,
+            providers = providers,
+        )
+
+        val overrideProviderId = prefs[COMMAND_TEXT_PROVIDER_ID]?.trim().orEmpty()
+        val overrideModelId = prefs[COMMAND_TEXT_MODEL_ID]?.trim().orEmpty()
+        val overridePresent = overrideProviderId.isNotBlank() || overrideModelId.isNotBlank()
+        val providerId = if (overridePresent) overrideProviderId else effective.textProviderId
+        val modelId = if (overridePresent) overrideModelId else effective.textModelId
+
+        val provider = providers.find { it.id == providerId }
+        if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_setup_text))
+            return
+        }
+
+        val useContext = prefs[USE_CONTEXT] ?: false
+        val disclosure = PrivacyDisclosureFormatter.disclosureForCommand(
+            provider = provider,
+            selectedModelId = modelId,
+            useContext = useContext,
+        )
+        val disclosureDecision = awaitFirstUseDisclosure(
+            mode = FirstUseDisclosureMode.COMMAND_TEXT,
+            disclosure = disclosure,
+        )
+        if (disclosureDecision != FirstUseDisclosureDecision.CONTINUE) {
+            cancelCommandMode(showError = false)
+            return
+        }
+
+        if (provider.endpoint.isBlank()) {
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_missing_endpoint))
+            return
+        }
+
+        val providerWithApiKey = provider.copy(apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty())
+        if (providerWithApiKey.authMode == ProviderAuthMode.API_KEY && providerWithApiKey.apiKey.isBlank()) {
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_missing_api_key))
+            return
+        }
+
+        val presetInstruction = presetById(commandSelectedPresetId.value)?.promptInstruction
+        val promptTemplate = TransformPromptBuilder.buildTemplate(
+            basePrompt = effective.prompt,
+            presetInstruction = presetInstruction,
+            spokenInstruction = spokenInstruction,
+        )
+
+        val temperature = if (provider.temperature > 0) provider.temperature else prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
+        val contextPrompt = if (useContext) currentInputConnection?.getTextBeforeCursor(500, 0)?.toString() else null
+
+        setCommandStage(CommandStage.PROCESSING, null)
+
+        val transformed = try {
+            withContext(Dispatchers.IO) {
+                smartFixer.fix(
+                    text = confirmedText,
+                    contextInformation = contextPrompt,
+                    provider = providerWithApiKey,
+                    modelId = modelId,
+                    temperature = temperature,
+                    promptTemplate = promptTemplate,
+                )
+            }
+        } catch (_: CancellationException) {
+            return
+        } catch (e: Exception) {
+            setCommandStage(CommandStage.ERROR, e.message ?: getString(R.string.command_error_transform_failed))
+            return
+        }
+
+        if (!isCommandModeActive.value) {
+            return
+        }
+
+        applyCommandResultOrError(
+            focusKey = focusKey,
+            snapshot = snapshot,
+            originalText = commandOriginalTextForUndo.orEmpty(),
+            appliedText = transformed,
+        )
+    }
+
+    private fun applyCommandResultOrError(
+        focusKey: FocusKey,
+        snapshot: SelectionSnapshot,
+        originalText: String,
+        appliedText: String,
+    ) {
+        if (currentFocusKey() != focusKey) {
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_focus_changed))
+            return
+        }
+
+        val ic = currentInputConnection
+        if (ic == null) {
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_no_input_connection))
+            return
+        }
+
+        val trimmed = appliedText.trimEnd()
+        if (trimmed.isBlank()) {
+            setCommandStage(CommandStage.ERROR, getString(R.string.command_error_empty_result))
+            return
+        }
+
+        val start = snapshot.start
+        val end = snapshot.end
+        val replaced = runCatching {
+            ic.beginBatchEdit()
+            try {
+                if (!ic.setSelection(start, end)) return@runCatching false
+                if (!ic.commitText(trimmed, 1)) return@runCatching false
+                ic.setSelection(start, start + trimmed.length)
+                true
+            } finally {
+                ic.endBatchEdit()
+            }
+        }.getOrDefault(false)
+
+        if (!replaced) {
+            setCommandStage(CommandStage.ERROR, getString(R.string.command_error_apply_failed))
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        commandController.recordUndoAfterApply(
+            focusKey = focusKey,
+            snapshot = snapshot,
+            originalText = originalText,
+            appliedText = trimmed,
+            nowMs = now,
+        )
+        refreshCommandUndoState()
+        setCommandStage(CommandStage.DONE, null)
+
+        CoroutineScope(Dispatchers.Main).launch {
+            delay(1200)
+            if (commandStage.value == CommandStage.DONE) {
+                isCommandModeActive.value = false
+                setCommandStage(CommandStage.WAITING, null)
+            }
+        }
+    }
+
+    private fun onCommandRetryTransform() {
+        if (!isCommandModeActive.value) return
+        if (commandStage.value != CommandStage.ERROR) return
+        val instruction = commandSpokenInstruction ?: return
+        commandJob?.cancel()
+        commandJob = CoroutineScope(Dispatchers.Main).launch {
+            runCommandTransformOrError(instruction)
+        }
+    }
+
+    private fun onCommandUndo() {
+        val now = System.currentTimeMillis()
+        val entry = commandController.consumeUndoEntry(now) ?: run {
+            refreshCommandUndoState()
+            return
+        }
+        if (currentFocusKey() != entry.focusKey) {
+            refreshCommandUndoState()
+            return
+        }
+        val ic = currentInputConnection ?: run {
+            refreshCommandUndoState()
+            return
+        }
+
+        val start = entry.snapshot.start
+        val appliedEnd = start + entry.appliedText.length
+        val original = entry.originalText
+
+        val restored = runCatching {
+            ic.beginBatchEdit()
+            try {
+                if (!ic.setSelection(start, appliedEnd)) return@runCatching false
+                if (!ic.commitText(original, 1)) return@runCatching false
+                ic.setSelection(start, start + original.length)
+                true
+            } finally {
+                ic.endBatchEdit()
+            }
+        }.getOrDefault(false)
+
+        refreshCommandUndoState()
+        if (!restored) {
+            return
+        }
+    }
+
     private fun supportsOpenAiRealtime(provider: ServiceProvider): Boolean {
         if (provider.type != ProviderType.OPENAI) return false
         if (provider.endpoint.isBlank()) return false
@@ -1432,6 +2012,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             smartFixer.cancel()
             closeRealtimeSession()
             recorderManager?.stop()
+            resetCommandRunState()
+            isCommandModeActive.value = false
             stopTimer()
             if (keyboardState.value != KeyboardState.Ready) setKeyboardState(KeyboardState.Ready)
         }
@@ -1459,6 +2041,9 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         smartFixer.cancel()
         closeRealtimeSession()
         recorderManager?.stop()
+        resetCommandRunState()
+        commandUndoJob?.cancel()
+        commandUndoJob = null
         releaseAllMediaPlayers()
     }
 }

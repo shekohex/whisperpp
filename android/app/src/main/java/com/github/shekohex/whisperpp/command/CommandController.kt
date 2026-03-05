@@ -46,6 +46,12 @@ class CommandController {
         return entry
     }
 
+    fun consumeUndoEntry(nowMs: Long): CommandUndoEntry? {
+        val entry = getUndoEntry(nowMs) ?: return null
+        undoEntry = null
+        return entry
+    }
+
     private companion object {
         private const val UNDO_TTL_MS = 30_000L
     }

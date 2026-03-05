@@ -49,6 +49,20 @@
     <string name="blocked_app_policy_reason_generic">Reason: blocked by a Privacy &amp; Safety app rule</string>
     <string name="blocked_app_policy_reason_for_package">Reason: blocked by a Privacy &amp; Safety app rule for %1$s</string>
 
+    <string name="command_clipboard_unavailable">Clipboard is empty or unavailable.</string>
+    <string name="command_error_focus_changed">Focus changed; command mode cancelled.</string>
+    <string name="command_error_permissions">Microphone permission required.</string>
+    <string name="command_error_setup_stt">Setup required: select STT provider + model in Settings</string>
+    <string name="command_error_setup_text">Setup required: select text provider + model in Settings</string>
+    <string name="command_error_missing_text">Command mode needs text to transform.</string>
+    <string name="command_error_missing_endpoint">Command unavailable: missing endpoint.</string>
+    <string name="command_error_missing_api_key">Command unavailable: missing API key.</string>
+    <string name="command_error_transform_failed">Command failed.</string>
+    <string name="command_error_no_input_connection">Cannot edit text here.</string>
+    <string name="command_error_empty_result">Result was empty.</string>
+    <string name="command_error_apply_failed">Cannot apply result here.</string>
+    <string name="command_error_clipboard_attempts_exhausted">Clipboard unavailable. Select text or copy text, then try again.</string>
+
     <!-- Warning and Error Messages -->
     <string name="error_endpoint_unset">Error: Endpoint is not set in settings.</string>
     <string name="error_apikey_unset">Error: OpenAI API Key is not set in settings.</string>
