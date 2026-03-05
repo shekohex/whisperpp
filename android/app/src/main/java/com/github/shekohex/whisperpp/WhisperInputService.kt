@@ -81,6 +81,8 @@ import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import com.github.shekohex.whisperpp.recorder.RecorderManager
 import com.github.shekohex.whisperpp.ui.keyboard.FirstUseDisclosureUiState
+import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeStyle
+import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeUiState
 import com.github.shekohex.whisperpp.ui.keyboard.KeyboardScreen
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
 import com.github.liuyueyi.quick.transfer.ChineseUtils
@@ -154,6 +156,9 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var showLongPressHint = mutableStateOf(false)
     private var undoAvailable = mutableStateOf(false)
     private var undoQuickActionVisible = mutableStateOf(false)
+    private var enhancementNotice = mutableStateOf<EnhancementNoticeUiState?>(null)
+    private var enhancementUndoAvailable = mutableStateOf(false)
+    private var enhancementNoticeJob: Job? = null
     private var externalSendBlockReason = mutableStateOf<SecureFieldDetector.Reason?>(null)
     private var externalSendBlockedByAppPolicy = mutableStateOf(false)
     private var externalSendBlockedPackageName = mutableStateOf<String?>(null)
@@ -201,7 +206,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 copyToClipboard = { copyToClipboard(it) },
                 clearComposing = { clearComposingText() },
                 getInputConnection = { currentInputConnection },
-                isInsertAllowed = { !isExternalSendBlocked() },
+                isInsertAllowed = { externalSendBlockReason.value == null },
                 startRecording = { startRecording(it) },
                 pauseRecording = { pauseRecording(targetState = it) },
                 resumeRecording = { resumeRecording(targetState = it) },
@@ -224,6 +229,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         focusInstanceId += 1
         dictationController.onFocusChanged(FocusKey.from(attribute, focusInstanceId))
         showUndoQuickActionIfAvailable()
+        refreshEnhancementUndoState()
         refreshExternalSendBlock(attribute)
         if (isExternalSendBlocked() && isExternalSendingActive()) {
             dictationController.onWindowHidden(toastMessage = blockedNotice())
@@ -235,6 +241,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         focusInstanceId += 1
         dictationController.onFocusChanged(FocusKey.from(info, focusInstanceId))
         showUndoQuickActionIfAvailable()
+        refreshEnhancementUndoState()
         refreshExternalSendBlock(info)
         if (isExternalSendBlocked() && isExternalSendingActive()) {
             dictationController.onWindowHidden(toastMessage = blockedNotice())
@@ -272,6 +279,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             val captured = dictationController.insertRawAndCaptureSegment(token, rawText)
             showUndoQuickActionIfAvailable()
 
+            if (captured == null && isExternalSendBlocked()) {
+                showEnhancementNotice(blockedNotice(), EnhancementNoticeStyle.INFO)
+            }
+
             closeRealtimeSession()
             clearActiveDictationSelection()
 
@@ -294,6 +305,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 return@launch
             }
 
+            if (keyboardState.value == KeyboardState.Ready) {
+                setKeyboardState(KeyboardState.SmartFixing)
+            }
+
             val effective = resolveEffectiveRuntimeConfig(
                 packageName = captured.focusKey.packageName,
                 languageCode = languageCode,
@@ -308,11 +323,13 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             val modelLabel = textModelId.ifBlank { "Unknown model" }
 
             if (shouldBlockExternalSend()) {
-                Toast.makeText(
-                    this@WhisperInputService,
+                showEnhancementNotice(
                     "Enhancement skipped for $providerLabel ($modelLabel): ${blockedNotice()}",
-                    Toast.LENGTH_SHORT,
-                ).show()
+                    EnhancementNoticeStyle.INFO,
+                )
+                if (keyboardState.value == KeyboardState.SmartFixing) {
+                    setKeyboardState(KeyboardState.Ready)
+                }
                 if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
                     delay(150)
                     onSwitchIme()
@@ -323,15 +340,17 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
             val textWarnings = effective.warnings.filter { it.channel == RuntimeChannel.TEXT }
             if (textWarnings.isNotEmpty()) {
-                Toast.makeText(this@WhisperInputService, formatRuntimeWarnings(textWarnings), Toast.LENGTH_SHORT).show()
+                showEnhancementNotice(formatRuntimeWarnings(textWarnings), EnhancementNoticeStyle.INFO)
             }
 
             if (provider == null || textModelId.isBlank() || provider.models.none { it.id == textModelId }) {
-                Toast.makeText(
-                    this@WhisperInputService,
+                showEnhancementNotice(
                     "Enhancement unavailable for ${textProviderId.ifBlank { "Unknown provider" }} (${textModelId.ifBlank { "Unknown model" }})",
-                    Toast.LENGTH_SHORT,
-                ).show()
+                    EnhancementNoticeStyle.ERROR,
+                )
+                if (keyboardState.value == KeyboardState.SmartFixing) {
+                    setKeyboardState(KeyboardState.Ready)
+                }
                 if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
                     delay(150)
                     onSwitchIme()
@@ -351,6 +370,9 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 disclosure = disclosure,
             )
             if (disclosureDecision != FirstUseDisclosureDecision.CONTINUE) {
+                if (keyboardState.value == KeyboardState.SmartFixing) {
+                    setKeyboardState(KeyboardState.Ready)
+                }
                 if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
                     delay(150)
                     onSwitchIme()
@@ -359,11 +381,13 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             }
 
             if (provider.endpoint.isBlank()) {
-                Toast.makeText(
-                    this@WhisperInputService,
+                showEnhancementNotice(
                     "Enhancement unavailable for ${provider.name} ($textModelId): missing endpoint",
-                    Toast.LENGTH_SHORT,
-                ).show()
+                    EnhancementNoticeStyle.ERROR,
+                )
+                if (keyboardState.value == KeyboardState.SmartFixing) {
+                    setKeyboardState(KeyboardState.Ready)
+                }
                 if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
                     delay(150)
                     onSwitchIme()
@@ -376,11 +400,13 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
             )
             if (providerWithApiKey.authMode == ProviderAuthMode.API_KEY && providerWithApiKey.apiKey.isBlank()) {
-                Toast.makeText(
-                    this@WhisperInputService,
+                showEnhancementNotice(
                     "Enhancement unavailable for ${provider.name} ($textModelId): missing API key",
-                    Toast.LENGTH_SHORT,
-                ).show()
+                    EnhancementNoticeStyle.ERROR,
+                )
+                if (keyboardState.value == KeyboardState.SmartFixing) {
+                    setKeyboardState(KeyboardState.Ready)
+                }
                 if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
                     delay(150)
                     onSwitchIme()
@@ -392,7 +418,6 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             val temperature = if (provider.temperature > 0) provider.temperature else prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
             val promptTemplate = effective.prompt
 
-            setKeyboardState(KeyboardState.SmartFixing)
             performFeedback()
 
             val outcome = enhancementRunner.run(
@@ -417,7 +442,15 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
             when (outcome) {
                 is EnhancementOutcome.Succeeded -> {
-                    dictationController.replaceCapturedSegment(captured, outcome.enhancedText)
+                    val replaced = dictationController.replaceCapturedSegment(captured, outcome.enhancedText)
+                    if (replaced) {
+                        refreshEnhancementUndoState()
+                    } else {
+                        showEnhancementNotice(
+                            "Enhancement ready for ${provider.name} ($textModelId), but focus changed; kept raw",
+                            EnhancementNoticeStyle.INFO,
+                        )
+                    }
                 }
 
                 is EnhancementOutcome.Skipped -> {
@@ -432,27 +465,24 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                     when (val reason = outcome.reason) {
                         FailureReason.Cancelled -> Unit
                         FailureReason.Timeout -> {
-                            Toast.makeText(
-                                this@WhisperInputService,
+                            showEnhancementNotice(
                                 "Enhancement timed out for ${provider.name} ($textModelId)",
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                                EnhancementNoticeStyle.ERROR,
+                            )
                         }
 
                         is FailureReason.Transient -> {
-                            Toast.makeText(
-                                this@WhisperInputService,
+                            showEnhancementNotice(
                                 "Enhancement failed for ${provider.name} ($textModelId): ${reason.message}",
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                                EnhancementNoticeStyle.ERROR,
+                            )
                         }
 
                         is FailureReason.NonTransient -> {
-                            Toast.makeText(
-                                this@WhisperInputService,
+                            showEnhancementNotice(
                                 "Enhancement failed for ${provider.name} ($textModelId): ${reason.message}",
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                                EnhancementNoticeStyle.ERROR,
+                            )
                         }
                     }
                 }
@@ -591,12 +621,23 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         showLongPressHint = showLongPressHint.value,
                         undoAvailable = undoAvailable.value,
                         undoQuickActionVisible = undoQuickActionVisible.value,
+                        enhancementNotice = enhancementNotice.value,
+                        enhancementUndoAvailable = enhancementUndoAvailable.value,
                         onMicAction = { onMicAction() },
                         onCancelAction = { onCancelAction() },
                         onDiscardAction = { discardRecording() },
                         onSendAction = { onSendAction() },
                         onDeleteAction = { onDeleteText() },
                         onUndoAction = { onUndoAction() },
+                        onEnhancementUndoAction = {
+                            performFeedback(isDelete = true)
+                            val applied = dictationController.applyEnhancementUndo()
+                            refreshEnhancementUndoState()
+                            if (!applied) {
+                                showEnhancementNotice("Can't undo enhancement here", EnhancementNoticeStyle.INFO)
+                            }
+                        },
+                        onDismissEnhancementNotice = { dismissEnhancementNotice() },
                         onOpenSettings = { launchMainActivity() },
                         onOpenSettingsDestination = { launchMainActivity(it) },
                         onLanguageClick = { showLanguageMenu(this) },
@@ -652,6 +693,32 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private fun clearUndoQuickAction() {
         undoQuickActionVisible.value = false
+    }
+
+    private fun refreshEnhancementUndoState() {
+        enhancementUndoAvailable.value = dictationController.isEnhancementUndoAvailable()
+    }
+
+    private fun clearEnhancementUndoState() {
+        enhancementUndoAvailable.value = false
+    }
+
+    private fun dismissEnhancementNotice() {
+        enhancementNoticeJob?.cancel()
+        enhancementNoticeJob = null
+        enhancementNotice.value = null
+    }
+
+    private fun showEnhancementNotice(message: String, style: EnhancementNoticeStyle) {
+        val trimmed = message.trim()
+        if (trimmed.isBlank()) return
+        enhancementNoticeJob?.cancel()
+        enhancementNotice.value = EnhancementNoticeUiState(message = trimmed, style = style)
+        enhancementNoticeJob = CoroutineScope(Dispatchers.Main).launch {
+            delay(2600)
+            enhancementNotice.value = null
+            enhancementNoticeJob = null
+        }
     }
 
     private fun clearActiveDictationSelection() {
@@ -897,6 +964,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
 
         clearUndoQuickAction()
+        clearEnhancementUndoState()
 
         when (keyboardState.value) {
             KeyboardState.Ready -> {
@@ -913,7 +981,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                     )
                     val sttWarnings = effective.warnings.filter { it.channel == RuntimeChannel.STT }
                     if (sttWarnings.isNotEmpty()) {
-                        Toast.makeText(this@WhisperInputService, formatRuntimeWarnings(sttWarnings), Toast.LENGTH_SHORT).show()
+                        showEnhancementNotice(formatRuntimeWarnings(sttWarnings), EnhancementNoticeStyle.INFO)
                     }
 
                     val providerId = effective.sttProviderId

@@ -57,6 +57,16 @@ data class FirstUseDisclosureUiState(
     val contextLine: String,
 )
 
+enum class EnhancementNoticeStyle {
+    INFO,
+    ERROR,
+}
+
+data class EnhancementNoticeUiState(
+    val message: String,
+    val style: EnhancementNoticeStyle,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KeyboardScreen(
@@ -67,12 +77,16 @@ fun KeyboardScreen(
     showLongPressHint: Boolean,
     undoAvailable: Boolean = false,
     undoQuickActionVisible: Boolean = false,
+    enhancementNotice: EnhancementNoticeUiState? = null,
+    enhancementUndoAvailable: Boolean = false,
     onMicAction: () -> Unit,
     onCancelAction: () -> Unit,
     onDiscardAction: () -> Unit,
     onSendAction: () -> Unit,
     onDeleteAction: () -> Unit,
     onUndoAction: () -> Unit = {},
+    onEnhancementUndoAction: () -> Unit = {},
+    onDismissEnhancementNotice: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenSettingsDestination: (String) -> Unit = {},
     onLanguageClick: () -> Unit,
@@ -100,6 +114,7 @@ fun KeyboardScreen(
     val externalSendingBlocked = externalSendBlockedReason != null || externalSendBlockedByAppPolicy
     val canShowBlockedExplanation = externalSendingBlocked && (externalSendBlockedByAppPolicy || showSecureFieldExplanation)
     val showUndoAction = undoAvailable && undoQuickActionVisible
+    val showEnhancementUndoAction = enhancementUndoAvailable
     val copy = remember(externalSendBlockedReason, externalSendBlockedByAppPolicy, blockedPackageName) {
         blockedExplanationCopySpec(
             externalSendBlockedReason = externalSendBlockedReason,
@@ -290,173 +305,235 @@ fun KeyboardScreen(
         }
     }
 
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 15.dp)
-            .height(72.dp)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(36.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 8.dp,
-        shadowElevation = 4.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+    Column(modifier = Modifier.fillMaxWidth()) {
+        AnimatedVisibility(
+            visible = enhancementNotice != null,
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
         ) {
-            // Left Cluster
-            Box(modifier = Modifier.width(100.dp), contentAlignment = Alignment.CenterStart) {
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = isSwiping && isRecordingState,
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut() + scaleOut()
+            val notice = enhancementNotice
+            if (notice != null) {
+                val isError = notice.style == EnhancementNoticeStyle.ERROR
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .clickable { onDismissEnhancementNotice() },
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
+                    tonalElevation = 6.dp,
+                    shadowElevation = 2.dp,
                 ) {
-                    PulsatingTrashIcon(swipeProgress)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = if (isError) Icons.Default.Error else Icons.Default.Info,
+                            contentDescription = null,
+                            tint = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                        Text(
+                            text = notice.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = null,
+                            tint = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
                 }
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = !isSwiping || !isRecordingState,
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut() + scaleOut()
-                ) {
-                    AnimatedContent(
-                        targetState = state,
-                        transitionSpec = {
-                            fadeIn() + slideInHorizontally() togetherWith fadeOut() + slideOutHorizontally()
-                        },
-                        label = "LeftClusterTransition"
-                    ) { targetState ->
-                        when (targetState) {
-                            KeyboardState.Recording, KeyboardState.RecordingLocked -> {
-                                RecordingTimer(recordingTimeMs)
-                            }
-                            KeyboardState.Paused, KeyboardState.PausedLocked -> {
-                                IconButton(onClick = onCancelAction) {
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        null,
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
+            }
+        }
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 15.dp)
+                .height(72.dp)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            shape = RoundedCornerShape(36.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 8.dp,
+            shadowElevation = 4.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Left Cluster
+                Box(modifier = Modifier.width(100.dp), contentAlignment = Alignment.CenterStart) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = isSwiping && isRecordingState,
+                        enter = fadeIn() + scaleIn(),
+                        exit = fadeOut() + scaleOut()
+                    ) {
+                        PulsatingTrashIcon(swipeProgress)
+                    }
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = !isSwiping || !isRecordingState,
+                        enter = fadeIn() + scaleIn(),
+                        exit = fadeOut() + scaleOut()
+                    ) {
+                        AnimatedContent(
+                            targetState = state,
+                            transitionSpec = {
+                                fadeIn() + slideInHorizontally() togetherWith fadeOut() + slideOutHorizontally()
+                            },
+                            label = "LeftClusterTransition"
+                        ) { targetState ->
+                            when (targetState) {
+                                KeyboardState.Recording, KeyboardState.RecordingLocked -> {
+                                    RecordingTimer(recordingTimeMs)
                                 }
-                            }
-                            else -> {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(onClick = onOpenSettings) {
+                                KeyboardState.Paused, KeyboardState.PausedLocked -> {
+                                    IconButton(onClick = onCancelAction) {
                                         Icon(
-                                            Icons.Default.Settings,
+                                            Icons.Default.Delete,
                                             null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            tint = MaterialTheme.colorScheme.error
                                         )
                                     }
-                                    Surface(
-                                        onClick = onLanguageClick,
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = MaterialTheme.colorScheme.secondaryContainer
-                                    ) {
-                                        Text(
-                                            text = languageLabel,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
+                                }
+                                else -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(onClick = onOpenSettings) {
+                                            Icon(
+                                                Icons.Default.Settings,
+                                                null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Surface(
+                                            onClick = onLanguageClick,
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = MaterialTheme.colorScheme.secondaryContainer
+                                        ) {
+                                            Text(
+                                                text = languageLabel,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            // Center Status
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = isSwiping && isRecordingState,
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut() + scaleOut()
+                // Center Status
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
                 ) {
-                    ShimmerText(
-                        text = stringResource(R.string.swipe_to_discard),
-                        progress = swipeProgress
-                    )
-                }
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = isSwipingUp && state == KeyboardState.Recording && !isSwiping,
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut() + scaleOut()
-                ) {
-                    ShimmerLockText(progress = swipeUpProgress)
-                }
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = !isSwiping && !isSwipingUp || !isRecordingState,
-                    enter = fadeIn() + scaleIn(),
-                    exit = fadeOut() + scaleOut()
-                ) {
-                    if (isPausedState) {
-                        PausedControlsCenter(
-                            state = state,
-                            recordingTimeMs = recordingTimeMs,
-                            onResume = if (externalSendingBlocked) showBlockedExplanationAction else onMicAction,
-                        )
-                    } else {
-                        StatusContent(state, amplitude, recordingTimeMs)
-                    }
-                }
-            }
-
-            // Right Cluster
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AnimatedVisibility(visible = showUndoAction) {
-                    IconButton(onClick = onUndoAction) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Undo,
-                            null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                AnimatedVisibility(visible = state == KeyboardState.Ready) {
-                    BackspaceButton(onDeleteAction)
-                }
-
-                AnimatedVisibility(visible = state == KeyboardState.Transcribing || state == KeyboardState.SmartFixing) {
-                    IconButton(onClick = onCancelAction) {
-                        Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-
-                Spacer(Modifier.width(8.dp))
-
-                if (isPausedState) {
-                    FilledIconButton(
-                        onClick = if (externalSendingBlocked) showBlockedExplanationAction else onSendAction,
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = isSwiping && isRecordingState,
+                        enter = fadeIn() + scaleIn(),
+                        exit = fadeOut() + scaleOut()
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = null,
+                        ShimmerText(
+                            text = stringResource(R.string.swipe_to_discard),
+                            progress = swipeProgress
                         )
                     }
-                } else {
-                    MainActionButton(
-                        state = state,
-                        externalSendingBlocked = externalSendingBlocked,
-                        showLongPressHint = showLongPressHint,
-                        onSwipeProgress = { swipeProgress = it },
-                        onSwipeUpProgress = { swipeUpProgress = it },
-                        onMicAction = onMicAction,
-                        onDiscardAction = onDiscardAction,
-                        onSendAction = onSendAction,
-                        onDismissHint = onDismissHint,
-                        onLockAction = onLockAction,
-                        onUnlockAction = onUnlockAction,
-                        onBlockedAction = showBlockedExplanationAction,
-                    )
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = isSwipingUp && state == KeyboardState.Recording && !isSwiping,
+                        enter = fadeIn() + scaleIn(),
+                        exit = fadeOut() + scaleOut()
+                    ) {
+                        ShimmerLockText(progress = swipeUpProgress)
+                    }
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = !isSwiping && !isSwipingUp || !isRecordingState,
+                        enter = fadeIn() + scaleIn(),
+                        exit = fadeOut() + scaleOut()
+                    ) {
+                        if (isPausedState) {
+                            PausedControlsCenter(
+                                state = state,
+                                recordingTimeMs = recordingTimeMs,
+                                onResume = if (externalSendingBlocked) showBlockedExplanationAction else onMicAction,
+                            )
+                        } else {
+                            StatusContent(state, amplitude, recordingTimeMs)
+                        }
+                    }
+                }
+
+                // Right Cluster
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AnimatedVisibility(visible = showEnhancementUndoAction) {
+                        AssistChip(
+                            onClick = onEnhancementUndoAction,
+                            label = { Text("Undo") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Undo,
+                                    null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                        )
+                    }
+
+                    AnimatedVisibility(visible = showUndoAction) {
+                        IconButton(onClick = onUndoAction) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Undo,
+                                null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = state == KeyboardState.Ready) {
+                        BackspaceButton(onDeleteAction)
+                    }
+
+                    AnimatedVisibility(visible = state == KeyboardState.Transcribing || state == KeyboardState.SmartFixing) {
+                        IconButton(onClick = onCancelAction) {
+                            Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    if (isPausedState) {
+                        FilledIconButton(
+                            onClick = if (externalSendingBlocked) showBlockedExplanationAction else onSendAction,
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = null,
+                            )
+                        }
+                    } else {
+                        MainActionButton(
+                            state = state,
+                            externalSendingBlocked = externalSendingBlocked,
+                            showLongPressHint = showLongPressHint,
+                            onSwipeProgress = { swipeProgress = it },
+                            onSwipeUpProgress = { swipeUpProgress = it },
+                            onMicAction = onMicAction,
+                            onDiscardAction = onDiscardAction,
+                            onSendAction = onSendAction,
+                            onDismissHint = onDismissHint,
+                            onLockAction = onLockAction,
+                            onUnlockAction = onUnlockAction,
+                            onBlockedAction = showBlockedExplanationAction,
+                        )
+                    }
                 }
             }
         }
