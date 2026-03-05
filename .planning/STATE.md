@@ -8,7 +8,7 @@
 **Current Plan:** 6
 **Total Plans in Phase:** 7
 
-**Progress:** [█████████░] 86%
+**Progress:** [█████████░] 91%
 
 ## Performance Metrics
 
@@ -27,6 +27,7 @@
 | Phase 04-prompts-profiles-enhancement P02 | 3 min | 2 tasks | 2 files |
 | Phase 04-prompts-profiles-enhancement P01 | 21 min | 2 tasks | 5 files |
 | Phase 04 P05 | 17 min | 2 tasks | 1 files |
+| Phase 04 P04 | 44 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,8 @@
 - [Phase 04]: EnhancementRunner uses withTimeout + single retry envelope
 - [Phase 04]: Enhancement skip policy: blank/punctuation-only transcripts are never sent
 - [Phase 04]: Prompts & profiles settings: base prompt uses explicit Save action (trim-on-save)
+- [Phase 04]: Enhancement pipeline is raw-first with segment-scoped replace + single enhancement-undo
+- [Phase 04]: RuntimeSelectionResolver precedence applied for dictation STT and enhancement TEXT, with non-blocking notices
 
 ### Blockers
 
@@ -78,6 +81,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-05T04:49:09.233Z
-**Stopped At:** Completed 04-05-PLAN.md
+**Last session:** 2026-03-05T05:21:01.266Z
+**Stopped At:** Completed 04-04-PLAN.md
 **Resume file:** None
