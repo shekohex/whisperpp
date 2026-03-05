@@ -79,6 +79,7 @@ sealed class SettingsScreen(val route: String) {
     object Keyboard : SettingsScreen("keyboard")
     object PrivacySafety : SettingsScreen("privacy_safety")
     object ProviderSelections : SettingsScreen("provider_selections")
+    object PromptsProfiles : SettingsScreen("prompts_profiles")
     object ProviderEdit : SettingsScreen("provider_edit?id={id}&cloneFromId={cloneFromId}") {
         fun createRoute(id: String? = null, cloneFromId: String? = null): String {
             val encodedId = Uri.encode(id ?: "")
@@ -104,6 +105,7 @@ fun SettingsNavigation(
         SettingsScreen.Keyboard.route,
         SettingsScreen.PrivacySafety.route,
         SettingsScreen.ProviderSelections.route,
+        SettingsScreen.PromptsProfiles.route,
         SettingsScreen.Main.route -> startRoute
         else -> SettingsScreen.Main.route
     }
@@ -140,6 +142,9 @@ fun SettingsNavigation(
         }
         composable(SettingsScreen.ProviderSelections.route) {
             ProviderSelectionsScreen(dataStore, navController)
+        }
+        composable(SettingsScreen.PromptsProfiles.route) {
+            PromptsProfilesScreen(dataStore, navController)
         }
         composable(
             route = SettingsScreen.ProviderEdit.route,
@@ -390,6 +395,12 @@ fun MainSettingsScreen(
                         onClick = { navController.navigate(SettingsScreen.PostProcessing.route) }
                     )
                     SettingsItem(
+                        icon = Icons.Default.TextFields,
+                        title = "Prompts & profiles",
+                        subtitle = "Base prompt and prompt profiles",
+                        onClick = { navController.navigate(SettingsScreen.PromptsProfiles.route) }
+                    )
+                    SettingsItem(
                         icon = Icons.Default.Keyboard,
                         title = "Keyboard Behavior",
                         subtitle = "Haptics, Auto-start, etc.",
@@ -442,6 +453,94 @@ fun MainSettingsScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PromptsProfilesScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
+    val repository = remember { SettingsRepository(dataStore) }
+    val basePrompt by repository.globalBasePrompt.collectAsState(initial = "")
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    var draftPrompt by remember { mutableStateOf("") }
+    var userEditing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(basePrompt) {
+        if (!userEditing) {
+            draftPrompt = basePrompt
+        }
+    }
+
+    val hasChanges = remember(basePrompt, draftPrompt) { draftPrompt != basePrompt }
+
+    Scaffold(
+        topBar = {
+            MediumTopAppBar(
+                title = { Text("Prompts & profiles") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                repository.saveGlobalBasePrompt(draftPrompt)
+                                userEditing = false
+                                Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        enabled = hasChanges,
+                    ) {
+                        Text("Save")
+                    }
+                }
+            )
+        },
+        contentWindowInsets = WindowInsets.statusBars
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Spacer(Modifier.height(16.dp))
+
+            SettingsGroup(title = "Global base prompt") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = draftPrompt,
+                        onValueChange = {
+                            userEditing = true
+                            draftPrompt = it
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 6,
+                        maxLines = 12,
+                        label = { Text("Base prompt") },
+                        placeholder = { Text("e.g. Improve clarity, fix punctuation, keep tone.") },
+                    )
+                    Text(
+                        text = "Used as the foundation for enhancement prompting.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
 }
