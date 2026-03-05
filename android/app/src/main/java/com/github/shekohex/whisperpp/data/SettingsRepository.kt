@@ -36,9 +36,13 @@ import java.util.Locale
 
 val PROVIDERS_JSON = stringPreferencesKey("providers_json")
 val PROFILES_JSON = stringPreferencesKey("profiles_json")
+val GLOBAL_BASE_PROMPT = stringPreferencesKey("global_base_prompt")
+val PROMPT_PROFILES_JSON = stringPreferencesKey("prompt_profiles_json")
+val APP_PROMPT_MAPPINGS_JSON = stringPreferencesKey("app_prompt_mappings_json")
 val PROVIDER_API_KEY_MIGRATION_DONE = booleanPreferencesKey("provider_api_key_migration_done")
 val PROVIDER_SCHEMA_V2_MIGRATION_DONE = booleanPreferencesKey("provider_schema_v2_migration_done")
 val PROVIDER_SELECTIONS_V2_MIGRATION_DONE = booleanPreferencesKey("provider_selections_v2_migration_done")
+val PROMPTS_PROFILES_SCHEMA_V1_MIGRATION_DONE = booleanPreferencesKey("prompts_profiles_schema_v1_migration_done")
 
 data class SettingsExport(
     val version: Int,
@@ -287,6 +291,95 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    val globalBasePrompt: Flow<String> = dataStore.data.map { prefs ->
+        sanitizeBasePrompt(prefs[GLOBAL_BASE_PROMPT])
+    }
+
+    val promptProfiles: Flow<List<PromptProfile>> = dataStore.data.map { prefs ->
+        parsePromptProfilesJson(prefs[PROMPT_PROFILES_JSON], gson)
+    }
+
+    val appPromptMappings: Flow<List<AppPromptMapping>> = dataStore.data.map { prefs ->
+        parseAppPromptMappingsJson(prefs[APP_PROMPT_MAPPINGS_JSON], gson)
+    }
+
+    suspend fun saveGlobalBasePrompt(prompt: String) {
+        val sanitized = sanitizeBasePrompt(prompt)
+        dataStore.edit { prefs ->
+            prefs[GLOBAL_BASE_PROMPT] = sanitized
+        }
+    }
+
+    suspend fun savePromptProfiles(profiles: List<PromptProfile>) {
+        dataStore.edit { prefs ->
+            prefs[PROMPT_PROFILES_JSON] = gson.toJson(sanitizePromptProfiles(profiles))
+        }
+    }
+
+    suspend fun upsertPromptProfile(profile: PromptProfile) {
+        val sanitized = sanitizePromptProfiles(listOf(profile)).firstOrNull() ?: return
+
+        val current = promptProfiles.first().toMutableList()
+        val index = current.indexOfFirst { it.id == sanitized.id }
+        if (index >= 0) {
+            current[index] = sanitized
+        } else {
+            current.add(sanitized)
+        }
+        savePromptProfiles(current)
+    }
+
+    suspend fun deletePromptProfile(profileId: String) {
+        val id = profileId.trim()
+        if (id.isBlank()) {
+            return
+        }
+        val current = promptProfiles.first().filterNot { it.id == id }
+        savePromptProfiles(current)
+    }
+
+    suspend fun saveAppPromptMappings(mappings: List<AppPromptMapping>) {
+        dataStore.edit { prefs ->
+            prefs[APP_PROMPT_MAPPINGS_JSON] = gson.toJson(sanitizeAppPromptMappings(mappings))
+        }
+    }
+
+    suspend fun upsertAppPromptMapping(mapping: AppPromptMapping) {
+        val sanitized = sanitizeAppPromptMappings(listOf(mapping)).firstOrNull() ?: return
+
+        val current = appPromptMappings.first().toMutableList()
+        val index = current.indexOfFirst { it.packageName == sanitized.packageName }
+        if (index >= 0) {
+            current[index] = sanitized
+        } else {
+            current.add(sanitized)
+        }
+        saveAppPromptMappings(current)
+    }
+
+    suspend fun deleteAppPromptMapping(packageName: String) {
+        val pkg = packageName.trim()
+        if (pkg.isBlank()) {
+            return
+        }
+        val current = appPromptMappings.first().filterNot { it.packageName == pkg }
+        saveAppPromptMappings(current)
+    }
+
+    suspend fun migratePromptsProfilesSchemaV1IfNeeded() {
+        val migrationDone = dataStore.data.map { prefs ->
+            prefs[PROMPTS_PROFILES_SCHEMA_V1_MIGRATION_DONE] ?: false
+        }.first()
+
+        if (migrationDone) {
+            return
+        }
+
+        dataStore.edit { prefs ->
+            prefs[PROMPTS_PROFILES_SCHEMA_V1_MIGRATION_DONE] = true
+        }
+    }
+
     suspend fun exportSettings(appVersionName: String): String {
         val prefs = dataStore.data.first()
         val providersList = providers.first()
@@ -493,6 +586,93 @@ internal fun validateSelections(
         keysToClear = keysToClear,
         effective = EffectiveSelections(stt = effectiveStt, text = effectiveText, commandText = effectiveCommand),
     )
+}
+
+internal fun sanitizeBasePrompt(value: String?): String {
+    val trimmed = value.orEmpty().trim()
+    return if (trimmed.isBlank()) "" else trimmed
+}
+
+internal fun parsePromptProfilesJson(json: String?, gson: Gson): List<PromptProfile> {
+    val raw = json?.trim().orEmpty()
+    if (raw.isBlank()) {
+        return emptyList()
+    }
+
+    val type = object : TypeToken<List<PromptProfile>>() {}.type
+    return try {
+        val decoded: List<PromptProfile>? = gson.fromJson(raw, type)
+        sanitizePromptProfiles(decoded ?: emptyList())
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+internal fun sanitizePromptProfiles(profiles: List<PromptProfile>): List<PromptProfile> {
+    return profiles.mapNotNull { profile ->
+        val id = (profile.id as String?).orEmpty().trim()
+        val name = (profile.name as String?).orEmpty().trim()
+        val append = (profile.promptAppend as String?).orEmpty().trim()
+
+        if (id.isBlank() || name.isBlank()) {
+            return@mapNotNull null
+        }
+
+        PromptProfile(
+            id = id,
+            name = name,
+            promptAppend = append,
+        )
+    }
+}
+
+internal fun parseAppPromptMappingsJson(json: String?, gson: Gson): List<AppPromptMapping> {
+    val raw = json?.trim().orEmpty()
+    if (raw.isBlank()) {
+        return emptyList()
+    }
+
+    val type = object : TypeToken<List<AppPromptMapping>>() {}.type
+    return try {
+        val decoded: List<AppPromptMapping>? = gson.fromJson(raw, type)
+        sanitizeAppPromptMappings(decoded ?: emptyList())
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+internal fun sanitizeAppPromptMappings(mappings: List<AppPromptMapping>): List<AppPromptMapping> {
+    return mappings.mapNotNull { mapping ->
+        val packageName = (mapping.packageName as String?).orEmpty().trim()
+        if (packageName.isBlank()) {
+            return@mapNotNull null
+        }
+
+        val profileId = mapping.profileId?.trim()?.takeIf { it.isNotBlank() }
+        val appendMode = (mapping.appendMode as AppendMode?) ?: AppendMode.APPEND
+        val appPromptAppend = mapping.appPromptAppend?.trim()?.takeIf { it.isNotBlank() }
+        val sttOverride = mapping.sttOverride?.let {
+            ProviderModelOverride(
+                providerId = (it.providerId as String?).orEmpty().trim(),
+                modelId = (it.modelId as String?).orEmpty().trim(),
+            )
+        }
+        val textOverride = mapping.textOverride?.let {
+            ProviderModelOverride(
+                providerId = (it.providerId as String?).orEmpty().trim(),
+                modelId = (it.modelId as String?).orEmpty().trim(),
+            )
+        }
+
+        AppPromptMapping(
+            packageName = packageName,
+            profileId = profileId,
+            appendMode = appendMode,
+            appPromptAppend = appPromptAppend,
+            sttOverride = sttOverride,
+            textOverride = textOverride,
+        )
+    }
 }
 
 internal fun extractProviderArray(rootElement: JsonElement): JsonArray? {

@@ -111,6 +111,7 @@ fun SettingsNavigation(
     LaunchedEffect(Unit) {
         repository.migrateProviderSchemaV2IfNeeded(context)
         repository.migrateProviderSelectionsV2IfNeeded()
+        repository.migratePromptsProfilesSchemaV1IfNeeded()
         migrationReady = true
     }
 
