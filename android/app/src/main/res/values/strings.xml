@@ -124,6 +124,16 @@
     <string name="settings_smart_fix_prompt_desc">The instruction prompt for the LLM. Leave empty to use default.</string>
     <string name="settings_smart_fix_prompt_hint">Customize the cleanup rules…</string>
 
+    <string name="settings_transform_presets_title">Transform presets</string>
+    <string name="settings_transform_presets_subtitle">Defaults for enhancement and command mode</string>
+    <string name="settings_transform_presets_group_title">Defaults</string>
+    <string name="settings_transform_presets_enhancement_label">Enhancement default</string>
+    <string name="settings_transform_presets_command_label">Command default</string>
+    <string name="settings_transform_presets_enhancement_helper">Dictation enhancement</string>
+    <string name="settings_transform_presets_command_helper">Command mode</string>
+    <string name="settings_transform_presets_picker_title">Choose preset</string>
+    <string name="settings_close">Close</string>
+
     <string name="transform_preset_cleanup_title">Cleanup</string>
     <string name="transform_preset_cleanup_description">Fix punctuation, capitalization, and typos.</string>
     <string name="transform_preset_shorten_title">Shorten</string>

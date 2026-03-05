@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1781,6 +1782,152 @@ fun LanguageDefaultsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     },
                 ) {
                     Text("Cancel")
+                }
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PresetsSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
+    val repository = remember { SettingsRepository(dataStore) }
+    val enhancementPresetId by repository.enhancementPresetId.collectAsState(initial = TRANSFORM_PRESET_ID_CLEANUP)
+    val commandPresetId by repository.commandPresetId.collectAsState(initial = TRANSFORM_PRESET_ID_TONE_REWRITE)
+    val scope = rememberCoroutineScope()
+
+    val enhancementPreset = remember(enhancementPresetId) {
+        presetById(enhancementPresetId) ?: presetById(TRANSFORM_PRESET_ID_CLEANUP)
+    }
+    val commandPreset = remember(commandPresetId) {
+        presetById(commandPresetId) ?: presetById(TRANSFORM_PRESET_ID_TONE_REWRITE)
+    }
+
+    var showEnhancementPicker by remember { mutableStateOf(false) }
+    var showCommandPicker by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            MediumTopAppBar(
+                title = { Text(stringResource(R.string.settings_transform_presets_title)) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+            )
+        },
+        contentWindowInsets = WindowInsets.statusBars,
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Spacer(Modifier.height(16.dp))
+
+            SettingsGroup(title = stringResource(R.string.settings_transform_presets_group_title)) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.settings_transform_presets_enhancement_label)) },
+                        supportingContent = {
+                            val title = enhancementPreset?.let { stringResource(it.titleRes) }
+                                ?: stringResource(R.string.transform_preset_cleanup_title)
+                            val helper = stringResource(R.string.settings_transform_presets_enhancement_helper)
+                            Text("$title • $helper")
+                        },
+                        leadingContent = { Icon(Icons.Default.AutoFixHigh, null) },
+                        trailingContent = { Icon(Icons.Default.ChevronRight, null) },
+                        modifier = Modifier.clickable { showEnhancementPicker = true },
+                    )
+                    HorizontalDivider()
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.settings_transform_presets_command_label)) },
+                        supportingContent = {
+                            val title = commandPreset?.let { stringResource(it.titleRes) }
+                                ?: stringResource(R.string.transform_preset_tone_rewrite_title)
+                            val helper = stringResource(R.string.settings_transform_presets_command_helper)
+                            Text("$title • $helper")
+                        },
+                        leadingContent = { Icon(Icons.Default.EditNote, null) },
+                        trailingContent = { Icon(Icons.Default.ChevronRight, null) },
+                        modifier = Modifier.clickable { showCommandPicker = true },
+                    )
+                }
+            }
+
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
+    }
+
+    if (showEnhancementPicker) {
+        AlertDialog(
+            onDismissRequest = { showEnhancementPicker = false },
+            title = { Text(stringResource(R.string.settings_transform_presets_picker_title)) },
+            text = {
+                Column {
+                    TRANSFORM_PRESETS.forEachIndexed { index, preset ->
+                        ListItem(
+                            headlineContent = { Text(stringResource(preset.titleRes)) },
+                            supportingContent = { Text(stringResource(preset.descriptionRes)) },
+                            leadingContent = {
+                                RadioButton(
+                                    selected = enhancementPresetId == preset.id,
+                                    onClick = null,
+                                )
+                            },
+                            modifier = Modifier.clickable {
+                                showEnhancementPicker = false
+                                scope.launch { repository.setEnhancementPresetId(preset.id) }
+                            },
+                        )
+                        if (index < TRANSFORM_PRESETS.lastIndex) {
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showEnhancementPicker = false }) {
+                    Text(stringResource(R.string.settings_close))
+                }
+            },
+        )
+    }
+
+    if (showCommandPicker) {
+        AlertDialog(
+            onDismissRequest = { showCommandPicker = false },
+            title = { Text(stringResource(R.string.settings_transform_presets_picker_title)) },
+            text = {
+                Column {
+                    TRANSFORM_PRESETS.forEachIndexed { index, preset ->
+                        ListItem(
+                            headlineContent = { Text(stringResource(preset.titleRes)) },
+                            supportingContent = { Text(stringResource(preset.descriptionRes)) },
+                            leadingContent = {
+                                RadioButton(
+                                    selected = commandPresetId == preset.id,
+                                    onClick = null,
+                                )
+                            },
+                            modifier = Modifier.clickable {
+                                showCommandPicker = false
+                                scope.launch { repository.setCommandPresetId(preset.id) }
+                            },
+                        )
+                        if (index < TRANSFORM_PRESETS.lastIndex) {
+                            HorizontalDivider()
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCommandPicker = false }) {
+                    Text(stringResource(R.string.settings_close))
                 }
             },
         )
