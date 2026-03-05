@@ -798,35 +798,30 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             .joinToString(separator = " ")
     }
 
+    private fun readSmartFixDefaultPromptOrEmpty(): String {
+        return runCatching {
+            resources.openRawResource(R.raw.smart_fix_prompt).bufferedReader().use { it.readText() }
+        }.getOrDefault("")
+    }
+
     private fun buildEnhancementPromptTemplate(
         basePrompt: String,
         presetInstruction: String?,
     ): String {
-        val sb = StringBuilder()
-
-        val base = basePrompt.trim()
-        if (base.isNotEmpty()) {
-            sb.appendLine(base)
-            sb.appendLine()
-        }
-
-        sb.appendLine("Rewrite the <TRANSCRIPT> text according to the instruction.")
-        sb.appendLine()
-
+        val base = basePrompt.trim().ifBlank { readSmartFixDefaultPromptOrEmpty().trim() }
         val preset = presetInstruction?.trim().orEmpty()
-        if (preset.isNotEmpty()) {
-            sb.appendLine("Instruction:")
-            sb.appendLine(preset)
-            sb.appendLine()
+        if (preset.isBlank()) {
+            return base
         }
 
-        sb.appendLine("Rules:")
-        sb.appendLine("- Keep the same language.")
-        sb.appendLine("- Do not add new information.")
-        sb.appendLine("- Do not answer questions; only rewrite the text.")
-        sb.appendLine("- Return only the rewritten text.")
-
-        return sb.toString().trimEnd()
+        return buildString {
+            if (base.isNotEmpty()) {
+                append(base)
+                append("\n\n")
+            }
+            append("Preset instruction:\n")
+            append(preset)
+        }.trimEnd()
     }
 
     private suspend fun resolveEffectiveRuntimeConfig(
