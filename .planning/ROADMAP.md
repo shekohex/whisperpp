@@ -115,6 +115,13 @@ Plans:
 4. Command mode replaces the selection with the result and provides 1-tap undo to restore the original selection.
 5. Users can choose from a preset transform library (>= 3 presets) for both dictation enhancement and selected-text transforms.
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Shared transform preset library + per-mode default presets (settings)
+- [ ] 05-02-PLAN.md — Command core contracts (selection resolver, undo contract, prompt builder) with unit tests
+- [ ] 05-03-PLAN.md — IME command mode end-to-end (Command key, clipboard fallback, voice instruction, transform, replace + undo, preset picker)
+
 ### Phase 6: Settings UX + Import/Export
 
 **Goal:** Users can configure and back up/restore all core behavior with polished settings UI.
