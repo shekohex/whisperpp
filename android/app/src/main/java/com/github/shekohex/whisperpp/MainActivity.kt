@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
             SettingsScreen.PostProcessing.route -> SettingsScreen.PostProcessing.route
             SettingsScreen.Keyboard.route -> SettingsScreen.Keyboard.route
             SettingsScreen.PrivacySafety.route -> SettingsScreen.PrivacySafety.route
+            SettingsScreen.Presets.route -> SettingsScreen.Presets.route
             else -> SettingsScreen.Main.route
         }
     }
