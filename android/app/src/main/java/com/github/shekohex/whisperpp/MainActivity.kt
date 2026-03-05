@@ -47,6 +47,9 @@ val TIMEOUT = intPreferencesKey("timeout")
 val PROMPT = stringPreferencesKey("prompt")
 val USE_CONTEXT = booleanPreferencesKey("use-context")
 
+val ENHANCEMENT_PRESET_ID = stringPreferencesKey("enhancement-preset-id")
+val COMMAND_PRESET_ID = stringPreferencesKey("command-preset-id")
+
 val SMART_FIX_ENABLED = booleanPreferencesKey("smart-fix-enabled")
 val SMART_FIX_BACKEND = stringPreferencesKey("smart-fix-backend")
 val SMART_FIX_ENDPOINT = stringPreferencesKey("smart-fix-endpoint")

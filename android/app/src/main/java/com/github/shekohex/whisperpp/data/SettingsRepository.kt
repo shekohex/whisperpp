@@ -15,6 +15,8 @@ import com.github.shekohex.whisperpp.ACTIVE_TEXT_MODEL_ID
 import com.github.shekohex.whisperpp.ACTIVE_TEXT_PROVIDER_ID
 import com.github.shekohex.whisperpp.COMMAND_TEXT_MODEL_ID
 import com.github.shekohex.whisperpp.COMMAND_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.COMMAND_PRESET_ID
+import com.github.shekohex.whisperpp.ENHANCEMENT_PRESET_ID
 import com.github.shekohex.whisperpp.MODEL
 import com.github.shekohex.whisperpp.SMART_FIX_BACKEND
 import com.github.shekohex.whisperpp.SMART_FIX_MODEL
@@ -138,6 +140,36 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             } catch (e: Exception) {
                 // Log error or handle migration failure
                 emptyList()
+            }
+        }
+    }
+
+    val enhancementPresetId: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[ENHANCEMENT_PRESET_ID]?.trim()?.takeIf { it.isNotBlank() } ?: TRANSFORM_PRESET_ID_CLEANUP
+    }
+
+    val commandPresetId: Flow<String?> = dataStore.data.map { prefs ->
+        prefs[COMMAND_PRESET_ID]?.trim()?.takeIf { it.isNotBlank() } ?: TRANSFORM_PRESET_ID_TONE_REWRITE
+    }
+
+    suspend fun setEnhancementPresetId(id: String?) {
+        val normalized = id?.trim()?.takeIf { it.isNotBlank() }
+        dataStore.edit { prefs ->
+            if (normalized == null) {
+                prefs.remove(ENHANCEMENT_PRESET_ID)
+            } else {
+                prefs[ENHANCEMENT_PRESET_ID] = normalized
+            }
+        }
+    }
+
+    suspend fun setCommandPresetId(id: String?) {
+        val normalized = id?.trim()?.takeIf { it.isNotBlank() }
+        dataStore.edit { prefs ->
+            if (normalized == null) {
+                prefs.remove(COMMAND_PRESET_ID)
+            } else {
+                prefs[COMMAND_PRESET_ID] = normalized
             }
         }
     }
