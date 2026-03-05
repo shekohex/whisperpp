@@ -454,7 +454,13 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             }
 
             val temperature = if (provider.temperature > 0) provider.temperature else prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
-            val promptTemplate = effective.prompt
+
+            val enhancementPresetId = repository.enhancementPresetId.first().orEmpty()
+            val enhancementPresetInstruction = presetById(enhancementPresetId)?.promptInstruction
+            val promptTemplate = buildEnhancementPromptTemplate(
+                basePrompt = effective.prompt,
+                presetInstruction = enhancementPresetInstruction,
+            )
 
             performFeedback()
 
@@ -790,6 +796,37 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             .filter { it.isNotBlank() }
             .distinct()
             .joinToString(separator = " ")
+    }
+
+    private fun buildEnhancementPromptTemplate(
+        basePrompt: String,
+        presetInstruction: String?,
+    ): String {
+        val sb = StringBuilder()
+
+        val base = basePrompt.trim()
+        if (base.isNotEmpty()) {
+            sb.appendLine(base)
+            sb.appendLine()
+        }
+
+        sb.appendLine("Rewrite the <TRANSCRIPT> text according to the instruction.")
+        sb.appendLine()
+
+        val preset = presetInstruction?.trim().orEmpty()
+        if (preset.isNotEmpty()) {
+            sb.appendLine("Instruction:")
+            sb.appendLine(preset)
+            sb.appendLine()
+        }
+
+        sb.appendLine("Rules:")
+        sb.appendLine("- Keep the same language.")
+        sb.appendLine("- Do not add new information.")
+        sb.appendLine("- Do not answer questions; only rewrite the text.")
+        sb.appendLine("- Return only the rewritten text.")
+
+        return sb.toString().trimEnd()
     }
 
     private suspend fun resolveEffectiveRuntimeConfig(
