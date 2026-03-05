@@ -80,6 +80,12 @@ sealed class SettingsScreen(val route: String) {
     object PrivacySafety : SettingsScreen("privacy_safety")
     object ProviderSelections : SettingsScreen("provider_selections")
     object PromptsProfiles : SettingsScreen("prompts_profiles")
+    object PromptProfileEdit : SettingsScreen("prompt_profile_edit?id={id}") {
+        fun createRoute(id: String? = null): String {
+            val encodedId = Uri.encode(id ?: "")
+            return "prompt_profile_edit?id=$encodedId"
+        }
+    }
     object ProviderEdit : SettingsScreen("provider_edit?id={id}&cloneFromId={cloneFromId}") {
         fun createRoute(id: String? = null, cloneFromId: String? = null): String {
             val encodedId = Uri.encode(id ?: "")
@@ -106,6 +112,7 @@ fun SettingsNavigation(
         SettingsScreen.PrivacySafety.route,
         SettingsScreen.ProviderSelections.route,
         SettingsScreen.PromptsProfiles.route,
+        SettingsScreen.PromptProfileEdit.route,
         SettingsScreen.Main.route -> startRoute
         else -> SettingsScreen.Main.route
     }
@@ -145,6 +152,15 @@ fun SettingsNavigation(
         }
         composable(SettingsScreen.PromptsProfiles.route) {
             PromptsProfilesScreen(dataStore, navController)
+        }
+        composable(
+            route = SettingsScreen.PromptProfileEdit.route,
+            arguments = listOf(
+                navArgument("id") { nullable = true },
+            )
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments?.getString("id")?.trim()?.takeIf { it.isNotBlank() }
+            PromptProfileEditScreen(dataStore, navController, id)
         }
         composable(
             route = SettingsScreen.ProviderEdit.route,
@@ -462,6 +478,7 @@ fun MainSettingsScreen(
 fun PromptsProfilesScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
     val repository = remember { SettingsRepository(dataStore) }
     val basePrompt by repository.globalBasePrompt.collectAsState(initial = "")
+    val promptProfiles by repository.promptProfiles.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -475,6 +492,8 @@ fun PromptsProfilesScreen(dataStore: DataStore<Preferences>, navController: NavH
     }
 
     val hasChanges = remember(basePrompt, draftPrompt) { draftPrompt != basePrompt }
+
+    var pendingDeleteProfile by remember { mutableStateOf<PromptProfile?>(null) }
 
     Scaffold(
         topBar = {
@@ -536,6 +555,202 @@ fun PromptsProfilesScreen(dataStore: DataStore<Preferences>, navController: NavH
                         text = "Used as the foundation for enhancement prompting.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            SettingsGroup(title = "Prompt profiles") {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ListItem(
+                        headlineContent = { Text("Add profile") },
+                        supportingContent = { Text("Name + optional prompt append") },
+                        leadingContent = { Icon(Icons.Default.Add, null) },
+                        modifier = Modifier.clickable {
+                            navController.navigate(SettingsScreen.PromptProfileEdit.createRoute(null))
+                        }
+                    )
+                    HorizontalDivider()
+
+                    if (promptProfiles.isEmpty()) {
+                        ListItem(
+                            headlineContent = { Text("No profiles yet") },
+                            supportingContent = { Text("Create one to reuse prompt append text across apps.") },
+                            leadingContent = { Icon(Icons.Default.Bookmarks, null) },
+                        )
+                    } else {
+                        val sortedProfiles = remember(promptProfiles) {
+                            promptProfiles.sortedBy { it.name.lowercase(Locale.getDefault()) }
+                        }
+                        sortedProfiles.forEachIndexed { index, profile ->
+                            ListItem(
+                                headlineContent = { Text(profile.name) },
+                                supportingContent = {
+                                    val preview = profile.promptAppend.ifBlank { "No append" }
+                                    Text(preview.take(80))
+                                },
+                                leadingContent = { Icon(Icons.Default.Bookmarks, null) },
+                                trailingContent = {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        IconButton(onClick = {
+                                            navController.navigate(SettingsScreen.PromptProfileEdit.createRoute(profile.id))
+                                        }) {
+                                            Icon(Icons.Default.Edit, "Edit")
+                                        }
+                                        IconButton(onClick = { pendingDeleteProfile = profile }) {
+                                            Icon(Icons.Default.Delete, "Delete")
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.clickable {
+                                    navController.navigate(SettingsScreen.PromptProfileEdit.createRoute(profile.id))
+                                }
+                            )
+                            if (index != sortedProfiles.lastIndex) {
+                                HorizontalDivider()
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
+    }
+
+    if (pendingDeleteProfile != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteProfile = null },
+            icon = { Icon(Icons.Default.Warning, null) },
+            title = { Text("Delete profile?") },
+            text = {
+                val name = pendingDeleteProfile?.name.orEmpty()
+                Text("Delete \"$name\"? App mappings that reference it will be kept and will fallback until updated.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = pendingDeleteProfile?.id.orEmpty()
+                    pendingDeleteProfile = null
+                    scope.launch {
+                        repository.deletePromptProfile(id)
+                        Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteProfile = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PromptProfileEditScreen(
+    dataStore: DataStore<Preferences>,
+    navController: NavHostController,
+    profileId: String?,
+) {
+    val repository = remember { SettingsRepository(dataStore) }
+    val profiles by repository.promptProfiles.collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    val isNew = profileId.isNullOrBlank()
+    val generatedId = remember { UUID.randomUUID().toString() }
+    val effectiveId = if (isNew) generatedId else profileId.orEmpty()
+
+    val existing = remember(profiles, profileId) { profiles.firstOrNull { it.id == profileId } }
+
+    var name by remember { mutableStateOf("") }
+    var append by remember { mutableStateOf("") }
+    var initializedFromExisting by remember { mutableStateOf(false) }
+
+    LaunchedEffect(existing?.id, isNew) {
+        if (isNew) {
+            return@LaunchedEffect
+        }
+        if (!initializedFromExisting) {
+            if (existing == null) {
+                Toast.makeText(context, "Profile not found", Toast.LENGTH_SHORT).show()
+                navController.popBackStack()
+                return@LaunchedEffect
+            }
+            name = existing.name
+            append = existing.promptAppend
+            initializedFromExisting = true
+        }
+    }
+
+    val canSave = remember(name) { name.trim().isNotBlank() }
+
+    Scaffold(
+        topBar = {
+            MediumTopAppBar(
+                title = { Text(if (isNew) "New profile" else "Edit profile") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                repository.upsertPromptProfile(
+                                    PromptProfile(
+                                        id = effectiveId,
+                                        name = name,
+                                        promptAppend = append,
+                                    )
+                                )
+                                Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+                                navController.popBackStack()
+                            }
+                        },
+                        enabled = canSave,
+                    ) {
+                        Text("Save")
+                    }
+                }
+            )
+        },
+        contentWindowInsets = WindowInsets.statusBars
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Spacer(Modifier.height(16.dp))
+
+            SettingsGroup(title = "Profile") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Name") },
+                    )
+                    OutlinedTextField(
+                        value = append,
+                        onValueChange = { append = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 4,
+                        maxLines = 10,
+                        label = { Text("Prompt append (optional)") },
                     )
                 }
             }
