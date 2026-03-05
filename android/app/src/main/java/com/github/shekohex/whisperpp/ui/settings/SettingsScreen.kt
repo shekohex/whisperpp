@@ -80,6 +80,13 @@ sealed class SettingsScreen(val route: String) {
     object PrivacySafety : SettingsScreen("privacy_safety")
     object ProviderSelections : SettingsScreen("provider_selections")
     object PromptsProfiles : SettingsScreen("prompts_profiles")
+    object AppMappings : SettingsScreen("app_mappings")
+    object AppMappingDetail : SettingsScreen("app_mapping_detail?packageName={packageName}") {
+        fun createRoute(packageName: String): String {
+            val encodedPackageName = Uri.encode(packageName)
+            return "app_mapping_detail?packageName=$encodedPackageName"
+        }
+    }
     object PromptProfileEdit : SettingsScreen("prompt_profile_edit?id={id}") {
         fun createRoute(id: String? = null): String {
             val encodedId = Uri.encode(id ?: "")
@@ -112,6 +119,8 @@ fun SettingsNavigation(
         SettingsScreen.PrivacySafety.route,
         SettingsScreen.ProviderSelections.route,
         SettingsScreen.PromptsProfiles.route,
+        SettingsScreen.AppMappings.route,
+        SettingsScreen.AppMappingDetail.route,
         SettingsScreen.PromptProfileEdit.route,
         SettingsScreen.Main.route -> startRoute
         else -> SettingsScreen.Main.route
@@ -152,6 +161,22 @@ fun SettingsNavigation(
         }
         composable(SettingsScreen.PromptsProfiles.route) {
             PromptsProfilesScreen(dataStore, navController)
+        }
+        composable(SettingsScreen.AppMappings.route) {
+            AppMappingsScreen(dataStore, navController)
+        }
+        composable(
+            route = SettingsScreen.AppMappingDetail.route,
+            arguments = listOf(
+                navArgument("packageName") { nullable = true },
+            )
+        ) { backStackEntry ->
+            val packageName = backStackEntry.arguments?.getString("packageName")?.trim().orEmpty()
+            if (packageName.isBlank()) {
+                navController.popBackStack()
+                return@composable
+            }
+            AppMappingDetailScreen(dataStore, navController, packageName)
         }
         composable(
             route = SettingsScreen.PromptProfileEdit.route,
@@ -613,6 +638,19 @@ fun PromptsProfilesScreen(dataStore: DataStore<Preferences>, navController: NavH
                 }
             }
 
+            SettingsGroup(title = "Per-app") {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ListItem(
+                        headlineContent = { Text("App mappings") },
+                        supportingContent = { Text("Map apps to a prompt profile") },
+                        leadingContent = { Icon(Icons.Default.Apps, null) },
+                        modifier = Modifier.clickable {
+                            navController.navigate(SettingsScreen.AppMappings.route)
+                        }
+                    )
+                }
+            }
+
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
@@ -752,6 +790,478 @@ fun PromptProfileEditScreen(
                         maxLines = 10,
                         label = { Text("Prompt append (optional)") },
                     )
+                }
+            }
+
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
+    }
+}
+
+private data class AppMappingPickerApp(
+    val packageName: String,
+    val label: String,
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppMappingsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val repository = remember { SettingsRepository(dataStore) }
+    val appMappings by repository.appPromptMappings.collectAsState(initial = emptyList())
+    val promptProfiles by repository.promptProfiles.collectAsState(initial = emptyList())
+
+    var searchQuery by remember { mutableStateOf("") }
+    var manualPackageName by remember { mutableStateOf("") }
+
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedPackages by remember { mutableStateOf(setOf<String>()) }
+
+    var showBulkAssignDialog by remember { mutableStateOf(false) }
+    var bulkSelectedProfileId by remember { mutableStateOf<String?>(null) }
+
+    val launcherApps by produceState(initialValue = emptyList<AppMappingPickerApp>(), context) {
+        value = withContext(Dispatchers.IO) {
+            val packageManager = context.packageManager
+            val queryIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            packageManager.queryIntentActivities(queryIntent, 0)
+                .mapNotNull { resolveInfo ->
+                    val packageName = resolveInfo.activityInfo?.packageName?.trim().orEmpty()
+                    if (packageName.isEmpty()) {
+                        null
+                    } else {
+                        val label = resolveInfo.loadLabel(packageManager)?.toString()?.trim().orEmpty()
+                        AppMappingPickerApp(
+                            packageName = packageName,
+                            label = label.ifEmpty { packageName },
+                        )
+                    }
+                }
+                .distinctBy { it.packageName }
+                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
+        }
+    }
+
+    val visibleApps = remember(launcherApps, appMappings, searchQuery) {
+        val installed = launcherApps.associateBy { it.packageName }
+        val mappedOnly = appMappings.asSequence()
+            .map { it.packageName.trim() }
+            .filter { it.isNotBlank() && !installed.containsKey(it) }
+            .distinct()
+            .map { pkg -> AppMappingPickerApp(packageName = pkg, label = pkg) }
+            .toList()
+
+        val merged = (launcherApps + mappedOnly)
+            .distinctBy { it.packageName }
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
+
+        val filter = searchQuery.trim().lowercase(Locale.US)
+        if (filter.isBlank()) {
+            merged
+        } else {
+            merged.filter {
+                it.label.lowercase(Locale.US).contains(filter) ||
+                    it.packageName.lowercase(Locale.US).contains(filter)
+            }
+        }
+    }
+
+    fun toggleSelection(packageName: String) {
+        selectedPackages = if (selectedPackages.contains(packageName)) {
+            selectedPackages - packageName
+        } else {
+            selectedPackages + packageName
+        }
+    }
+
+    fun assignProfileToPackages(profileId: String?) {
+        val normalizedProfileId = profileId?.trim()?.takeIf { it.isNotBlank() }
+        scope.launch {
+            val byPkg = appMappings.associateBy { it.packageName }.toMutableMap()
+            selectedPackages.forEach { pkg ->
+                val existing = byPkg[pkg]
+                val updated = (existing ?: AppPromptMapping(packageName = pkg)).copy(profileId = normalizedProfileId)
+                byPkg[pkg] = updated
+            }
+            repository.saveAppPromptMappings(byPkg.values.toList())
+            Toast.makeText(context, "Assigned", Toast.LENGTH_SHORT).show()
+            showBulkAssignDialog = false
+            selectionMode = false
+            selectedPackages = emptySet()
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            MediumTopAppBar(
+                title = {
+                    Text(if (selectionMode) "${selectedPackages.size} selected" else "App mappings")
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    if (selectionMode) {
+                        IconButton(
+                            onClick = {
+                                bulkSelectedProfileId = null
+                                showBulkAssignDialog = true
+                            },
+                            enabled = selectedPackages.isNotEmpty(),
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.Send, "Assign")
+                        }
+                        IconButton(onClick = {
+                            selectionMode = false
+                            selectedPackages = emptySet()
+                        }) {
+                            Icon(Icons.Default.Close, "Cancel")
+                        }
+                    } else {
+                        IconButton(onClick = { selectionMode = true }) {
+                            Icon(Icons.Default.DoneAll, "Multi-select")
+                        }
+                    }
+                }
+            )
+        },
+        contentWindowInsets = WindowInsets.statusBars,
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Spacer(Modifier.height(8.dp))
+
+            SettingsGroup(title = "Search") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Search installed apps") },
+                        leadingIcon = { Icon(Icons.Default.Search, null) },
+                        singleLine = true,
+                    )
+
+                    OutlinedTextField(
+                        value = manualPackageName,
+                        onValueChange = { manualPackageName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Add by package name") },
+                        singleLine = true,
+                    )
+                    Button(
+                        onClick = {
+                            val normalized = manualPackageName.trim()
+                            if (normalized.isNotBlank()) {
+                                scope.launch {
+                                    repository.upsertAppPromptMapping(AppPromptMapping(packageName = normalized))
+                                    manualPackageName = ""
+                                    navController.navigate(SettingsScreen.AppMappingDetail.createRoute(normalized))
+                                }
+                            }
+                        },
+                        enabled = manualPackageName.trim().isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Add")
+                    }
+                }
+            }
+
+            SettingsGroup(title = "Installed apps") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (visibleApps.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "No matching apps",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        val profileById = remember(promptProfiles) { promptProfiles.associateBy { it.id } }
+                        val mappingByPackage = remember(appMappings) { appMappings.associateBy { it.packageName } }
+
+                        visibleApps.forEachIndexed { index, app ->
+                            val mapping = mappingByPackage[app.packageName]
+                            val profileName = mapping?.profileId?.let { id ->
+                                profileById[id]?.name ?: id
+                            } ?: "None"
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (selectionMode) {
+                                            toggleSelection(app.packageName)
+                                        } else {
+                                            navController.navigate(SettingsScreen.AppMappingDetail.createRoute(app.packageName))
+                                        }
+                                    },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                if (selectionMode) {
+                                    Checkbox(
+                                        checked = selectedPackages.contains(app.packageName),
+                                        onCheckedChange = { toggleSelection(app.packageName) },
+                                    )
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = app.label,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                    Text(
+                                        text = app.packageName,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                Text(
+                                    text = profileName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (index < visibleApps.lastIndex) {
+                                HorizontalDivider()
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
+    }
+
+    if (showBulkAssignDialog) {
+        val sortedProfiles = remember(promptProfiles) {
+            promptProfiles.sortedBy { it.name.lowercase(Locale.getDefault()) }
+        }
+        AlertDialog(
+            onDismissRequest = { showBulkAssignDialog = false },
+            title = { Text("Assign profile") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ListItem(
+                        headlineContent = { Text("None") },
+                        leadingContent = {
+                            RadioButton(
+                                selected = bulkSelectedProfileId == null,
+                                onClick = { bulkSelectedProfileId = null },
+                            )
+                        },
+                        modifier = Modifier.clickable { bulkSelectedProfileId = null },
+                    )
+                    HorizontalDivider()
+                    sortedProfiles.forEach { profile ->
+                        ListItem(
+                            headlineContent = { Text(profile.name) },
+                            supportingContent = {
+                                val preview = profile.promptAppend.ifBlank { "No append" }
+                                Text(preview.take(80))
+                            },
+                            leadingContent = {
+                                RadioButton(
+                                    selected = bulkSelectedProfileId == profile.id,
+                                    onClick = { bulkSelectedProfileId = profile.id },
+                                )
+                            },
+                            modifier = Modifier.clickable { bulkSelectedProfileId = profile.id },
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { assignProfileToPackages(bulkSelectedProfileId) }) {
+                    Text("Assign")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBulkAssignDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppMappingDetailScreen(
+    dataStore: DataStore<Preferences>,
+    navController: NavHostController,
+    packageName: String,
+) {
+    val repository = remember { SettingsRepository(dataStore) }
+    val appMappings by repository.appPromptMappings.collectAsState(initial = emptyList())
+    val promptProfiles by repository.promptProfiles.collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    val existing = remember(appMappings, packageName) {
+        appMappings.firstOrNull { it.packageName == packageName }
+    }
+
+    var profileId by remember { mutableStateOf<String?>(null) }
+    var initialized by remember { mutableStateOf(false) }
+
+    LaunchedEffect(existing?.packageName, packageName) {
+        if (!initialized) {
+            profileId = existing?.profileId
+            initialized = true
+        }
+    }
+
+    val canSave = remember(initialized) { initialized }
+
+    Scaffold(
+        topBar = {
+            MediumTopAppBar(
+                title = { Text("App mapping") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                val normalizedProfileId = profileId?.trim()?.takeIf { it.isNotBlank() }
+                                repository.upsertAppPromptMapping(
+                                    AppPromptMapping(
+                                        packageName = packageName,
+                                        profileId = normalizedProfileId,
+                                    )
+                                )
+                                Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+                                navController.popBackStack()
+                            }
+                        },
+                        enabled = canSave,
+                    ) {
+                        Text("Save")
+                    }
+                },
+            )
+        },
+        contentWindowInsets = WindowInsets.statusBars,
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Spacer(Modifier.height(16.dp))
+
+            SettingsGroup(title = "App") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = packageName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            SettingsGroup(title = "Profile") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    var expanded by remember { mutableStateOf(false) }
+                    val selectedProfile = promptProfiles.firstOrNull { it.id == profileId }
+                    val label = selectedProfile?.name ?: profileId?.takeIf { it.isNotBlank() } ?: "None"
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = !expanded },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        OutlinedTextField(
+                            readOnly = true,
+                            value = label,
+                            onValueChange = {},
+                            label = { Text("Prompt profile") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                            modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("None") },
+                                onClick = {
+                                    profileId = null
+                                    expanded = false
+                                },
+                            )
+                            promptProfiles
+                                .sortedBy { it.name.lowercase(Locale.getDefault()) }
+                                .forEach { profile ->
+                                    DropdownMenuItem(
+                                        text = { Text(profile.name) },
+                                        onClick = {
+                                            profileId = profile.id
+                                            expanded = false
+                                        },
+                                    )
+                                }
+                        }
+                    }
+
+                    if (existing != null) {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    repository.deleteAppPromptMapping(packageName)
+                                    Toast.makeText(context, "Removed mapping", Toast.LENGTH_SHORT).show()
+                                    navController.popBackStack()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Remove mapping")
+                        }
+                    }
                 }
             }
 
