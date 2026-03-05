@@ -38,7 +38,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **ENH-02**: Enhancement uses an effective prompt = base prompt + per-app prompt append (when configured)
 - [x] **ENH-03**: When enhancement succeeds, Whisper++ auto-replaces the dictated segment in place
 - [x] **ENH-04**: User can undo the last enhancement replacement (restores raw transcript)
-- [ ] **ENH-05**: Whisper++ includes a small transform preset library (at least 3) usable for dictation or selected-text transforms
+- [x] **ENH-05**: Whisper++ includes a small transform preset library (at least 3) usable for dictation or selected-text transforms
 
 ### Per-App Profiles
 
@@ -129,7 +129,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENH-02 | 4 | Complete |
 | ENH-03 | 4 | Complete |
 | ENH-04 | 4 | Complete |
-| ENH-05 | 5 | Pending |
+| ENH-05 | 5 | Complete |
 | PROF-01 | 4 | Complete |
 | PROF-02 | 4 | Complete |
 | PROF-03 | 4 | Complete |

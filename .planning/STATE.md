@@ -8,7 +8,7 @@
 **Current Plan:** 3
 **Total Plans in Phase:** 3
 
-**Progress:** [█████████░] 92%
+**Progress:** [██████████] 96%
 
 ## Performance Metrics
 
@@ -31,6 +31,7 @@
 | Phase 04 P07 | 1 min | 2 tasks | 2 files |
 | Phase 04-prompts-profiles-enhancement P06 | 12 min | 2 tasks | 1 files |
 | Phase 05-command-mode-presets P02 | 10 min | 2 tasks | 7 files |
+| Phase 05-command-mode-presets P01 | 18 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,7 @@
 - [Phase 04]: Enhancement pipeline is raw-first with segment-scoped replace + single enhancement-undo
 - [Phase 04]: RuntimeSelectionResolver precedence applied for dictation STT and enhancement TEXT, with non-blocking notices
 - [Phase 05]: SelectionResolver returns NeedsClipboard(snapshot) when selection indices exist but selected text is unreadable
+- [Phase 05]: Enhancement default preset fallback is cleanup; command default fallback is tone_rewrite
 
 ### Blockers
 
@@ -85,6 +87,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-05T22:31:57.264Z
-**Stopped At:** Completed 05-02-PLAN.md
+**Last session:** 2026-03-05T22:43:46.084Z
+**Stopped At:** Completed 05-01-PLAN.md
 **Resume file:** None
