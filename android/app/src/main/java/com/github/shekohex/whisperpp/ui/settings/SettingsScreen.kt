@@ -81,6 +81,7 @@ sealed class SettingsScreen(val route: String) {
     object PrivacySafety : SettingsScreen("privacy_safety")
     object ProviderSelections : SettingsScreen("provider_selections")
     object LanguageDefaults : SettingsScreen("language_defaults")
+    object Presets : SettingsScreen("presets")
     object PromptsProfiles : SettingsScreen("prompts_profiles")
     object AppMappings : SettingsScreen("app_mappings")
     object AppMappingDetail : SettingsScreen("app_mapping_detail?packageName={packageName}") {
@@ -121,6 +122,7 @@ fun SettingsNavigation(
         SettingsScreen.PrivacySafety.route,
         SettingsScreen.ProviderSelections.route,
         SettingsScreen.LanguageDefaults.route,
+        SettingsScreen.Presets.route,
         SettingsScreen.PromptsProfiles.route,
         SettingsScreen.AppMappings.route,
         SettingsScreen.AppMappingDetail.route,
@@ -164,6 +166,9 @@ fun SettingsNavigation(
         }
         composable(SettingsScreen.LanguageDefaults.route) {
             LanguageDefaultsScreen(dataStore, navController)
+        }
+        composable(SettingsScreen.Presets.route) {
+            PresetsSettingsScreen(dataStore, navController)
         }
         composable(SettingsScreen.PromptsProfiles.route) {
             PromptsProfilesScreen(dataStore, navController)
@@ -440,6 +445,12 @@ fun MainSettingsScreen(
                         title = "Smart Fix (LLM)",
                         subtitle = if (settingsState?.get(SMART_FIX_ENABLED) == true) "Enabled" else "Disabled",
                         onClick = { navController.navigate(SettingsScreen.PostProcessing.route) }
+                    )
+                    SettingsItem(
+                        icon = Icons.Default.AutoFixHigh,
+                        title = stringResource(R.string.settings_transform_presets_title),
+                        subtitle = stringResource(R.string.settings_transform_presets_subtitle),
+                        onClick = { navController.navigate(SettingsScreen.Presets.route) }
                     )
                     SettingsItem(
                         icon = Icons.Default.TextFields,
