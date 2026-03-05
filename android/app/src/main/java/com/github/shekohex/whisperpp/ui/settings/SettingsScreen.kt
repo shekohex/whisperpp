@@ -79,6 +79,7 @@ sealed class SettingsScreen(val route: String) {
     object Keyboard : SettingsScreen("keyboard")
     object PrivacySafety : SettingsScreen("privacy_safety")
     object ProviderSelections : SettingsScreen("provider_selections")
+    object LanguageDefaults : SettingsScreen("language_defaults")
     object PromptsProfiles : SettingsScreen("prompts_profiles")
     object AppMappings : SettingsScreen("app_mappings")
     object AppMappingDetail : SettingsScreen("app_mapping_detail?packageName={packageName}") {
@@ -118,6 +119,7 @@ fun SettingsNavigation(
         SettingsScreen.Keyboard.route,
         SettingsScreen.PrivacySafety.route,
         SettingsScreen.ProviderSelections.route,
+        SettingsScreen.LanguageDefaults.route,
         SettingsScreen.PromptsProfiles.route,
         SettingsScreen.AppMappings.route,
         SettingsScreen.AppMappingDetail.route,
@@ -158,6 +160,9 @@ fun SettingsNavigation(
         }
         composable(SettingsScreen.ProviderSelections.route) {
             ProviderSelectionsScreen(dataStore, navController)
+        }
+        composable(SettingsScreen.LanguageDefaults.route) {
+            LanguageDefaultsScreen(dataStore, navController)
         }
         composable(SettingsScreen.PromptsProfiles.route) {
             PromptsProfilesScreen(dataStore, navController)
@@ -1007,9 +1012,14 @@ fun AppMappingsScreen(dataStore: DataStore<Preferences>, navController: NavHostC
 
                         visibleApps.forEachIndexed { index, app ->
                             val mapping = mappingByPackage[app.packageName]
-                            val profileName = mapping?.profileId?.let { id ->
-                                profileById[id]?.name ?: id
-                            } ?: "None"
+                            val mappedProfileId = mapping?.profileId?.trim().orEmpty()
+                            val resolvedProfile = mappedProfileId.takeIf { it.isNotBlank() }?.let { id -> profileById[id] }
+                            val missingProfile = mappedProfileId.isNotBlank() && resolvedProfile == null
+                            val profileName = when {
+                                mappedProfileId.isBlank() -> "None"
+                                resolvedProfile != null -> resolvedProfile.name
+                                else -> "Missing"
+                            }
 
                             Row(
                                 modifier = Modifier
@@ -1045,8 +1055,15 @@ fun AppMappingsScreen(dataStore: DataStore<Preferences>, navController: NavHostC
                                 Text(
                                     text = profileName,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = if (missingProfile) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                if (missingProfile) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                }
                             }
                             if (index < visibleApps.lastIndex) {
                                 HorizontalDivider()
@@ -1120,6 +1137,7 @@ fun AppMappingDetailScreen(
     packageName: String,
 ) {
     val repository = remember { SettingsRepository(dataStore) }
+    val providers by repository.providers.collectAsState(initial = emptyList())
     val appMappings by repository.appPromptMappings.collectAsState(initial = emptyList())
     val promptProfiles by repository.promptProfiles.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
@@ -1129,17 +1147,47 @@ fun AppMappingDetailScreen(
         appMappings.firstOrNull { it.packageName == packageName }
     }
 
+    val initial = remember(existing, packageName) { existing ?: AppPromptMapping(packageName = packageName) }
+
     var profileId by remember { mutableStateOf<String?>(null) }
+    var appendMode by remember { mutableStateOf(AppendMode.APPEND) }
+    var appPromptAppend by remember { mutableStateOf("") }
+
+    var sttOverrideProviderId by remember { mutableStateOf("") }
+    var sttOverrideModelId by remember { mutableStateOf("") }
+    var textOverrideProviderId by remember { mutableStateOf("") }
+    var textOverrideModelId by remember { mutableStateOf("") }
+
     var initialized by remember { mutableStateOf(false) }
 
-    LaunchedEffect(existing?.packageName, packageName) {
+    LaunchedEffect(initial.packageName) {
         if (!initialized) {
-            profileId = existing?.profileId
+            profileId = initial.profileId
+            appendMode = initial.appendMode
+            appPromptAppend = initial.appPromptAppend.orEmpty()
+            sttOverrideProviderId = initial.sttOverride?.providerId.orEmpty()
+            sttOverrideModelId = initial.sttOverride?.modelId.orEmpty()
+            textOverrideProviderId = initial.textOverride?.providerId.orEmpty()
+            textOverrideModelId = initial.textOverride?.modelId.orEmpty()
             initialized = true
         }
     }
 
     val canSave = remember(initialized) { initialized }
+    val missingProfile = remember(profileId, promptProfiles) {
+        val id = profileId?.trim().orEmpty()
+        id.isNotBlank() && promptProfiles.none { it.id == id }
+    }
+
+    fun overrideOrNull(providerId: String, modelId: String): ProviderModelOverride? {
+        val p = providerId.trim()
+        val m = modelId.trim()
+        return if (p.isBlank() && m.isBlank()) {
+            null
+        } else {
+            ProviderModelOverride(providerId = p, modelId = m)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -1155,10 +1203,17 @@ fun AppMappingDetailScreen(
                         onClick = {
                             scope.launch {
                                 val normalizedProfileId = profileId?.trim()?.takeIf { it.isNotBlank() }
+                                val normalizedAppend = appPromptAppend.trim().takeIf { it.isNotBlank() }
+                                val sttOverride = overrideOrNull(sttOverrideProviderId, sttOverrideModelId)
+                                val textOverride = overrideOrNull(textOverrideProviderId, textOverrideModelId)
                                 repository.upsertAppPromptMapping(
                                     AppPromptMapping(
                                         packageName = packageName,
                                         profileId = normalizedProfileId,
+                                        appendMode = appendMode,
+                                        appPromptAppend = normalizedAppend,
+                                        sttOverride = sttOverride,
+                                        textOverride = textOverride,
                                     )
                                 )
                                 Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
@@ -1248,18 +1303,414 @@ fun AppMappingDetailScreen(
                         }
                     }
 
-                    if (existing != null) {
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    repository.deleteAppPromptMapping(packageName)
-                                    Toast.makeText(context, "Removed mapping", Toast.LENGTH_SHORT).show()
-                                    navController.popBackStack()
-                                }
-                            },
+                    if (missingProfile) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("Remove mapping")
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.onErrorContainer)
+                                Text(
+                                    text = "Missing profile; mapping will fallback until updated.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            SettingsGroup(title = "Prompt append") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = appendMode == AppendMode.APPEND,
+                            onClick = { appendMode = AppendMode.APPEND },
+                            label = { Text("Append") },
+                        )
+                        FilterChip(
+                            selected = appendMode == AppendMode.NO_APPEND,
+                            onClick = { appendMode = AppendMode.NO_APPEND },
+                            label = { Text("No append") },
+                        )
+                    }
+
+                    if (appendMode == AppendMode.NO_APPEND) {
+                        Text(
+                            text = "Append disabled for this app. Base prompt still applies.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value = appPromptAppend,
+                            onValueChange = { appPromptAppend = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 4,
+                            maxLines = 10,
+                            label = { Text("App-specific append (optional)") },
+                        )
+                    }
+                }
+            }
+
+            ProviderModelSelectionEditor(
+                title = "Dictation override (STT)",
+                providers = providers,
+                allowedKinds = setOf(ModelKind.STT, ModelKind.MULTIMODAL),
+                providerId = sttOverrideProviderId,
+                modelId = sttOverrideModelId,
+                onUpdate = { providerId, modelId ->
+                    sttOverrideProviderId = providerId
+                    sttOverrideModelId = modelId
+                },
+            )
+
+            ProviderModelSelectionEditor(
+                title = "Enhancement override (Text)",
+                providers = providers,
+                allowedKinds = setOf(ModelKind.TEXT, ModelKind.MULTIMODAL),
+                providerId = textOverrideProviderId,
+                modelId = textOverrideModelId,
+                onUpdate = { providerId, modelId ->
+                    textOverrideProviderId = providerId
+                    textOverrideModelId = modelId
+                },
+            )
+
+            if (existing != null) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            repository.deleteAppPromptMapping(packageName)
+                            Toast.makeText(context, "Removed mapping", Toast.LENGTH_SHORT).show()
+                            navController.popBackStack()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Remove mapping")
+                }
+            }
+
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProviderModelSelectionEditor(
+    title: String,
+    providers: List<ServiceProvider>,
+    allowedKinds: Set<ModelKind>,
+    providerId: String,
+    modelId: String,
+    onUpdate: (String, String) -> Unit,
+) {
+    var providerExpanded by remember { mutableStateOf(false) }
+    var modelExpanded by remember { mutableStateOf(false) }
+
+    val selectedProvider = remember(providers, providerId) { providers.firstOrNull { it.id == providerId } }
+    val selectedModel = remember(selectedProvider, modelId) { selectedProvider?.models?.firstOrNull { it.id == modelId } }
+
+    fun isCompatible(model: ModelConfig): Boolean {
+        return model.kind in allowedKinds
+    }
+
+    SettingsGroup(title = title) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ExposedDropdownMenuBox(
+                expanded = providerExpanded,
+                onExpandedChange = { providerExpanded = !providerExpanded },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                val providerLabel = selectedProvider?.name
+                    ?: providerId.takeIf { it.isNotBlank() }
+                    ?: "Inherit"
+                OutlinedTextField(
+                    readOnly = true,
+                    value = providerLabel,
+                    onValueChange = {},
+                    label = { Text("Provider") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = providerExpanded) },
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                )
+                ExposedDropdownMenu(
+                    expanded = providerExpanded,
+                    onDismissRequest = { providerExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Inherit") },
+                        onClick = {
+                            onUpdate("", "")
+                            providerExpanded = false
+                        },
+                    )
+                    providers.forEach { provider ->
+                        DropdownMenuItem(
+                            text = { Text(provider.name) },
+                            onClick = {
+                                onUpdate(provider.id, "")
+                                providerExpanded = false
+                            },
+                        )
+                    }
+                    if (providers.isEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("No providers configured") },
+                            onClick = { providerExpanded = false },
+                        )
+                    }
+                }
+            }
+
+            ExposedDropdownMenuBox(
+                expanded = modelExpanded,
+                onExpandedChange = { if (selectedProvider != null) modelExpanded = !modelExpanded },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                val modelLabel = when {
+                    selectedProvider == null -> modelId.takeIf { it.isNotBlank() } ?: "Inherit"
+                    selectedModel != null -> selectedModel.name
+                    modelId.isNotBlank() -> modelId
+                    else -> "Inherit"
+                }
+                OutlinedTextField(
+                    readOnly = true,
+                    enabled = selectedProvider != null,
+                    value = modelLabel,
+                    onValueChange = {},
+                    label = { Text("Model") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelExpanded) },
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                )
+                ExposedDropdownMenu(
+                    expanded = modelExpanded,
+                    onDismissRequest = { modelExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Inherit") },
+                        onClick = {
+                            onUpdate(providerId, "")
+                            modelExpanded = false
+                        },
+                    )
+                    val compatibleModels = selectedProvider?.models?.filter(::isCompatible).orEmpty()
+                    compatibleModels.forEach { model ->
+                        DropdownMenuItem(
+                            text = { Text(model.name) },
+                            onClick = {
+                                onUpdate(providerId, model.id)
+                                modelExpanded = false
+                            },
+                        )
+                    }
+                    if (compatibleModels.isEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("No compatible models") },
+                            onClick = { modelExpanded = false },
+                        )
+                    }
+                }
+            }
+
+            if (providerId.isNotBlank() || modelId.isNotBlank()) {
+                OutlinedButton(
+                    onClick = { onUpdate("", "") },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Clear")
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LanguageDefaultsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
+    val repository = remember { SettingsRepository(dataStore) }
+    val providers by repository.providers.collectAsState(initial = emptyList())
+    val languageDefaults by repository.profiles.collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    var showAddDialog by remember { mutableStateOf(false) }
+    var draftLanguageCode by remember { mutableStateOf("") }
+    var expandedCode by remember { mutableStateOf<String?>(null) }
+
+    fun upsert(updated: LanguageProfile) {
+        val normalized = updated.languageCode.trim()
+        if (normalized.isBlank()) {
+            return
+        }
+        scope.launch {
+            val next = languageDefaults.toMutableList()
+            val index = next.indexOfFirst { it.languageCode.equals(normalized, ignoreCase = true) }
+            val effective = updated.copy(languageCode = normalized)
+            if (index >= 0) {
+                next[index] = effective
+            } else {
+                next.add(effective)
+            }
+            repository.saveProfiles(next)
+        }
+    }
+
+    fun delete(languageCode: String) {
+        val normalized = languageCode.trim()
+        if (normalized.isBlank()) {
+            return
+        }
+        scope.launch {
+            val next = languageDefaults.filterNot { it.languageCode.equals(normalized, ignoreCase = true) }
+            repository.saveProfiles(next)
+            Toast.makeText(context, "Removed", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            MediumTopAppBar(
+                title = { Text("Per-language defaults") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showAddDialog = true }) {
+                        Icon(Icons.Default.Add, "Add")
+                    }
+                },
+            )
+        },
+        contentWindowInsets = WindowInsets.statusBars,
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Spacer(Modifier.height(16.dp))
+
+            if (languageDefaults.isEmpty()) {
+                SettingsGroup(title = "Languages") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "No per-language defaults yet",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            } else {
+                val sorted = remember(languageDefaults) {
+                    languageDefaults.sortedBy { it.languageCode.lowercase(Locale.getDefault()) }
+                }
+                sorted.forEach { profile ->
+                    val code = profile.languageCode
+                    val isExpanded = expandedCode.equals(code, ignoreCase = true)
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = code,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Text(
+                                        text = "STT + Text defaults",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                IconButton(onClick = { expandedCode = if (isExpanded) null else code }) {
+                                    Icon(
+                                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = "Expand",
+                                    )
+                                }
+                                IconButton(onClick = { delete(code) }) {
+                                    Icon(Icons.Default.Delete, "Delete")
+                                }
+                            }
+
+                            if (isExpanded) {
+                                ProviderModelSelectionEditor(
+                                    title = "Dictation (STT)",
+                                    providers = providers,
+                                    allowedKinds = setOf(ModelKind.STT, ModelKind.MULTIMODAL),
+                                    providerId = profile.transcriptionProviderId,
+                                    modelId = profile.transcriptionModelId,
+                                    onUpdate = { providerId, modelId ->
+                                        upsert(
+                                            profile.copy(
+                                                transcriptionProviderId = providerId,
+                                                transcriptionModelId = modelId,
+                                            )
+                                        )
+                                    },
+                                )
+
+                                ProviderModelSelectionEditor(
+                                    title = "Enhancement (Text)",
+                                    providers = providers,
+                                    allowedKinds = setOf(ModelKind.TEXT, ModelKind.MULTIMODAL),
+                                    providerId = profile.smartFixProviderId,
+                                    modelId = profile.smartFixModelId,
+                                    onUpdate = { providerId, modelId ->
+                                        upsert(
+                                            profile.copy(
+                                                smartFixProviderId = providerId,
+                                                smartFixModelId = modelId,
+                                            )
+                                        )
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -1267,6 +1718,72 @@ fun AppMappingDetailScreen(
 
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
+    }
+
+    if (showAddDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAddDialog = false
+                draftLanguageCode = ""
+            },
+            title = { Text("Add language") },
+            text = {
+                OutlinedTextField(
+                    value = draftLanguageCode,
+                    onValueChange = { draftLanguageCode = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("Language code") },
+                    placeholder = { Text("e.g. en, en-US, ar") },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val normalized = draftLanguageCode.trim()
+                        val exists = languageDefaults.any { it.languageCode.equals(normalized, ignoreCase = true) }
+                        if (normalized.isBlank()) {
+                            return@TextButton
+                        }
+                        if (exists) {
+                            Toast.makeText(context, "Already exists", Toast.LENGTH_SHORT).show()
+                            showAddDialog = false
+                            draftLanguageCode = ""
+                            expandedCode = normalized
+                            return@TextButton
+                        }
+                        scope.launch {
+                            repository.saveProfiles(
+                                languageDefaults + LanguageProfile(
+                                    languageCode = normalized,
+                                    transcriptionProviderId = "",
+                                    transcriptionModelId = "",
+                                    smartFixProviderId = "",
+                                    smartFixModelId = "",
+                                )
+                            )
+                            Toast.makeText(context, "Added", Toast.LENGTH_SHORT).show()
+                            expandedCode = normalized
+                            showAddDialog = false
+                            draftLanguageCode = ""
+                        }
+                    },
+                    enabled = draftLanguageCode.trim().isNotBlank(),
+                ) {
+                    Text("Add")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showAddDialog = false
+                        draftLanguageCode = ""
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 
@@ -1326,6 +1843,24 @@ fun ProviderSelectionsScreen(dataStore: DataStore<Preferences>, navController: N
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Spacer(Modifier.height(16.dp))
+
+            SettingsGroup(title = "Defaults") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ListItem(
+                        headlineContent = { Text("Per-language defaults") },
+                        supportingContent = { Text("Choose STT and text defaults per language") },
+                        leadingContent = { Icon(Icons.Default.Translate, null) },
+                        modifier = Modifier.clickable {
+                            navController.navigate(SettingsScreen.LanguageDefaults.route)
+                        },
+                    )
+                }
+            }
 
             SettingsGroup(title = "Dictation (STT)") {
                 Column(
