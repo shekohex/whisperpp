@@ -5,10 +5,10 @@
 **Current Phase:** 04
 **Current Phase Name:** Prompts, Profiles & Enhancement
 **Status:** Ready to execute
-**Current Plan:** 4
+**Current Plan:** 6
 **Total Plans in Phase:** 7
 
-**Progress:** [████████░░] 82%
+**Progress:** [█████████░] 86%
 
 ## Performance Metrics
 
@@ -26,6 +26,7 @@
 | Phase 04-prompts-profiles-enhancement P03 | 2 min | 2 tasks | 3 files |
 | Phase 04-prompts-profiles-enhancement P02 | 3 min | 2 tasks | 2 files |
 | Phase 04-prompts-profiles-enhancement P01 | 21 min | 2 tasks | 5 files |
+| Phase 04 P05 | 17 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -65,6 +66,7 @@
 - [Phase 03]: Best-effort finalize uses last known streaming transcript if non-streaming transcription fails
 - [Phase 04]: EnhancementRunner uses withTimeout + single retry envelope
 - [Phase 04]: Enhancement skip policy: blank/punctuation-only transcripts are never sent
+- [Phase 04]: Prompts & profiles settings: base prompt uses explicit Save action (trim-on-save)
 
 ### Blockers
 
@@ -76,6 +78,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-05T04:23:20.209Z
-**Stopped At:** Completed 04-03-PLAN.md
+**Last session:** 2026-03-05T04:49:09.233Z
+**Stopped At:** Completed 04-05-PLAN.md
 **Resume file:** None
