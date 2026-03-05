@@ -42,8 +42,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Per-App Profiles
 
-- [ ] **PROF-01**: User can define a global base prompt
-- [ ] **PROF-02**: User can create prompt profiles and manually map apps (by package name) to a profile
+- [x] **PROF-01**: User can define a global base prompt
+- [x] **PROF-02**: User can create prompt profiles and manually map apps (by package name) to a profile
 - [x] **PROF-03**: Per-app mapping can override prompt append and the chosen STT/text providers/models
 - [x] **PROF-04**: User can configure per-language defaults (language -> STT model/provider and text model/provider)
 
@@ -130,8 +130,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENH-03 | 4 | Pending |
 | ENH-04 | 4 | Pending |
 | ENH-05 | 5 | Pending |
-| PROF-01 | 4 | Pending |
-| PROF-02 | 4 | Pending |
+| PROF-01 | 4 | Complete |
+| PROF-02 | 4 | Complete |
 | PROF-03 | 4 | Complete |
 | PROF-04 | 4 | Complete |
 | CMD-01 | 5 | Pending |
