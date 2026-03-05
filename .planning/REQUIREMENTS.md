@@ -34,7 +34,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Enhancement & Prompts
 
-- [ ] **ENH-01**: After dictation stops, Whisper++ runs enhancement by default and pastes enhanced text (fallback to raw on failure)
+- [x] **ENH-01**: After dictation stops, Whisper++ runs enhancement by default and pastes enhanced text (fallback to raw on failure)
 - [ ] **ENH-02**: Enhancement uses an effective prompt = base prompt + per-app prompt append (when configured)
 - [ ] **ENH-03**: When enhancement succeeds, Whisper++ auto-replaces the dictated segment in place
 - [ ] **ENH-04**: User can undo the last enhancement replacement (restores raw transcript)
@@ -125,7 +125,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DICT-05 | 3 | Complete |
 | DICT-06 | 3 | Complete |
 | DICT-07 | 3 | Complete |
-| ENH-01 | 4 | Pending |
+| ENH-01 | 4 | Complete |
 | ENH-02 | 4 | Pending |
 | ENH-03 | 4 | Pending |
 | ENH-04 | 4 | Pending |

@@ -2,13 +2,13 @@
 
 **Core value:** Speak anywhere; get accurate, context-appropriate text inserted instantly.
 
-**Current Phase:** 03
-**Current Phase Name:** Dictation
-**Status:** Milestone complete
-**Current Plan:** Not started
-**Total Plans in Phase:** 4
+**Current Phase:** 04
+**Current Phase Name:** Prompts, Profiles & Enhancement
+**Status:** Ready to execute
+**Current Plan:** 4
+**Total Plans in Phase:** 7
 
-**Progress:** [██████████] 100%
+**Progress:** [████████░░] 77%
 
 ## Performance Metrics
 
@@ -23,6 +23,7 @@
 | Phase 03-dictation P02 | 32 min | 3 tasks | 6 files |
 | Phase 03-dictation P03 | 9 min | 2 tasks | 4 files |
 | Phase 03-dictation P04 | 25 min | 3 tasks | 5 files |
+| Phase 04-prompts-profiles-enhancement P02 | 3 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -60,6 +61,8 @@
 - [Phase 03]: Gate streaming partials to OpenAI provider + realtime protocol derivable from base URL
 - [Phase 03]: Finalize insertion always uses composing replace path (setComposingText + finishComposingText)
 - [Phase 03]: Best-effort finalize uses last known streaming transcript if non-streaming transcription fails
+- [Phase 04]: EnhancementRunner uses withTimeout + single retry envelope
+- [Phase 04]: Enhancement skip policy: blank/punctuation-only transcripts are never sent
 
 ### Blockers
 
@@ -71,6 +74,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-03T20:18:28.123Z
-**Stopped At:** Completed 03-dictation-04-PLAN.md
+**Last session:** 2026-03-05T04:04:02.188Z
+**Stopped At:** Completed 04-02-PLAN.md
 **Resume file:** None
