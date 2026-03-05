@@ -2,13 +2,13 @@
 
 **Core value:** Speak anywhere; get accurate, context-appropriate text inserted instantly.
 
-**Current Phase:** 04
-**Current Phase Name:** Prompts, Profiles & Enhancement
-**Status:** Milestone complete
-**Current Plan:** Not started
-**Total Plans in Phase:** 7
+**Current Phase:** 05
+**Current Phase Name:** Command Mode & Presets
+**Status:** Ready to execute
+**Current Plan:** 3
+**Total Plans in Phase:** 3
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 92%
 
 ## Performance Metrics
 
@@ -30,6 +30,7 @@
 | Phase 04 P04 | 44 min | 3 tasks | 5 files |
 | Phase 04 P07 | 1 min | 2 tasks | 2 files |
 | Phase 04-prompts-profiles-enhancement P06 | 12 min | 2 tasks | 1 files |
+| Phase 05-command-mode-presets P02 | 10 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,7 @@
 - [Phase 04]: Prompts & profiles settings: base prompt uses explicit Save action (trim-on-save)
 - [Phase 04]: Enhancement pipeline is raw-first with segment-scoped replace + single enhancement-undo
 - [Phase 04]: RuntimeSelectionResolver precedence applied for dictation STT and enhancement TEXT, with non-blocking notices
+- [Phase 05]: SelectionResolver returns NeedsClipboard(snapshot) when selection indices exist but selected text is unreadable
 
 ### Blockers
 
@@ -83,6 +85,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-05T05:46:33.356Z
-**Stopped At:** Completed 04-06-PLAN.md
+**Last session:** 2026-03-05T22:31:57.264Z
+**Stopped At:** Completed 05-02-PLAN.md
 **Resume file:** None

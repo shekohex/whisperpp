@@ -50,9 +50,9 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Command Mode (Selected Text)
 
 - [ ] **CMD-01**: User can enter command mode via a dedicated Command key
-- [ ] **CMD-02**: Command mode uses selected text from the editor when available; otherwise uses a clipboard fallback workflow
+- [x] **CMD-02**: Command mode uses selected text from the editor when available; otherwise uses a clipboard fallback workflow
 - [ ] **CMD-03**: User can speak an instruction; Whisper++ transcribes it and sends (instruction + selected text) to the selected text model/provider
-- [ ] **CMD-04**: Command mode replaces the selection with the result and provides 1-tap undo
+- [x] **CMD-04**: Command mode replaces the selection with the result and provides 1-tap undo
 
 ### Analytics (Local)
 
@@ -135,9 +135,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROF-03 | 4 | Complete |
 | PROF-04 | 4 | Complete |
 | CMD-01 | 5 | Pending |
-| CMD-02 | 5 | Pending |
+| CMD-02 | 5 | Complete |
 | CMD-03 | 5 | Pending |
-| CMD-04 | 5 | Pending |
+| CMD-04 | 5 | Complete |
 | STATS-01 | 7 | Pending |
 | STATS-02 | 7 | Pending |
 | PRIV-01 | 1 | Complete |
