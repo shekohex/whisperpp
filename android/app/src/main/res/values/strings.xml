@@ -178,6 +178,37 @@
     <string name="settings_close">Close</string>
     <string name="settings_help_action">Show contextual help</string>
 
+    <string name="analytics_home_title">Time saved</string>
+    <string name="analytics_home_subtitle_active">Compared to typing over the last seven days</string>
+    <string name="analytics_home_subtitle_empty">Your next send starts a fresh seven-day streak against typing</string>
+    <string name="analytics_screen_title">Analytics dashboard</string>
+    <string name="analytics_back">Back</string>
+    <string name="analytics_hero_title">You’ve already saved</string>
+    <string name="analytics_trend_title">Last 7 days</string>
+    <string name="analytics_trend_summary">Time saved stays visible here each day so the dashboard keeps feeling alive, even while you are building momentum.</string>
+    <string name="analytics_trend_empty">No bars yet, but the trend is ready to light up with your next Whisper++ session.</string>
+    <string name="analytics_lifetime_totals_title">Lifetime totals</string>
+    <string name="analytics_lifetime_totals_hint">Since your last analytics reset</string>
+    <string name="analytics_metric_minutes">Dictation minutes</string>
+    <string name="analytics_metric_wpm">Words per minute</string>
+    <string name="analytics_metric_keystrokes">Keystrokes saved</string>
+    <string name="analytics_metric_minutes_short">Minutes</string>
+    <string name="analytics_metric_wpm_short">WPM</string>
+    <string name="analytics_metric_keystrokes_short">Keys saved</string>
+    <string name="analytics_session_breakdown_title">Session breakdown</string>
+    <string name="analytics_completed_sessions">Sent sessions</string>
+    <string name="analytics_cancelled_sessions">Cancelled sessions</string>
+    <string name="analytics_word_breakdown_title">Word breakdown</string>
+    <string name="analytics_raw_words">Raw transcript words</string>
+    <string name="analytics_final_words">Final inserted words</string>
+    <string name="analytics_reset_title">Reset local analytics</string>
+    <string name="analytics_reset_summary">Clear lifetime totals and the seven-day trend on this device without leaving the dashboard.</string>
+    <string name="analytics_reset_action">Reset analytics</string>
+    <string name="analytics_reset_confirm_title">Reset analytics?</string>
+    <string name="analytics_reset_confirm_message">This permanently clears your local totals, breakdowns, and seven-day trend for Whisper++.</string>
+    <string name="analytics_reset_confirm_action">Reset</string>
+    <string name="analytics_reset_dismiss_action">Keep data</string>
+
     <string name="transform_preset_cleanup_title">Cleanup</string>
     <string name="transform_preset_cleanup_description">Fix punctuation, capitalization, and typos.</string>
     <string name="transform_preset_shorten_title">Shorten</string>
