@@ -121,6 +121,54 @@ data class AdvancedPreferencesBackup(
     val updateChannel: String = "stable",
 )
 
+enum class RestoreMode {
+    OVERWRITE,
+    MERGE,
+}
+
+enum class RestoreWarningKind {
+    NEWER_SCHEMA_VERSION,
+    OLDER_SCHEMA_VERSION,
+    NEWER_APP_VERSION,
+    OLDER_APP_VERSION,
+}
+
+data class RestoreWarning(
+    val kind: RestoreWarningKind,
+    val message: String,
+)
+
+data class SkippedImportItem(
+    val categoryId: String,
+    val itemKey: String? = null,
+    val reason: String,
+)
+
+data class CategoryPreview(
+    val categoryId: String,
+    val label: String,
+    val containsSensitiveContent: Boolean,
+    val isAvailable: Boolean,
+    val selectable: Boolean,
+    val includedByDefault: Boolean,
+    val importedItemCount: Int,
+    val existingItemCount: Int,
+    val resultingItemCount: Int,
+    val conflictKeys: List<String> = emptyList(),
+)
+
+data class ImportAnalysis(
+    val envelopeSchemaVersion: Int,
+    val payloadSchemaVersion: Int,
+    val backupAppVersionName: String,
+    val exportedAtUtc: String,
+    val restoreMode: RestoreMode,
+    val resolvedPayload: SettingsBackupPayload,
+    val categoryPreviews: List<CategoryPreview>,
+    val warnings: List<RestoreWarning> = emptyList(),
+    val skippedItems: List<SkippedImportItem> = emptyList(),
+)
+
 val SETTINGS_BACKUP_CATEGORY_MANIFEST: List<SettingsBackupCategoryManifestEntry> = listOf(
     SettingsBackupCategoryManifestEntry(
         id = SETTINGS_BACKUP_CATEGORY_PROVIDERS_MODELS,
