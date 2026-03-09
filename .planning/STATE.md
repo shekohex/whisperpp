@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 07
 current_phase_name: Local Analytics Dashboard
-current_plan: 2
-status: in_progress
-stopped_at: Completed 07-local-analytics-dashboard-01-PLAN.md
-last_updated: "2026-03-09T22:31:18Z"
+current_plan: 3
+status: executing
+stopped_at: Completed 07-local-analytics-dashboard-02-PLAN.md
+last_updated: "2026-03-09T22:43:54.244Z"
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 32
-  completed_plans: 30
-  percent: 94
+  completed_plans: 31
+  percent: 97
 ---
 
 # STATE: Whisper++
@@ -22,11 +22,11 @@ progress:
 
 **Current Phase:** 07
 **Current Phase Name:** Local Analytics Dashboard
-**Status:** Plan 01 complete — ready for plan 02
-**Current Plan:** 2
+**Status:** Plan 02 complete — ready for plan 03
+**Current Plan:** 3
 **Total Plans in Phase:** 3
 
-**Progress:** [█████████░] 94%
+**Progress:** [██████████] 97%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ progress:
 | Phase 06 P02 | 24 min | 2 tasks | 4 files |
 | Phase 06 P04 | 21 min | 2 tasks | 4 files |
 | Phase 07-local-analytics-dashboard P01 | 16 min | 3 tasks | 9 files |
+| Phase 07-local-analytics-dashboard P02 | 8 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,8 @@ progress:
 - [Phase 07-local-analytics-dashboard]: Analytics persistence uses a dedicated datastore file so backup exclusion can operate at file granularity.
 - [Phase 07-local-analytics-dashboard]: Dashboard strings remain derived from raw counts at read time; formatted copy is never persisted.
 - [Phase 07-local-analytics-dashboard]: Seven-day history is stored as a fixed LocalDate-keyed bucket window with dates serialized as strings for JVM-safe tests.
+- [Phase 07-local-analytics-dashboard]: WhisperInputService now keys analytics on DictationController sessionId so retries, duplicate callbacks, and streaming terminal paths collapse into one outcome write.
+- [Phase 07-local-analytics-dashboard]: Completed analytics are emitted only after the raw insert and enhancement outcome are known, with Smart Fix cancellation after raw insertion treated as a raw completion instead of a cancelled run.
 
 ### Blockers
 
@@ -128,6 +131,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-09T22:30:14.675Z
-**Stopped At:** Completed 07-local-analytics-dashboard-01-PLAN.md
+**Last session:** 2026-03-09T22:43:54.242Z
+**Stopped At:** Completed 07-local-analytics-dashboard-02-PLAN.md
 **Resume file:** None
