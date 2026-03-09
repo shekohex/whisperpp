@@ -47,7 +47,7 @@
       "color": "#FF6B35"
     },
     "gsd-verifier": {
-      "model": "openai/gpt-5.3-codex-spark",
+      "model": "openai/gpt-5.4",
       "variant": "high",
       "color": "#4285F4"
     },
