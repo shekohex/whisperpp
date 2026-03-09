@@ -56,7 +56,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Analytics (Local)
 
-- [ ] **STATS-01**: Whisper++ tracks local-only usage stats (dictation minutes, sessions, words dictated, words/min, keystrokes saved)
+- [x] **STATS-01**: Whisper++ tracks local-only usage stats (dictation minutes, sessions, words dictated, words/min, keystrokes saved)
 - [ ] **STATS-02**: Settings home includes an analytics dashboard including an estimated "time saved" summary
 
 ### Privacy & Safety
@@ -66,7 +66,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **PRIV-03**: Network logging redacts auth headers and does not log user audio/text payloads by default
 - [ ] **PRIV-04**: User can set per-app send policy to block sending audio/text to external providers and Whisper++ enforces it
 - [ ] **PRIV-05**: UI clearly discloses what data is sent (audio/text) and to which provider endpoint(s)
-- [ ] **PRIV-06**: Usage analytics are stored locally only, can be reset, and are not transmitted by default
+- [x] **PRIV-06**: Usage analytics are stored locally only, can be reset, and are not transmitted by default
 
 ## v2 Requirements
 
@@ -138,14 +138,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CMD-02 | 5 | Complete |
 | CMD-03 | 5 | Complete |
 | CMD-04 | 5 | Complete |
-| STATS-01 | 7 | Pending |
+| STATS-01 | 7 | Complete |
 | STATS-02 | 7 | Pending |
 | PRIV-01 | 1 | Complete |
 | PRIV-02 | 1 | Complete |
 | PRIV-03 | 1 | Complete |
 | PRIV-04 | 1 | Complete |
 | PRIV-05 | 1 | Complete |
-| PRIV-06 | 7 | Pending |
+| PRIV-06 | 7 | Complete |
 
 **Coverage:**
 - v1 requirements: 37 total

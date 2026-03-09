@@ -1,14 +1,32 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+current_phase: 07
+current_phase_name: Local Analytics Dashboard
+current_plan: 2
+status: in_progress
+stopped_at: Completed 07-local-analytics-dashboard-01-PLAN.md
+last_updated: "2026-03-09T22:31:18Z"
+progress:
+  total_phases: 7
+  completed_phases: 6
+  total_plans: 32
+  completed_plans: 30
+  percent: 94
+---
+
 # STATE: Whisper++
 
 **Core value:** Speak anywhere; get accurate, context-appropriate text inserted instantly.
 
-**Current Phase:** 06
-**Current Phase Name:** Settings UX + Import/Export
-**Status:** Phase complete — ready for verification
-**Current Plan:** 4
-**Total Plans in Phase:** 4
+**Current Phase:** 07
+**Current Phase Name:** Local Analytics Dashboard
+**Status:** Plan 01 complete — ready for plan 02
+**Current Plan:** 2
+**Total Plans in Phase:** 3
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 94%
 
 ## Performance Metrics
 
@@ -37,6 +55,7 @@
 | Phase 06-settings-ux-import-export P03 | 6 min | 2 tasks | 6 files |
 | Phase 06 P02 | 24 min | 2 tasks | 4 files |
 | Phase 06 P04 | 21 min | 2 tasks | 4 files |
+| Phase 07-local-analytics-dashboard P01 | 16 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -95,6 +114,9 @@
 - [Phase 06]: Backup and restore now lives in a dedicated nested settings screen instead of loose home actions.
 - [Phase 06]: Backup and restore status flows back to settings home through savedStateHandle so users stay in settings after export or restore.
 - [Phase 06]: Restore repair actions route credential fixes to Providers and selection fixes to Provider selections.
+- [Phase 07-local-analytics-dashboard]: Analytics persistence uses a dedicated datastore file so backup exclusion can operate at file granularity.
+- [Phase 07-local-analytics-dashboard]: Dashboard strings remain derived from raw counts at read time; formatted copy is never persisted.
+- [Phase 07-local-analytics-dashboard]: Seven-day history is stored as a fixed LocalDate-keyed bucket window with dates serialized as strings for JVM-safe tests.
 
 ### Blockers
 
@@ -106,6 +128,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-09T19:46:44.127Z
-**Stopped At:** Completed 06-04-PLAN.md
+**Last session:** 2026-03-09T22:30:14.675Z
+**Stopped At:** Completed 07-local-analytics-dashboard-01-PLAN.md
 **Resume file:** None
