@@ -1,8 +1,10 @@
 package com.github.shekohex.whisperpp.data
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.google.gson.Gson
@@ -48,11 +50,33 @@ interface ProviderCredentialSource {
     fun getProviderApiKey(providerId: String): String?
 }
 
+interface ProviderCredentialSink {
+    fun setProviderApiKey(providerId: String, apiKey: String)
+
+    fun clearProviderApiKey(providerId: String)
+}
+
 class SecretsStoreProviderCredentialSource(
     private val secretsStore: SecretsStore,
 ) : ProviderCredentialSource {
     override fun getProviderApiKey(providerId: String): String? {
         return secretsStore.getProviderApiKey(providerId)
+    }
+}
+
+class SecretsStoreProviderCredentials(
+    private val secretsStore: SecretsStore,
+) : ProviderCredentialSource, ProviderCredentialSink {
+    override fun getProviderApiKey(providerId: String): String? {
+        return secretsStore.getProviderApiKey(providerId)
+    }
+
+    override fun setProviderApiKey(providerId: String, apiKey: String) {
+        secretsStore.setProviderApiKey(providerId, apiKey)
+    }
+
+    override fun clearProviderApiKey(providerId: String) {
+        secretsStore.clearProviderApiKey(providerId)
     }
 }
 
@@ -63,9 +87,23 @@ private data class ParsedImportPayload(
     val payloadSchemaVersion: Int,
 )
 
+private data class SelectionSnapshot(
+    val type: RestoreSelectionType,
+    val providerKey: Preferences.Key<String>,
+    val modelKey: Preferences.Key<String>,
+    val providerId: String,
+    val modelId: String,
+)
+
+private data class SelectionRepairMutation(
+    val selection: ClearedSelection,
+    val repairEntry: RestoreRepairEntry,
+)
+
 class SettingsBackupRepository(
     private val dataStore: DataStore<Preferences>,
     private val credentialSource: ProviderCredentialSource,
+    private val credentialSink: ProviderCredentialSink? = null,
     private val gson: Gson = Gson(),
     private val timestampProvider: () -> String = { Instant.now().truncatedTo(ChronoUnit.SECONDS).toString() },
     private val currentAppVersionNameProvider: () -> String = { "" },
@@ -434,6 +472,327 @@ class SettingsBackupRepository(
                 message = "$source schema version $schemaVersion is older than supported version $SETTINGS_BACKUP_SCHEMA_VERSION.",
             )
         }
+    }
+
+    suspend fun applyImportAnalysis(
+        analysis: ImportAnalysis,
+        includedCategoryIds: Set<String> = emptySet(),
+    ): RestoreSummary {
+        val categoriesToApply = resolveCategoriesToApply(analysis, includedCategoryIds)
+        if (categoriesToApply.isNotEmpty()) {
+            val resolvedPayload = analysis.resolvedPayload
+            dataStore.edit { prefs ->
+                if (SETTINGS_BACKUP_CATEGORY_PROVIDERS_MODELS in categoriesToApply) {
+                    applyProvidersModels(prefs, resolvedPayload.providersModels)
+                }
+                if (SETTINGS_BACKUP_CATEGORY_ACTIVE_SELECTIONS in categoriesToApply) {
+                    applyActiveSelections(prefs, resolvedPayload.activeSelections)
+                }
+                if (SETTINGS_BACKUP_CATEGORY_LANGUAGE_DEFAULTS in categoriesToApply) {
+                    applyLanguageDefaults(prefs, resolvedPayload.languageDefaults)
+                }
+                if (SETTINGS_BACKUP_CATEGORY_PROMPTS_PROFILES in categoriesToApply) {
+                    applyPromptsProfiles(prefs, resolvedPayload.promptsProfiles)
+                }
+                if (SETTINGS_BACKUP_CATEGORY_APP_MAPPINGS in categoriesToApply) {
+                    applyAppMappings(prefs, resolvedPayload.appMappings)
+                }
+                if (SETTINGS_BACKUP_CATEGORY_TRANSFORM_PRESETS in categoriesToApply) {
+                    applyTransformPresets(prefs, resolvedPayload.transformPresets)
+                }
+                if (SETTINGS_BACKUP_CATEGORY_KEYBOARD_BEHAVIOR in categoriesToApply) {
+                    applyKeyboardBehavior(prefs, resolvedPayload.keyboardBehavior)
+                }
+                if (SETTINGS_BACKUP_CATEGORY_PRIVACY_SAFETY in categoriesToApply) {
+                    applyPrivacySafety(prefs, resolvedPayload.privacySafety)
+                }
+                if (SETTINGS_BACKUP_CATEGORY_ADVANCED_PREFERENCES in categoriesToApply) {
+                    applyAdvancedPreferences(prefs, resolvedPayload.advancedPreferences)
+                }
+            }
+
+            if (SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS in categoriesToApply) {
+                applyProviderCredentials(resolvedPayload.providerCredentials)
+            }
+        }
+
+        val clearedSelections = mutableListOf<ClearedSelection>()
+        val repairEntries = mutableListOf<RestoreRepairEntry>()
+
+        val prefsAfterApply = dataStore.data.first()
+        val providersAfterApply = parseProviders(prefsAfterApply[backupProvidersJsonKey])
+        val selectionValidation = validateSelections(
+            providers = providersAfterApply,
+            sttProviderId = prefsAfterApply.stringValue(backupActiveSttProviderIdKey),
+            sttModelId = prefsAfterApply.stringValue(backupActiveSttModelIdKey),
+            textProviderId = prefsAfterApply.stringValue(backupActiveTextProviderIdKey),
+            textModelId = prefsAfterApply.stringValue(backupActiveTextModelIdKey),
+            commandProviderId = prefsAfterApply.stringValue(backupCommandTextProviderIdKey),
+            commandModelId = prefsAfterApply.stringValue(backupCommandTextModelIdKey),
+        )
+        if (selectionValidation.keysToClear.isNotEmpty()) {
+            val validationClears = buildSelectionValidationRepairs(
+                prefs = prefsAfterApply,
+                providers = providersAfterApply,
+                validation = selectionValidation,
+            )
+            dataStore.edit { prefs ->
+                selectionValidation.keysToClear.forEach { prefs.remove(it) }
+            }
+            clearedSelections += validationClears.map { it.selection }
+            repairEntries += validationClears.map { it.repairEntry }
+        }
+
+        val prefsAfterValidation = dataStore.data.first()
+        val missingCredentialProviders = providersAfterApply
+            .filter { it.authMode == ProviderAuthMode.API_KEY }
+            .filter { credentialSource.getProviderApiKey(it.id).isNullOrBlank() }
+        if (missingCredentialProviders.isNotEmpty()) {
+            repairEntries += missingCredentialProviders.map { provider ->
+                RestoreRepairEntry(
+                    area = RestoreRepairArea.PROVIDER_CREDENTIALS,
+                    providerId = provider.id,
+                    providerName = provider.name,
+                    message = "Re-enter the API key for ${provider.name} before using it.",
+                )
+            }
+
+            val credentialClears = buildCredentialRepairMutations(
+                prefs = prefsAfterValidation,
+                providers = providersAfterApply,
+                missingCredentialProviders = missingCredentialProviders,
+            )
+            if (credentialClears.isNotEmpty()) {
+                dataStore.edit { prefs ->
+                    credentialClears.forEach { mutation ->
+                        prefs.remove(selectionProviderKey(mutation.selection.selectionType))
+                        prefs.remove(selectionModelKey(mutation.selection.selectionType))
+                    }
+                }
+                clearedSelections += credentialClears.map { it.selection }
+                repairEntries += credentialClears.map { it.repairEntry }
+            }
+        }
+
+        return RestoreSummary(
+            restoreMode = analysis.restoreMode,
+            appliedCategories = SETTINGS_BACKUP_CATEGORY_MANIFEST.map { it.id }.filter { it in categoriesToApply },
+            skippedItems = analysis.skippedItems,
+            warnings = analysis.warnings,
+            clearedSelections = clearedSelections.distinctBy { listOf(it.selectionType, it.providerId, it.modelId, it.reason) },
+            repairChecklist = repairEntries.distinctBy { listOf(it.area, it.providerId, it.selectionType, it.message) },
+        )
+    }
+
+    private suspend fun applyProviderCredentials(category: ProviderCredentialsBackup) {
+        val sink = credentialSink ?: return
+        val prefs = dataStore.data.first()
+        val currentProviderIds = parseProviders(prefs[backupProvidersJsonKey]).map { it.id }
+        val importedProviderIds = category.credentials.map { it.providerId }
+        (currentProviderIds + importedProviderIds).distinct().forEach { providerId ->
+            sink.clearProviderApiKey(providerId)
+        }
+        category.credentials.forEach { credential ->
+            sink.setProviderApiKey(credential.providerId, credential.apiKey)
+        }
+    }
+
+    private fun resolveCategoriesToApply(
+        analysis: ImportAnalysis,
+        includedCategoryIds: Set<String>,
+    ): Set<String> {
+        val available = analysis.categoryPreviews.filter { it.isAvailable }.map { it.categoryId }.toSet()
+        if (analysis.restoreMode == RestoreMode.OVERWRITE) {
+            return available
+        }
+
+        val requested = if (includedCategoryIds.isEmpty()) {
+            analysis.categoryPreviews.filter { it.selectable && it.includedByDefault }.map { it.categoryId }.toSet()
+        } else {
+            includedCategoryIds
+        }
+
+        require(requested.all { it in available }) {
+            val invalidIds = requested.filterNot { it in available }.sorted().joinToString(", ")
+            "Unknown or unavailable backup categories selected: $invalidIds"
+        }
+        return requested
+    }
+
+    private fun buildSelectionValidationRepairs(
+        prefs: Preferences,
+        providers: List<ServiceProvider>,
+        validation: SelectionValidationResult,
+    ): List<SelectionRepairMutation> {
+        return selectionSnapshots(prefs)
+            .filter { snapshot -> snapshot.providerKey in validation.keysToClear || snapshot.modelKey in validation.keysToClear }
+            .map { snapshot ->
+                val provider = providers.find { it.id == snapshot.providerId }
+                val reason = when {
+                    provider == null || snapshot.providerId.isBlank() -> "The restored ${selectionLabel(snapshot.type)} provider is unavailable on this device."
+                    provider.models.none { it.id == snapshot.modelId } || snapshot.modelId.isBlank() -> "The restored ${selectionLabel(snapshot.type)} model is unavailable for ${provider.name}."
+                    else -> "The restored ${selectionLabel(snapshot.type)} selection is no longer valid."
+                }
+                SelectionRepairMutation(
+                    selection = ClearedSelection(
+                        selectionType = snapshot.type,
+                        providerId = snapshot.providerId,
+                        modelId = snapshot.modelId,
+                        reason = reason,
+                    ),
+                    repairEntry = RestoreRepairEntry(
+                        area = selectionArea(snapshot.type),
+                        providerId = snapshot.providerId.ifBlank { null },
+                        providerName = provider?.name,
+                        selectionType = snapshot.type,
+                        message = "Choose a new ${selectionLabel(snapshot.type)} provider/model in settings.",
+                    ),
+                )
+            }
+    }
+
+    private fun buildCredentialRepairMutations(
+        prefs: Preferences,
+        providers: List<ServiceProvider>,
+        missingCredentialProviders: List<ServiceProvider>,
+    ): List<SelectionRepairMutation> {
+        val missingProviderIds = missingCredentialProviders.map { it.id }.toSet()
+        return selectionSnapshots(prefs)
+            .filter { it.providerId.isNotBlank() && it.modelId.isNotBlank() }
+            .filter { it.providerId in missingProviderIds }
+            .map { snapshot ->
+                val provider = providers.find { it.id == snapshot.providerId }
+                val providerName = provider?.name ?: snapshot.providerId
+                SelectionRepairMutation(
+                    selection = ClearedSelection(
+                        selectionType = snapshot.type,
+                        providerId = snapshot.providerId,
+                        modelId = snapshot.modelId,
+                        reason = "Missing restored API key for $providerName.",
+                    ),
+                    repairEntry = RestoreRepairEntry(
+                        area = selectionArea(snapshot.type),
+                        providerId = snapshot.providerId,
+                        providerName = provider?.name,
+                        selectionType = snapshot.type,
+                        message = "Restore the API key for $providerName and then reselect it for ${selectionLabel(snapshot.type)}.",
+                    ),
+                )
+            }
+    }
+
+    private fun selectionSnapshots(prefs: Preferences): List<SelectionSnapshot> {
+        return listOf(
+            SelectionSnapshot(
+                type = RestoreSelectionType.ACTIVE_STT,
+                providerKey = backupActiveSttProviderIdKey,
+                modelKey = backupActiveSttModelIdKey,
+                providerId = prefs.stringValue(backupActiveSttProviderIdKey),
+                modelId = prefs.stringValue(backupActiveSttModelIdKey),
+            ),
+            SelectionSnapshot(
+                type = RestoreSelectionType.ACTIVE_TEXT,
+                providerKey = backupActiveTextProviderIdKey,
+                modelKey = backupActiveTextModelIdKey,
+                providerId = prefs.stringValue(backupActiveTextProviderIdKey),
+                modelId = prefs.stringValue(backupActiveTextModelIdKey),
+            ),
+            SelectionSnapshot(
+                type = RestoreSelectionType.COMMAND_TEXT,
+                providerKey = backupCommandTextProviderIdKey,
+                modelKey = backupCommandTextModelIdKey,
+                providerId = prefs.stringValue(backupCommandTextProviderIdKey),
+                modelId = prefs.stringValue(backupCommandTextModelIdKey),
+            ),
+        )
+    }
+
+    private fun selectionArea(type: RestoreSelectionType): RestoreRepairArea {
+        return when (type) {
+            RestoreSelectionType.ACTIVE_STT -> RestoreRepairArea.ACTIVE_STT
+            RestoreSelectionType.ACTIVE_TEXT -> RestoreRepairArea.ACTIVE_TEXT
+            RestoreSelectionType.COMMAND_TEXT -> RestoreRepairArea.COMMAND_TEXT
+        }
+    }
+
+    private fun selectionLabel(type: RestoreSelectionType): String {
+        return when (type) {
+            RestoreSelectionType.ACTIVE_STT -> "dictation"
+            RestoreSelectionType.ACTIVE_TEXT -> "enhancement"
+            RestoreSelectionType.COMMAND_TEXT -> "command mode"
+        }
+    }
+
+    private fun selectionProviderKey(type: RestoreSelectionType): Preferences.Key<String> {
+        return when (type) {
+            RestoreSelectionType.ACTIVE_STT -> backupActiveSttProviderIdKey
+            RestoreSelectionType.ACTIVE_TEXT -> backupActiveTextProviderIdKey
+            RestoreSelectionType.COMMAND_TEXT -> backupCommandTextProviderIdKey
+        }
+    }
+
+    private fun selectionModelKey(type: RestoreSelectionType): Preferences.Key<String> {
+        return when (type) {
+            RestoreSelectionType.ACTIVE_STT -> backupActiveSttModelIdKey
+            RestoreSelectionType.ACTIVE_TEXT -> backupActiveTextModelIdKey
+            RestoreSelectionType.COMMAND_TEXT -> backupCommandTextModelIdKey
+        }
+    }
+
+    private fun applyProvidersModels(prefs: MutablePreferences, category: ProvidersModelsBackup) {
+        prefs[backupProvidersJsonKey] = gson.toJson(category.providers)
+    }
+
+    private fun applyActiveSelections(prefs: MutablePreferences, category: ActiveSelectionsBackup) {
+        prefs.putStringOrRemove(backupActiveSttProviderIdKey, category.activeSttProviderId)
+        prefs.putStringOrRemove(backupActiveSttModelIdKey, category.activeSttModelId)
+        prefs.putStringOrRemove(backupActiveTextProviderIdKey, category.activeTextProviderId)
+        prefs.putStringOrRemove(backupActiveTextModelIdKey, category.activeTextModelId)
+        prefs.putStringOrRemove(backupCommandTextProviderIdKey, category.commandTextProviderId)
+        prefs.putStringOrRemove(backupCommandTextModelIdKey, category.commandTextModelId)
+    }
+
+    private fun applyLanguageDefaults(prefs: MutablePreferences, category: LanguageDefaultsBackup) {
+        prefs[backupProfilesJsonKey] = gson.toJson(category.profiles)
+    }
+
+    private fun applyPromptsProfiles(prefs: MutablePreferences, category: PromptsProfilesBackup) {
+        prefs[backupGlobalBasePromptKey] = sanitizeBasePrompt(category.globalBasePrompt)
+        prefs[backupPromptProfilesJsonKey] = gson.toJson(category.promptProfiles)
+    }
+
+    private fun applyAppMappings(prefs: MutablePreferences, category: AppMappingsBackup) {
+        prefs[backupAppPromptMappingsJsonKey] = gson.toJson(category.mappings)
+    }
+
+    private fun applyTransformPresets(prefs: MutablePreferences, category: TransformPresetsBackup) {
+        prefs.putStringOrRemove(backupEnhancementPresetIdKey, category.enhancementPresetId)
+        prefs.putStringOrRemove(backupCommandPresetIdKey, category.commandPresetId)
+    }
+
+    private fun applyKeyboardBehavior(prefs: MutablePreferences, category: KeyboardBehaviorBackup) {
+        prefs[backupAutoRecordingStartKey] = category.autoRecordingStart
+        prefs[backupAutoSwitchBackKey] = category.autoSwitchBack
+        prefs[backupAutoTranscribeOnPauseKey] = category.autoTranscribeOnPause
+        prefs[backupCancelConfirmationKey] = category.cancelConfirmation
+        prefs[backupAddTrailingSpaceKey] = category.addTrailingSpace
+        prefs[backupHapticFeedbackEnabledKey] = category.hapticFeedbackEnabled
+        prefs[backupSoundEffectsEnabledKey] = category.soundEffectsEnabled
+    }
+
+    private fun applyPrivacySafety(prefs: MutablePreferences, category: PrivacySafetyBackup) {
+        prefs[backupSmartFixEnabledKey] = category.smartFixEnabled
+        prefs[backupUseContextKey] = category.useContext
+        prefs[backupPerAppSendPolicyJsonKey] = gson.toJson(category.perAppSendPolicies)
+        prefs[backupSecureFieldExplanationDontShowAgainKey] = category.secureFieldExplanationDontShowAgain
+        prefs[backupVerboseNetworkLogsEnabledKey] = category.verboseNetworkLogsEnabled
+        prefs[backupDisclosureShownDictationAudioKey] = category.disclosureShownDictationAudio
+        prefs[backupDisclosureShownEnhancementTextKey] = category.disclosureShownEnhancementText
+        prefs[backupDisclosureShownCommandTextKey] = category.disclosureShownCommandText
+    }
+
+    private fun applyAdvancedPreferences(prefs: MutablePreferences, category: AdvancedPreferencesBackup) {
+        prefs.putStringOrRemove(backupUpdateChannelKey, category.updateChannel)
     }
 
     private fun parseImportPayload(payloadJson: String): ParsedImportPayload {
@@ -1095,6 +1454,18 @@ private inline fun <reified T : Enum<T>> JsonObject.enumValue(
         return defaultValue
     }
     return runCatching { enumValueOf<T>(rawValue) }.getOrElse { defaultValue }
+}
+
+private fun MutablePreferences.putStringOrRemove(
+    key: Preferences.Key<String>,
+    value: String,
+) {
+    val trimmed = value.trim()
+    if (trimmed.isEmpty()) {
+        remove(key)
+    } else {
+        this[key] = trimmed
+    }
 }
 
 private fun Preferences.stringValue(key: Preferences.Key<String>): String {

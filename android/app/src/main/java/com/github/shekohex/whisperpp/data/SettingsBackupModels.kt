@@ -169,6 +169,43 @@ data class ImportAnalysis(
     val skippedItems: List<SkippedImportItem> = emptyList(),
 )
 
+enum class RestoreSelectionType {
+    ACTIVE_STT,
+    ACTIVE_TEXT,
+    COMMAND_TEXT,
+}
+
+enum class RestoreRepairArea {
+    PROVIDER_CREDENTIALS,
+    ACTIVE_STT,
+    ACTIVE_TEXT,
+    COMMAND_TEXT,
+}
+
+data class ClearedSelection(
+    val selectionType: RestoreSelectionType,
+    val providerId: String,
+    val modelId: String,
+    val reason: String,
+)
+
+data class RestoreRepairEntry(
+    val area: RestoreRepairArea,
+    val providerId: String? = null,
+    val providerName: String? = null,
+    val selectionType: RestoreSelectionType? = null,
+    val message: String,
+)
+
+data class RestoreSummary(
+    val restoreMode: RestoreMode,
+    val appliedCategories: List<String>,
+    val skippedItems: List<SkippedImportItem>,
+    val warnings: List<RestoreWarning>,
+    val clearedSelections: List<ClearedSelection>,
+    val repairChecklist: List<RestoreRepairEntry>,
+)
+
 val SETTINGS_BACKUP_CATEGORY_MANIFEST: List<SettingsBackupCategoryManifestEntry> = listOf(
     SettingsBackupCategoryManifestEntry(
         id = SETTINGS_BACKUP_CATEGORY_PROVIDERS_MODELS,
