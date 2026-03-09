@@ -155,3 +155,10 @@ Plans:
 1. Users can view local-only usage stats (dictation minutes, sessions, words dictated, words/min, keystrokes saved).
 2. Settings home includes an analytics dashboard with an estimated time-saved summary.
 3. Users can reset analytics, and analytics are not transmitted by default.
+
+**Plans:** 3 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — Build the local-only analytics repository, formatter, and backup/privacy boundary
+- [ ] 07-02-PLAN.md — Capture completed vs cancelled dictation analytics exactly once in the IME runtime
+- [ ] 07-03-PLAN.md — Add the settings-home analytics mini dashboard, dedicated analytics screen, and reset UI
