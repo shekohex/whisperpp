@@ -88,6 +88,7 @@ sealed class SettingsScreen(val route: String) {
                 route == PostProcessing.route -> true
                 route == Keyboard.route -> true
                 route == PrivacySafety.route -> true
+                route == BackupRestore.route -> true
                 route == ProviderSelections.route -> true
                 route == LanguageDefaults.route -> true
                 route == Presets.route -> true
@@ -106,6 +107,7 @@ sealed class SettingsScreen(val route: String) {
     object PostProcessing : SettingsScreen("post_processing")
     object Keyboard : SettingsScreen("keyboard")
     object PrivacySafety : SettingsScreen("privacy_safety")
+    object BackupRestore : SettingsScreen("backup_restore")
     object ProviderSelections : SettingsScreen("provider_selections")
     object LanguageDefaults : SettingsScreen("language_defaults")
     object Presets : SettingsScreen("presets")
@@ -173,6 +175,9 @@ fun SettingsNavigation(
         }
         composable(SettingsScreen.PrivacySafety.route) {
             PrivacySafetyScreen(dataStore, navController)
+        }
+        composable(SettingsScreen.BackupRestore.route) {
+            BackupRestoreScreen(dataStore, navController)
         }
         composable(SettingsScreen.ProviderSelections.route) {
             ProviderSelectionsScreen(dataStore, navController)

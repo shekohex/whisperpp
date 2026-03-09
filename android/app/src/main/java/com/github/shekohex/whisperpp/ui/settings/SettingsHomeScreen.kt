@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -34,8 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Mic
@@ -48,7 +45,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
@@ -63,7 +59,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,11 +93,7 @@ import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_CLEANUP
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
 import com.github.shekohex.whisperpp.data.presetById
 import com.github.shekohex.whisperpp.data.validateSelections
-import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 private data class SettingsSetupIssue(
     val message: String,
@@ -118,9 +109,9 @@ fun SettingsHomeScreen(
     showUpdate: Boolean = false,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     val repository = remember { SettingsRepository(dataStore) }
+    val homeEntry = remember(navController) { navController.getBackStackEntry(SettingsScreen.Main.route) }
     val settingsState by dataStore.data.collectAsState(initial = emptyPreferences())
     val providers by repository.providers.collectAsState(initial = emptyList())
     val promptProfiles by repository.promptProfiles.collectAsState(initial = emptyList())
@@ -129,9 +120,12 @@ fun SettingsHomeScreen(
     val basePrompt by repository.globalBasePrompt.collectAsState(initial = "")
     val enhancementPresetId by repository.enhancementPresetId.collectAsState(initial = TRANSFORM_PRESET_ID_CLEANUP)
     val commandPresetId by repository.commandPresetId.collectAsState(initial = TRANSFORM_PRESET_ID_TONE_REWRITE)
-
-    var showImportConfirmDialog by remember { mutableStateOf(false) }
-    var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    val backupRestoreStatus by homeEntry.savedStateHandle
+        .getStateFlow(BACKUP_RESTORE_HOME_STATUS_KEY, "")
+        .collectAsState()
+    val backupRestoreRepairCount by homeEntry.savedStateHandle
+        .getStateFlow(BACKUP_RESTORE_REPAIR_COUNT_KEY, 0)
+        .collectAsState()
     var hasMicPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED,
@@ -184,7 +178,7 @@ fun SettingsHomeScreen(
         }
     }
 
-    val setupIssues = remember(providers, validation, settingsState) {
+    val setupIssues = remember(providers, validation, settingsState, backupRestoreRepairCount) {
         buildList {
             if (providers.isEmpty()) {
                 add(
@@ -224,88 +218,16 @@ fun SettingsHomeScreen(
                     ),
                 )
             }
-        }
-    }
-
-    val appVersionName = remember {
-        try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
-        } catch (_: Exception) {
-            "unknown"
-        }
-    }
-
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json"),
-    ) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        scope.launch {
-            try {
-                val json = repository.exportSettings(appVersionName)
-                context.contentResolver.openOutputStream(uri)?.use { output ->
-                    output.write(json.toByteArray())
-                }
-                Toast.makeText(context, "Settings exported successfully", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+            if (backupRestoreRepairCount > 0) {
+                add(
+                    SettingsSetupIssue(
+                        message = "Last restore still needs $backupRestoreRepairCount ${pluralize(backupRestoreRepairCount, "repair step", "repair steps")}.",
+                        actionLabel = "Review restore",
+                        onFix = { navController.navigate(SettingsScreen.BackupRestore.route) },
+                    ),
+                )
             }
         }
-    }
-
-    val importLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        pendingImportUri = uri
-        showImportConfirmDialog = true
-    }
-
-    if (showImportConfirmDialog) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = {
-                showImportConfirmDialog = false
-                pendingImportUri = null
-            },
-            icon = { Icon(Icons.Default.Warning, null) },
-            title = { Text("Import Settings") },
-            text = { Text("This will override your current settings. Are you sure you want to continue?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showImportConfirmDialog = false
-                    pendingImportUri?.let { uri ->
-                        scope.launch {
-                            try {
-                                val json = context.contentResolver.openInputStream(uri)?.use { input ->
-                                    input.bufferedReader().readText()
-                                } ?: throw IllegalStateException("Could not read file")
-                                when (val result = repository.importSettings(json)) {
-                                    is com.github.shekohex.whisperpp.data.ImportResult.Success -> {
-                                        Toast.makeText(context, "Settings imported successfully", Toast.LENGTH_SHORT).show()
-                                    }
-
-                                    is com.github.shekohex.whisperpp.data.ImportResult.Error -> {
-                                        Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
-                    pendingImportUri = null
-                }) {
-                    Text("Import")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showImportConfirmDialog = false
-                    pendingImportUri = null
-                }) {
-                    Text("Cancel")
-                }
-            },
-        )
     }
 
     val totalModels = remember(providers) { providers.sumOf { it.models.size } }
@@ -491,22 +413,26 @@ fun SettingsHomeScreen(
 
             item {
                 SettingsGroup(title = "Backup & restore") {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        SettingsItem(
-                            icon = Icons.Default.CloudUpload,
-                            title = "Export Settings",
-                            subtitle = "Save the current settings snapshot to a file",
-                            onClick = {
-                                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-                                exportLauncher.launch("whisper_settings_${timestamp}.json")
+                    Column(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        SettingsOverviewCard(
+                            icon = Icons.Default.Backup,
+                            title = "Backup & restore",
+                            status = backupRestoreStatus.ifBlank {
+                                if (backupRestoreRepairCount > 0) {
+                                    "Repair attention needed"
+                                } else {
+                                    "No backup yet"
+                                }
                             },
-                        )
-                        HorizontalDivider()
-                        SettingsItem(
-                            icon = Icons.Default.Download,
-                            title = "Import Settings",
-                            subtitle = "Restore settings from a previously exported file",
-                            onClick = { importLauncher.launch(arrayOf("application/json")) },
+                            guidance = if (backupRestoreRepairCount > 0) {
+                                "Review the last restore summary, skipped items, and repair checklist before relying on those settings."
+                            } else {
+                                "Create password-encrypted backups, preview imports, and restore safely without leaving settings."
+                            },
+                            onClick = { navController.navigate(SettingsScreen.BackupRestore.route) },
                         )
                     }
                 }

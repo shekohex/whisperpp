@@ -146,6 +146,16 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
+        SettingsScreen.BackupRestore.route -> SettingsHelpContent(
+            title = "Backup & restore",
+            summary = "Exports are password-encrypted only, and restores always go file pick to mode choice to password to preview before apply.",
+            tips = listOf(
+                "Provider credentials can be included in encrypted backups, so use a strong password you will remember.",
+                "Merge mode lets you include or exclude whole categories before restoring anything.",
+                "After restore, stay on this screen to review skipped items, cleared selections, and repair guidance.",
+            ),
+        )
+
         else -> SettingsHelpContent(
             title = "Settings help",
             summary = "Use the grouped settings screens to change one focused area at a time.",
