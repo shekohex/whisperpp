@@ -90,7 +90,7 @@
 
 ### Blockers
 
-- Unrelated settings UI compile errors in `android/app/src/main/java/com/github/shekohex/whisperpp/ui/settings/SettingsHelp.kt` and matching strings currently block module-wide Gradle unit-test verification for Phase 6 backup work.
+None
 
 ### Notes / To Watch
 
