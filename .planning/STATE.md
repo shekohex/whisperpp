@@ -4,11 +4,11 @@
 
 **Current Phase:** 06
 **Current Phase Name:** Settings UX + Import/Export
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Current Plan:** 4
 **Total Plans in Phase:** 4
 
-**Progress:** [██████████] 97%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -36,6 +36,7 @@
 | Phase 06-settings-ux-import-export P01 | 8 min | 2 tasks | 5 files |
 | Phase 06-settings-ux-import-export P03 | 6 min | 2 tasks | 6 files |
 | Phase 06 P02 | 24 min | 2 tasks | 4 files |
+| Phase 06 P04 | 21 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,9 @@
 - [Phase 06]: Import always produces a typed analysis preview before any restore writes.
 - [Phase 06]: Merge semantics are category-scoped with imported values winning conflicts and explicit include/exclude support.
 - [Phase 06]: Post-restore validation clears unusable selections and returns repair checklist entries for missing credentials.
+- [Phase 06]: Backup and restore now lives in a dedicated nested settings screen instead of loose home actions.
+- [Phase 06]: Backup and restore status flows back to settings home through savedStateHandle so users stay in settings after export or restore.
+- [Phase 06]: Restore repair actions route credential fixes to Providers and selection fixes to Provider selections.
 
 ### Blockers
 
@@ -102,6 +106,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-09T19:20:17.105Z
-**Stopped At:** Completed 06-02-PLAN.md
+**Last session:** 2026-03-09T19:46:44.127Z
+**Stopped At:** Completed 06-04-PLAN.md
 **Resume file:** None

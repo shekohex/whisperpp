@@ -17,7 +17,7 @@ Whisper++ is an Android keyboard (IME) that turns speech into text in any app, w
 | 3 | Dictation | Users can dictate reliably with streaming-gated partials, cancellation, and undo | Complete (4/4, 2026-03-03) |
 | 4 | Prompts, Profiles & Enhancement | Users get per-app/per-language prompting + safe post-dictation enhancement with undo | Complete (7/7, 2026-03-05) |
 | 5 | Command Mode & Presets | Users can transform selected text via voice instructions with clipboard fallback and undo | Complete (3/3, 2026-03-05) |
-| 6 | Settings UX + Import/Export | Users can configure and back up/restore all core behavior with polished settings UI | In Progress (3/4, 2026-03-09) |
+| 6 | Settings UX + Import/Export | Users can configure and back up/restore all core behavior with polished settings UI | Complete (4/4, 2026-03-09) |
 | 7 | Local Analytics Dashboard | Users can view and reset local-only usage analytics and time-saved estimates | Pending |
 
 ---
@@ -141,7 +141,7 @@ Plans:
 - [x] 06-01-PLAN.md — Build the encrypted backup envelope and full export snapshot foundation
 - [x] 06-02-PLAN.md — Add import analysis/apply semantics with partial restore and repair reporting
 - [x] 06-03-PLAN.md — Rework settings home into grouped Material 3 cards with contextual help
-- [ ] 06-04-PLAN.md — Ship the backup/restore UI flow with preview, merge/overwrite choice, and completion summary
+- [x] 06-04-PLAN.md — Ship the backup/restore UI flow with preview, merge/overwrite choice, and completion summary
 
 ### Phase 7: Local Analytics Dashboard
 
