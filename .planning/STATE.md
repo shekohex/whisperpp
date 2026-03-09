@@ -2,13 +2,13 @@
 
 **Core value:** Speak anywhere; get accurate, context-appropriate text inserted instantly.
 
-**Current Phase:** 05
-**Current Phase Name:** Command Mode & Presets
-**Status:** Milestone complete
-**Current Plan:** Not started
-**Total Plans in Phase:** 3
+**Current Phase:** 06
+**Current Phase Name:** Settings UX + Import/Export
+**Status:** Ready to execute
+**Current Plan:** 3
+**Total Plans in Phase:** 4
 
-**Progress:** [██████████] 100%
+**Progress:** [█████████░] 93%
 
 ## Performance Metrics
 
@@ -33,6 +33,8 @@
 | Phase 05-command-mode-presets P02 | 10 min | 2 tasks | 7 files |
 | Phase 05-command-mode-presets P01 | 18 min | 3 tasks | 6 files |
 | Phase 05 P03 | 25 min | 3 tasks | 4 files |
+| Phase 06-settings-ux-import-export P01 | 8 min | 2 tasks | 5 files |
+| Phase 06-settings-ux-import-export P03 | 6 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -79,10 +81,16 @@
 - [Phase 05]: Enhancement default preset fallback is cleanup; command default fallback is tone_rewrite
 - [Phase 05]: Command mode listening uses explicit Stop action (no auto-stop).
 - [Phase 05]: Clipboard fallback requires per-run preview confirmation and tracks attempts remaining.
+- [Phase 06-settings-ux-import-export]: Use PBKDF2WithHmacSHA1 plus AES-GCM metadata-backed envelopes for API 24-compatible password backups.
+- [Phase 06-settings-ux-import-export]: Keep provider credentials in a dedicated encrypted backup category separate from provider JSON serialization.
+- [Phase 06-settings-ux-import-export]: Freeze the Phase 6 backup category manifest so later import/export UI can reuse stable IDs, labels, and sensitive flags.
+- [Phase 06-settings-ux-import-export]: Settings home is a grouped overview with setup-critical items first and maintenance controls visually secondary.
+- [Phase 06-settings-ux-import-export]: Settings help uses a shared route-aware bottom sheet across home and nested screens.
+- [Phase 06-settings-ux-import-export]: Settings deep-links resolve through a centralized whitelist so nested destinations work and unknown routes fall back safely.
 
 ### Blockers
 
-None
+- Unrelated settings UI compile errors in `android/app/src/main/java/com/github/shekohex/whisperpp/ui/settings/SettingsHelp.kt` and matching strings currently block module-wide Gradle unit-test verification for Phase 6 backup work.
 
 ### Notes / To Watch
 
@@ -90,6 +98,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-09T16:04:09.940Z
-**Stopped At:** Phase 6 context gathered
-**Resume file:** .planning/phases/06-settings-ux-import-export/06-CONTEXT.md
+**Last session:** 2026-03-09T17:51:33.489Z
+**Stopped At:** Completed 06-03-PLAN.md
+**Resume file:** None
