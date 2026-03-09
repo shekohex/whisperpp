@@ -58,6 +58,9 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
+import com.github.shekohex.whisperpp.analytics.DictationAnalyticsSession
+import com.github.shekohex.whisperpp.analytics.analyticsDataStore
 import com.github.shekohex.whisperpp.data.EffectiveRuntimeConfig
 import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.ProviderType
@@ -110,6 +113,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import java.io.File
+import java.time.LocalDate
 import java.util.Locale
 
 private const val RECORDED_AUDIO_FILENAME_WAV = "recorded.wav"
@@ -139,6 +143,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var isFirstTime: Boolean = true
     
     private lateinit var repository: SettingsRepository
+    private lateinit var analyticsRepository: AnalyticsRepository
     private lateinit var secretsStore: SecretsStore
     private lateinit var sendPolicyRepository: SendPolicyRepository
 
@@ -215,6 +220,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var realtimeBestEffortTranscript: String? = null
     private var pendingRealtimeProvider: ServiceProvider? = null
     private var pendingRealtimeModelId: String? = null
+    private var dictationAnalyticsSession: DictationAnalyticsSession? = null
 
     override fun onCreate() {
 
@@ -222,6 +228,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
         repository = SettingsRepository(dataStore)
+        analyticsRepository = AnalyticsRepository(analyticsDataStore)
         secretsStore = SecretsStore(this)
         sendPolicyRepository = SendPolicyRepository(dataStore)
         runBlocking {
@@ -333,8 +340,11 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 return@launch
             }
 
+            activeDictationAnalyticsSession(token)?.recordRawTranscript(rawText)
+
             val smartFixEnabled = prefs[SMART_FIX_ENABLED] ?: false
             if (!smartFixEnabled || isBlankOrPunctuationOnly(rawText)) {
+                completeDictationAnalyticsSession(token = token, rawText = rawText)
                 if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
                     delay(150)
                     onSwitchIme()
@@ -361,6 +371,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             val modelLabel = textModelId.ifBlank { "Unknown model" }
 
             if (shouldBlockExternalSend()) {
+                completeDictationAnalyticsSession(token = token, rawText = rawText)
                 showEnhancementNotice(
                     "Enhancement skipped for $providerLabel ($modelLabel): ${blockedNotice()}",
                     EnhancementNoticeStyle.INFO,
@@ -382,6 +393,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             }
 
             if (provider == null || textModelId.isBlank() || provider.models.none { it.id == textModelId }) {
+                completeDictationAnalyticsSession(token = token, rawText = rawText)
                 showEnhancementNotice(
                     "Enhancement unavailable for ${textProviderId.ifBlank { "Unknown provider" }} (${textModelId.ifBlank { "Unknown model" }})",
                     EnhancementNoticeStyle.ERROR,
@@ -408,6 +420,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 disclosure = disclosure,
             )
             if (disclosureDecision != FirstUseDisclosureDecision.CONTINUE) {
+                completeDictationAnalyticsSession(token = token, rawText = rawText)
                 if (keyboardState.value == KeyboardState.SmartFixing) {
                     setKeyboardState(KeyboardState.Ready)
                 }
@@ -419,6 +432,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             }
 
             if (provider.endpoint.isBlank()) {
+                completeDictationAnalyticsSession(token = token, rawText = rawText)
                 showEnhancementNotice(
                     "Enhancement unavailable for ${provider.name} ($textModelId): missing endpoint",
                     EnhancementNoticeStyle.ERROR,
@@ -438,6 +452,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
             )
             if (providerWithApiKey.authMode == ProviderAuthMode.API_KEY && providerWithApiKey.apiKey.isBlank()) {
+                completeDictationAnalyticsSession(token = token, rawText = rawText)
                 showEnhancementNotice(
                     "Enhancement unavailable for ${provider.name} ($textModelId): missing API key",
                     EnhancementNoticeStyle.ERROR,
@@ -488,8 +503,14 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 is EnhancementOutcome.Succeeded -> {
                     val replaced = dictationController.replaceCapturedSegment(captured, outcome.enhancedText)
                     if (replaced) {
+                        completeDictationAnalyticsSession(
+                            token = token,
+                            rawText = rawText,
+                            finalInsertedText = outcome.enhancedText,
+                        )
                         refreshEnhancementUndoState()
                     } else {
+                        completeDictationAnalyticsSession(token = token, rawText = rawText)
                         showEnhancementNotice(
                             "Enhancement ready for ${provider.name} ($textModelId), but focus changed; kept raw",
                             EnhancementNoticeStyle.INFO,
@@ -498,6 +519,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 }
 
                 is EnhancementOutcome.Skipped -> {
+                    completeDictationAnalyticsSession(token = token, rawText = rawText)
                     when (outcome.reason) {
                         SkipReason.Empty,
                         SkipReason.PunctuationOnly,
@@ -506,6 +528,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 }
 
                 is EnhancementOutcome.Failed -> {
+                    completeDictationAnalyticsSession(token = token, rawText = rawText)
                     when (val reason = outcome.reason) {
                         FailureReason.Cancelled -> Unit
                         FailureReason.Timeout -> {
@@ -549,7 +572,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
 
         if (!bestEffort.isNullOrBlank()) {
-            dictationController.insertRawAndCaptureSegment(token, bestEffort)
+            val captured = dictationController.insertRawAndCaptureSegment(token, bestEffort)
+            if (captured != null) {
+                completeDictationAnalyticsSession(token = token, rawText = bestEffort)
+            }
             showUndoQuickActionIfAvailable()
             performFeedback()
         } else {
@@ -1155,6 +1181,13 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         clearUndoQuickAction()
 
         val token = dictationController.onSendRequested() ?: run {
+            val cachedTranscript = realtimeFinalTranscript?.takeIf { it.isNotBlank() }
+                ?: realtimeBestEffortTranscript?.takeIf { it.isNotBlank() }
+            if (cachedTranscript != null) {
+                completeDictationAnalyticsSession(rawText = cachedTranscript)
+                closeRealtimeSession()
+                clearActiveDictationSelection()
+            }
             showUndoQuickActionIfAvailable()
             performFeedback()
             return
@@ -1180,7 +1213,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             KeyboardState.Paused,
             KeyboardState.PausedLocked,
             KeyboardState.Transcribing,
-            KeyboardState.SmartFixing -> confirmCancelAction { dictationController.onCancelConfirmed() }
+            KeyboardState.SmartFixing -> confirmCancelAction {
+                recordTerminalDictationAnalyticsForCancellation()
+                dictationController.onCancelConfirmed()
+            }
             else -> Unit
         }
     }
@@ -1201,6 +1237,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         showLongPressHint.value = false
         setKeyboardState(KeyboardState.Recording)
         recordingTimeMs.value = 0L
+        dictationAnalyticsSession = DictationAnalyticsSession(token.sessionId)
         startTimer()
 
         if (!token.streamingPartialsEnabled) {
@@ -1303,6 +1340,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private fun discardRecording() {
         playCustomSound(R.raw.rec_pause)
         clearUndoQuickAction()
+        recordTerminalDictationAnalyticsForCancellation()
         dictationController.onCancelConfirmed()
     }
 
@@ -1897,6 +1935,67 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         realtimeBestEffortTranscript = null
         pendingRealtimeProvider = null
         pendingRealtimeModelId = null
+    }
+
+    private fun activeDictationAnalyticsSession(
+        token: DictationController.SendToken? = null,
+    ): DictationAnalyticsSession? {
+        val session = dictationAnalyticsSession ?: return null
+        if (token != null && session.sessionId != token.sessionId) {
+            return null
+        }
+        return session
+    }
+
+    private fun completeDictationAnalyticsSession(
+        token: DictationController.SendToken? = null,
+        rawText: String? = null,
+        finalInsertedText: String? = null,
+    ) {
+        val session = activeDictationAnalyticsSession(token) ?: return
+        rawText?.let(session::recordRawTranscript)
+        finalInsertedText?.let(session::recordFinalInsertedText)
+        val outcome = session.finalize(durationMs = recordingTimeMs.value) as? DictationAnalyticsSession.Outcome.Completed ?: return
+        dictationAnalyticsSession = null
+        persistDictationAnalyticsOutcome(outcome)
+    }
+
+    private fun recordTerminalDictationAnalyticsForCancellation() {
+        val session = dictationAnalyticsSession ?: return
+        val outcome = when (keyboardState.value) {
+            KeyboardState.SmartFixing -> session.finalize(durationMs = recordingTimeMs.value)
+            KeyboardState.Recording,
+            KeyboardState.RecordingLocked,
+            KeyboardState.Paused,
+            KeyboardState.PausedLocked,
+            KeyboardState.Transcribing
+            -> session.cancel(durationMs = recordingTimeMs.value)
+            KeyboardState.Ready -> null
+        } ?: return
+        dictationAnalyticsSession = null
+        persistDictationAnalyticsOutcome(outcome)
+    }
+
+    private fun persistDictationAnalyticsOutcome(outcome: DictationAnalyticsSession.Outcome) {
+        CoroutineScope(Dispatchers.IO).launch {
+            when (outcome) {
+                is DictationAnalyticsSession.Outcome.Completed -> {
+                    analyticsRepository.recordCompletedSession(
+                        durationMs = outcome.durationMs,
+                        rawText = outcome.rawText,
+                        finalInsertedText = outcome.finalInsertedText,
+                        recordedOn = LocalDate.now(),
+                    )
+                }
+
+                is DictationAnalyticsSession.Outcome.Cancelled -> {
+                    analyticsRepository.recordCancelledSession(
+                        durationMs = outcome.durationMs,
+                        recordedOn = LocalDate.now(),
+                    )
+                }
+            }
+        }
     }
 
     private fun confirmCancelAction(onConfirm: () -> Unit) {
