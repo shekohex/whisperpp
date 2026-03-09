@@ -156,6 +156,16 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
+        SettingsScreen.Analytics.route -> SettingsHelpContent(
+            title = "Analytics dashboard",
+            summary = "This screen stays local-only and compares your dictation wins against typing with a rolling seven-day view.",
+            tips = listOf(
+                "Time saved leads the dashboard, while named lifetime totals call out dictation minutes, WPM, and keystrokes saved.",
+                "Sent versus cancelled sessions and raw versus final words stay here so settings home can remain compact.",
+                "Reset clears the local dashboard in place on this device, including the visible seven-day trend scaffold.",
+            ),
+        )
+
         else -> SettingsHelpContent(
             title = "Settings help",
             summary = "Use the grouped settings screens to change one focused area at a time.",

@@ -88,6 +88,9 @@ import com.github.shekohex.whisperpp.PER_APP_SEND_POLICY_JSON
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.SOUND_EFFECTS_ENABLED
 import com.github.shekohex.whisperpp.VERBOSE_NETWORK_LOGS_ENABLED
+import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
+import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
+import com.github.shekohex.whisperpp.analytics.analyticsDataStore
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_CLEANUP
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
@@ -111,6 +114,7 @@ fun SettingsHomeScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val repository = remember { SettingsRepository(dataStore) }
+    val analyticsRepository = remember(context) { AnalyticsRepository(context.analyticsDataStore) }
     val homeEntry = remember(navController) { navController.getBackStackEntry(SettingsScreen.Main.route) }
     val settingsState by dataStore.data.collectAsState(initial = emptyPreferences())
     val providers by repository.providers.collectAsState(initial = emptyList())
@@ -120,6 +124,7 @@ fun SettingsHomeScreen(
     val basePrompt by repository.globalBasePrompt.collectAsState(initial = "")
     val enhancementPresetId by repository.enhancementPresetId.collectAsState(initial = TRANSFORM_PRESET_ID_CLEANUP)
     val commandPresetId by repository.commandPresetId.collectAsState(initial = TRANSFORM_PRESET_ID_TONE_REWRITE)
+    val analyticsSnapshot by analyticsRepository.snapshot.collectAsState(initial = AnalyticsSnapshot())
     val backupRestoreStatus by homeEntry.savedStateHandle
         .getStateFlow(BACKUP_RESTORE_HOME_STATUS_KEY, "")
         .collectAsState()
@@ -285,6 +290,13 @@ fun SettingsHomeScreen(
                         onPrimaryAction = { setupIssues.firstOrNull()?.onFix?.invoke() },
                     )
                 }
+            }
+
+            item {
+                AnalyticsDashboardCard(
+                    snapshot = analyticsSnapshot,
+                    onClick = { navController.navigate(SettingsScreen.Analytics.route) },
+                )
             }
 
             item {

@@ -45,6 +45,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
+import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
+import com.github.shekohex.whisperpp.analytics.analyticsDataStore
 import com.github.shekohex.whisperpp.ui.components.VoiceWaveform
 import com.github.shekohex.whisperpp.*
 import com.github.shekohex.whisperpp.R
@@ -89,6 +92,7 @@ sealed class SettingsScreen(val route: String) {
                 route == Keyboard.route -> true
                 route == PrivacySafety.route -> true
                 route == BackupRestore.route -> true
+                route == Analytics.route -> true
                 route == ProviderSelections.route -> true
                 route == LanguageDefaults.route -> true
                 route == Presets.route -> true
@@ -108,6 +112,7 @@ sealed class SettingsScreen(val route: String) {
     object Keyboard : SettingsScreen("keyboard")
     object PrivacySafety : SettingsScreen("privacy_safety")
     object BackupRestore : SettingsScreen("backup_restore")
+    object Analytics : SettingsScreen("analytics")
     object ProviderSelections : SettingsScreen("provider_selections")
     object LanguageDefaults : SettingsScreen("language_defaults")
     object Presets : SettingsScreen("presets")
@@ -178,6 +183,23 @@ fun SettingsNavigation(
         }
         composable(SettingsScreen.BackupRestore.route) {
             BackupRestoreScreen(dataStore, navController)
+        }
+        composable(SettingsScreen.Analytics.route) {
+            val analyticsRepository = remember(context) { AnalyticsRepository(context.analyticsDataStore) }
+            val snapshot by analyticsRepository.snapshot.collectAsState(initial = AnalyticsSnapshot())
+            val scope = rememberCoroutineScope()
+            AnalyticsDashboardScreen(
+                snapshot = snapshot,
+                onBack = { navController.popBackStack() },
+                onConfirmReset = {
+                    scope.launch {
+                        analyticsRepository.resetAnalytics()
+                    }
+                },
+                actions = {
+                    SettingsHelpAction(SettingsScreen.Analytics.route)
+                },
+            )
         }
         composable(SettingsScreen.ProviderSelections.route) {
             ProviderSelectionsScreen(dataStore, navController)
