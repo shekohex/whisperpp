@@ -108,14 +108,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun resolveSettingsStartRoute(destination: String?): String {
-        return when (destination) {
-            SettingsScreen.Backend.route -> SettingsScreen.Backend.route
-            SettingsScreen.PostProcessing.route -> SettingsScreen.PostProcessing.route
-            SettingsScreen.Keyboard.route -> SettingsScreen.Keyboard.route
-            SettingsScreen.PrivacySafety.route -> SettingsScreen.PrivacySafety.route
-            SettingsScreen.Presets.route -> SettingsScreen.Presets.route
-            else -> SettingsScreen.Main.route
-        }
+        return SettingsScreen.resolveStartRoute(destination)
     }
 
     private fun checkPermissions() {

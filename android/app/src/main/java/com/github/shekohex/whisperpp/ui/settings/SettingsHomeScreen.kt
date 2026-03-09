@@ -337,6 +337,9 @@ fun SettingsHomeScreen(
         topBar = {
             LargeTopAppBar(
                 title = { Text("Settings") },
+                actions = {
+                    SettingsHelpAction(SettingsScreen.Main.route)
+                },
             )
         },
         contentWindowInsets = WindowInsets.statusBars,

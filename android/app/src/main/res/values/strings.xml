@@ -176,6 +176,7 @@
     <string name="settings_transform_presets_command_helper">Command mode</string>
     <string name="settings_transform_presets_picker_title">Choose preset</string>
     <string name="settings_close">Close</string>
+    <string name="settings_help_action">Show contextual help</string>
 
     <string name="transform_preset_cleanup_title">Cleanup</string>
     <string name="transform_preset_cleanup_description">Fix punctuation, capitalization, and typos.</string>

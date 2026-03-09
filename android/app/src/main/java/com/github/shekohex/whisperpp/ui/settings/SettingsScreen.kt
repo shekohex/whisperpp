@@ -72,6 +72,35 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 sealed class SettingsScreen(val route: String) {
+    companion object {
+        fun resolveStartRoute(route: String?): String {
+            val normalized = route?.trim().orEmpty()
+            if (normalized.isBlank()) {
+                return Main.route
+            }
+            return if (isSupportedStartRoute(normalized)) normalized else Main.route
+        }
+
+        private fun isSupportedStartRoute(route: String): Boolean {
+            return when {
+                route == Main.route -> true
+                route == Backend.route -> true
+                route == PostProcessing.route -> true
+                route == Keyboard.route -> true
+                route == PrivacySafety.route -> true
+                route == ProviderSelections.route -> true
+                route == LanguageDefaults.route -> true
+                route == Presets.route -> true
+                route == PromptsProfiles.route -> true
+                route == AppMappings.route -> true
+                route.startsWith("app_mapping_detail?") -> true
+                route.startsWith("prompt_profile_edit?") -> true
+                route.startsWith("provider_edit?") -> true
+                else -> false
+            }
+        }
+    }
+
     object Main : SettingsScreen("main")
     object Backend : SettingsScreen("backend")
     object PostProcessing : SettingsScreen("post_processing")
@@ -113,21 +142,7 @@ fun SettingsNavigation(
     val navController = rememberNavController()
     val repository = remember { SettingsRepository(dataStore) }
     var migrationReady by remember { mutableStateOf(false) }
-    val startDestination = when (startRoute) {
-        SettingsScreen.Backend.route,
-        SettingsScreen.PostProcessing.route,
-        SettingsScreen.Keyboard.route,
-        SettingsScreen.PrivacySafety.route,
-        SettingsScreen.ProviderSelections.route,
-        SettingsScreen.LanguageDefaults.route,
-        SettingsScreen.Presets.route,
-        SettingsScreen.PromptsProfiles.route,
-        SettingsScreen.AppMappings.route,
-        SettingsScreen.AppMappingDetail.route,
-        SettingsScreen.PromptProfileEdit.route,
-        SettingsScreen.Main.route -> startRoute
-        else -> SettingsScreen.Main.route
-    }
+    val startDestination = SettingsScreen.resolveStartRoute(startRoute)
 
     LaunchedEffect(Unit) {
         repository.migrateProviderSchemaV2IfNeeded(context)
@@ -242,6 +257,7 @@ fun PromptsProfilesScreen(dataStore: DataStore<Preferences>, navController: NavH
                     }
                 },
                 actions = {
+                    SettingsHelpAction(SettingsScreen.PromptsProfiles.route)
                     TextButton(
                         onClick = {
                             scope.launch {
@@ -268,6 +284,12 @@ fun PromptsProfilesScreen(dataStore: DataStore<Preferences>, navController: NavH
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(16.dp))
+
+            Text(
+                text = "Tap Save to apply base prompt edits. Profiles and app mappings update when you edit their entries.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             SettingsGroup(title = "Global base prompt") {
                 Column(
@@ -447,6 +469,7 @@ fun PromptProfileEditScreen(
                     }
                 },
                 actions = {
+                    SettingsHelpAction(SettingsScreen.PromptsProfiles.route)
                     TextButton(
                         onClick = {
                             scope.launch {
@@ -479,6 +502,12 @@ fun PromptProfileEditScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(16.dp))
+
+            Text(
+                text = "Save stores this profile immediately so it can be reused in app mappings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             SettingsGroup(title = "Profile") {
                 Column(
@@ -616,6 +645,7 @@ fun AppMappingsScreen(dataStore: DataStore<Preferences>, navController: NavHostC
                     }
                 },
                 actions = {
+                    SettingsHelpAction(SettingsScreen.AppMappings.route)
                     if (selectionMode) {
                         IconButton(
                             onClick = {
@@ -906,6 +936,7 @@ fun AppMappingDetailScreen(
                     }
                 },
                 actions = {
+                    SettingsHelpAction(SettingsScreen.AppMappings.route)
                     TextButton(
                         onClick = {
                             scope.launch {
@@ -945,6 +976,12 @@ fun AppMappingDetailScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(16.dp))
+
+            Text(
+                text = "Save applies this mapping right away. Leave any field empty to inherit the global defaults.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             SettingsGroup(title = "App") {
                 Column(
@@ -1306,6 +1343,7 @@ fun LanguageDefaultsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     }
                 },
                 actions = {
+                    SettingsHelpAction(SettingsScreen.LanguageDefaults.route)
                     IconButton(onClick = { showAddDialog = true }) {
                         Icon(Icons.Default.Add, "Add")
                     }
@@ -1323,6 +1361,12 @@ fun LanguageDefaultsScreen(dataStore: DataStore<Preferences>, navController: Nav
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(16.dp))
+
+            Text(
+                text = "Add a language when one global setup is not enough. Changes save as soon as you choose them.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             if (languageDefaults.isEmpty()) {
                 SettingsGroup(title = "Languages") {
@@ -1521,6 +1565,9 @@ fun PresetsSettingsScreen(dataStore: DataStore<Preferences>, navController: NavH
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
+                actions = {
+                    SettingsHelpAction(SettingsScreen.Presets.route)
+                },
             )
         },
         contentWindowInsets = WindowInsets.statusBars,
@@ -1534,6 +1581,12 @@ fun PresetsSettingsScreen(dataStore: DataStore<Preferences>, navController: NavH
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(16.dp))
+
+            Text(
+                text = "Preset changes apply to the next enhancement or command run.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             SettingsGroup(title = stringResource(R.string.settings_transform_presets_group_title)) {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -1682,6 +1735,9 @@ fun ProviderSelectionsScreen(dataStore: DataStore<Preferences>, navController: N
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
+                },
+                actions = {
+                    SettingsHelpAction(SettingsScreen.ProviderSelections.route)
                 }
             )
         },
@@ -1696,6 +1752,12 @@ fun ProviderSelectionsScreen(dataStore: DataStore<Preferences>, navController: N
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Spacer(Modifier.height(16.dp))
+
+            Text(
+                text = "Selections save immediately. Choose a provider first, then choose one of its compatible models.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             SettingsGroup(title = "Defaults") {
                 Column(
@@ -2119,6 +2181,9 @@ fun BackendSettingsScreen(dataStore: DataStore<Preferences>, navController: NavH
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
+                },
+                actions = {
+                    SettingsHelpAction(SettingsScreen.Backend.route)
                 }
             )
         },
@@ -2142,6 +2207,13 @@ fun BackendSettingsScreen(dataStore: DataStore<Preferences>, navController: NavH
                 contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                item {
+                    Text(
+                        text = "Add or test providers here, then open Provider selections to choose the active defaults Whisper++ should use.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 items(providers.size) { index ->
                     val provider = providers[index]
                     ProviderCard(
@@ -2900,6 +2972,7 @@ fun ProviderEditScreen(
                     }
                 },
                 actions = {
+                    SettingsHelpAction(SettingsScreen.Backend.route)
                     if (isEditingExisting && existingProviderId != null) {
                         TextButton(onClick = {
                             navController.navigate(SettingsScreen.ProviderEdit.createRoute(id = null, cloneFromId = existingProviderId))
@@ -2964,6 +3037,11 @@ fun ProviderEditScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Save stores this provider for selections and tests. Use Test or model import to verify the setup before leaving.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             OutlinedTextField(
                 value = name,
                 onValueChange = {
@@ -3660,6 +3738,9 @@ fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
+                },
+                actions = {
+                    SettingsHelpAction(SettingsScreen.PostProcessing.route)
                 }
             )
         },
@@ -3667,6 +3748,11 @@ fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Changes apply immediately. Use a custom prompt only when the default cleanup behavior is not enough.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             SettingsGroup(title = "Behavior") {
                 SettingsToggle(
                     icon = Icons.Default.AutoFixHigh,
@@ -3800,6 +3886,9 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
+                },
+                actions = {
+                    SettingsHelpAction(SettingsScreen.Keyboard.route)
                 }
             )
         },
@@ -3807,6 +3896,11 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Keyboard toggles apply immediately and affect the next dictation or command session.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             SettingsGroup(title = "Automation") {
                 SettingsToggle(
                     icon = Icons.Default.Mic,

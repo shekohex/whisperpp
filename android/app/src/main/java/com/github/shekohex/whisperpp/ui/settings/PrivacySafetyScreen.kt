@@ -192,7 +192,10 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                actions = {
+                    SettingsHelpAction(SettingsScreen.PrivacySafety.route)
+                },
             )
         },
         contentWindowInsets = WindowInsets.statusBars,
@@ -270,6 +273,12 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
                     ) {
                         Text("Reset first-use disclosures")
                     }
+
+                    Text(
+                        text = "Changes apply immediately. Reset makes each first-use disclosure appear again the next time that mode runs.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 
