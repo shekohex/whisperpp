@@ -5,10 +5,10 @@
 **Current Phase:** 06
 **Current Phase Name:** Settings UX + Import/Export
 **Status:** Ready to execute
-**Current Plan:** 3
+**Current Plan:** 4
 **Total Plans in Phase:** 4
 
-**Progress:** [█████████░] 93%
+**Progress:** [██████████] 97%
 
 ## Performance Metrics
 
@@ -35,6 +35,7 @@
 | Phase 05 P03 | 25 min | 3 tasks | 4 files |
 | Phase 06-settings-ux-import-export P01 | 8 min | 2 tasks | 5 files |
 | Phase 06-settings-ux-import-export P03 | 6 min | 2 tasks | 6 files |
+| Phase 06 P02 | 24 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,9 @@
 - [Phase 06-settings-ux-import-export]: Settings home is a grouped overview with setup-critical items first and maintenance controls visually secondary.
 - [Phase 06-settings-ux-import-export]: Settings help uses a shared route-aware bottom sheet across home and nested screens.
 - [Phase 06-settings-ux-import-export]: Settings deep-links resolve through a centralized whitelist so nested destinations work and unknown routes fall back safely.
+- [Phase 06]: Import always produces a typed analysis preview before any restore writes.
+- [Phase 06]: Merge semantics are category-scoped with imported values winning conflicts and explicit include/exclude support.
+- [Phase 06]: Post-restore validation clears unusable selections and returns repair checklist entries for missing credentials.
 
 ### Blockers
 
@@ -98,6 +102,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-09T17:51:33.489Z
-**Stopped At:** Completed 06-03-PLAN.md
+**Last session:** 2026-03-09T19:20:17.105Z
+**Stopped At:** Completed 06-02-PLAN.md
 **Resume file:** None
