@@ -57,7 +57,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Analytics (Local)
 
 - [x] **STATS-01**: Whisper++ tracks local-only usage stats (dictation minutes, sessions, words dictated, words/min, keystrokes saved)
-- [ ] **STATS-02**: Settings home includes an analytics dashboard including an estimated "time saved" summary
+- [x] **STATS-02**: Settings home includes an analytics dashboard including an estimated "time saved" summary
 
 ### Privacy & Safety
 
@@ -139,7 +139,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CMD-03 | 5 | Complete |
 | CMD-04 | 5 | Complete |
 | STATS-01 | 7 | Complete |
-| STATS-02 | 7 | Pending |
+| STATS-02 | 7 | Complete |
 | PRIV-01 | 1 | Complete |
 | PRIV-02 | 1 | Complete |
 | PRIV-03 | 1 | Complete |
