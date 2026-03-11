@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -133,7 +134,15 @@ fun AnalyticsDashboardScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     lifetimeStats.forEach { stat ->
-                        LifetimeStatRow(label = stat.label, value = stat.value)
+                        LifetimeStatRow(
+                            label = stat.label,
+                            value = stat.value,
+                            valueTag = when (stat.label) {
+                                context.getString(R.string.analytics_metric_minutes) -> "analytics_metric_minutes_value"
+                                context.getString(R.string.analytics_metric_wpm) -> "analytics_metric_wpm_value"
+                                else -> "analytics_metric_keystrokes_value"
+                            },
+                        )
                     }
                 }
             }
@@ -148,10 +157,12 @@ fun AnalyticsDashboardScreen(
                     BreakdownRow(
                         label = stringResource(R.string.analytics_completed_sessions),
                         value = snapshot.totalCompletedSessions.toString(),
+                        valueTag = "analytics_completed_sessions_value",
                     )
                     BreakdownRow(
                         label = stringResource(R.string.analytics_cancelled_sessions),
                         value = snapshot.totalCancelledSessions.toString(),
+                        valueTag = "analytics_cancelled_sessions_value",
                     )
                 }
             }
@@ -166,10 +177,12 @@ fun AnalyticsDashboardScreen(
                     BreakdownRow(
                         label = stringResource(R.string.analytics_raw_words),
                         value = snapshot.totalRawWordCount.toString(),
+                        valueTag = "analytics_raw_words_value",
                     )
                     BreakdownRow(
                         label = stringResource(R.string.analytics_final_words),
                         value = snapshot.totalFinalInsertedWordCount.toString(),
+                        valueTag = "analytics_final_words_value",
                     )
                 }
             }
@@ -271,6 +284,7 @@ private fun AnalyticsHeroCard(snapshot: AnalyticsSnapshot) {
 private fun LifetimeStatRow(
     label: String,
     value: String,
+    valueTag: String,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -300,6 +314,7 @@ private fun LifetimeStatRow(
         ) {
             Text(
                 text = value,
+                modifier = Modifier.testTag(valueTag),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -311,6 +326,7 @@ private fun LifetimeStatRow(
 private fun BreakdownRow(
     label: String,
     value: String,
+    valueTag: String,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -330,6 +346,7 @@ private fun BreakdownRow(
             )
             Text(
                 text = value,
+                modifier = Modifier.testTag(valueTag),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
