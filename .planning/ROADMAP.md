@@ -2,7 +2,7 @@
 
 **Depth:** comprehensive
 **Scope:** v1 requirements only
-**Current focus:** Phase 7
+**Current focus:** Phase 8
 
 ## Overview
 
@@ -19,6 +19,8 @@ Whisper++ is an Android keyboard (IME) that turns speech into text in any app, w
 | 5 | Command Mode & Presets | Users can transform selected text via voice instructions with clipboard fallback and undo | Complete (3/3, 2026-03-05) |
 | 6 | Settings UX + Import/Export | Users can configure and back up/restore all core behavior with polished settings UI | Complete (4/4, 2026-03-09) |
 | 7 | Local Analytics Dashboard | Users can view and reset local-only usage analytics and time-saved estimates | Complete (3/3, 2026-03-11) |
+| 8 | Phase 06 Verification Recovery | Users can verify shipped settings/import-export behavior so phase-06 requirements are no longer orphaned | Planned |
+| 9 | Privacy Traceability & Command Disclosure Alignment | Users see accurate command disclosures before command-mode capture and privacy requirements regain traceable coverage | Planned |
 
 ---
 
@@ -162,3 +164,23 @@ Plans:
 - [x] 07-01-PLAN.md — Build the local-only analytics repository, formatter, and backup/privacy boundary
 - [x] 07-02-PLAN.md — Capture completed vs cancelled dictation analytics exactly once in the IME runtime
 - [x] 07-03-PLAN.md — Add the settings-home analytics mini dashboard, dedicated analytics screen, and reset UI
+
+### Phase 8: Phase 06 Verification Recovery
+
+**Goal:** Users can rely on verified settings and import/export behavior, and phase-06 requirements are no longer orphaned from audit coverage.
+
+**Dependencies:** Phase 6
+
+**Requirements:** UI-01, SET-01, SET-02
+
+**Gap Closure:** Closes the audit orphaned-requirement gaps caused by missing phase-06 verification coverage and restores traceable verification for the shipped settings/import-export work.
+
+### Phase 9: Privacy Traceability & Command Disclosure Alignment
+
+**Goal:** Users see accurate privacy disclosures before command-mode audio is captured, and phase-01 privacy requirements are traceable to verified artifacts again.
+
+**Dependencies:** Phase 1, Phase 5
+
+**Requirements:** PRIV-01, PRIV-02, PRIV-03, PRIV-04, PRIV-05, CMD-03
+
+**Gap Closure:** Closes the audit partial gaps for PRIV-01 through PRIV-05, fixes the phase-01 to phase-05 command disclosure integration issue, and restores the first-time command-mode privacy and consent flow before spoken instruction capture.

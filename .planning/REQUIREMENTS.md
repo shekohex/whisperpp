@@ -9,9 +9,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### UI & Settings
 
-- [x] **UI-01**: Settings UI uses Material 3 (Material You) components + theming
-- [x] **SET-01**: All core behavior is configurable in settings (providers/models, prompts, per-app/per-language overrides, dictation/enhancement/command toggles)
-- [x] **SET-02**: User can export/import full settings (providers/models/profiles/mappings/toggles) and share the export file; settings can be backed up and restored
+- [ ] **UI-01**: Settings UI uses Material 3 (Material You) components + theming
+- [ ] **SET-01**: All core behavior is configurable in settings (providers/models, prompts, per-app/per-language overrides, dictation/enhancement/command toggles)
+- [ ] **SET-02**: User can export/import full settings (providers/models/profiles/mappings/toggles) and share the export file; settings can be backed up and restored
 
 ### Providers & Models
 
@@ -51,7 +51,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **CMD-01**: User can enter command mode via a dedicated Command key
 - [x] **CMD-02**: Command mode uses selected text from the editor when available; otherwise uses a clipboard fallback workflow
-- [x] **CMD-03**: User can speak an instruction; Whisper++ transcribes it and sends (instruction + selected text) to the selected text model/provider
+- [ ] **CMD-03**: User can speak an instruction; Whisper++ transcribes it and sends (instruction + selected text) to the selected text model/provider
 - [x] **CMD-04**: Command mode replaces the selection with the result and provides 1-tap undo
 
 ### Analytics (Local)
@@ -109,9 +109,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UI-01 | 6 | Complete |
-| SET-01 | 6 | Complete |
-| SET-02 | 6 | Complete |
+| UI-01 | 8 | Pending |
+| SET-01 | 8 | Pending |
+| SET-02 | 8 | Pending |
 | PROV-01 | 2 | Complete |
 | PROV-02 | 2 | Complete |
 | PROV-03 | 2 | Complete |
@@ -136,15 +136,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROF-04 | 4 | Complete |
 | CMD-01 | 5 | Complete |
 | CMD-02 | 5 | Complete |
-| CMD-03 | 5 | Complete |
+| CMD-03 | 9 | Pending |
 | CMD-04 | 5 | Complete |
 | STATS-01 | 7 | Complete |
 | STATS-02 | 7 | Complete |
-| PRIV-01 | 1 | Complete |
-| PRIV-02 | 1 | Complete |
-| PRIV-03 | 1 | Complete |
-| PRIV-04 | 1 | Complete |
-| PRIV-05 | 1 | Complete |
+| PRIV-01 | 9 | Pending |
+| PRIV-02 | 9 | Pending |
+| PRIV-03 | 9 | Pending |
+| PRIV-04 | 9 | Pending |
+| PRIV-05 | 9 | Pending |
 | PRIV-06 | 7 | Complete |
 
 **Coverage:**
@@ -154,4 +154,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-26*
-*Last updated: 2026-02-26 after roadmap creation*
+*Last updated: 2026-03-12 after gap-closure phase planning*
