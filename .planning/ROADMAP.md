@@ -175,6 +175,12 @@ Plans:
 
 **Gap Closure:** Closes the audit orphaned-requirement gaps caused by missing phase-06 verification coverage and restores traceable verification for the shipped settings/import-export work.
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Add stable settings verification seams and focused phase-06 Compose UI coverage
+- [ ] 08-02-PLAN.md — Author 06-VERIFICATION.md and update recovered requirement traceability
+
 ### Phase 9: Privacy Traceability & Command Disclosure Alignment
 
 **Goal:** Users see accurate privacy disclosures before command-mode audio is captured, and phase-01 privacy requirements are traceable to verified artifacts again.
