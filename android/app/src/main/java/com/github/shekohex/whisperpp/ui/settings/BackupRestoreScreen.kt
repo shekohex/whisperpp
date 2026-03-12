@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -856,7 +857,7 @@ private fun BackupNoticeCard(
 }
 
 @Composable
-private fun ImportPreviewCard(
+internal fun ImportPreviewCard(
     analysis: ImportAnalysis,
     selectedMergeCategories: Set<String>,
     onToggleCategory: (String) -> Unit,
@@ -866,7 +867,10 @@ private fun ImportPreviewCard(
 ) {
     val canConfirm = analysis.restoreMode == RestoreMode.OVERWRITE || selectedMergeCategories.isNotEmpty()
 
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        modifier = Modifier.testTag("backup_restore_preview_card"),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         BackupNoticeCard(
             title = "Preview before restore",
             message = "Backup from ${formatBackupDisplayTime(analysis.exportedAtUtc)} · app ${analysis.backupAppVersionName} · ${restoreModeLabel(analysis.restoreMode)}",
@@ -990,12 +994,16 @@ private fun ImportPreviewCard(
 }
 
 @Composable
-private fun RestoreSummaryCard(
+internal fun RestoreSummaryCard(
     summary: RestoreSummary,
     categoryLabelById: Map<String, com.github.shekohex.whisperpp.data.SettingsBackupCategoryManifestEntry>,
     onNavigate: (String) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("backup_restore_summary_card"),
+    ) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),

@@ -64,6 +64,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -444,6 +445,7 @@ fun SettingsHomeScreen(
                             } else {
                                 "Create password-encrypted backups, preview imports, and restore safely without leaving settings."
                             },
+                            modifier = Modifier.testTag("backup_restore_home_card"),
                             onClick = { navController.navigate(SettingsScreen.BackupRestore.route) },
                         )
                     }
@@ -495,7 +497,9 @@ private fun SettingsSetupBanner(
     onPrimaryAction: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("settings_home_setup_banner"),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
         shape = RoundedCornerShape(24.dp),
     ) {
@@ -633,16 +637,17 @@ private fun SettingsOverviewCard(
     title: String,
     status: String,
     guidance: String,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     showChevron: Boolean = true,
     enabled: Boolean = true,
 ) {
-    val modifier = Modifier
+    val cardModifier = modifier
         .fillMaxWidth()
         .padding(horizontal = 12.dp)
 
     Surface(
-        modifier = if (enabled) modifier.clickable(onClick = onClick) else modifier,
+        modifier = if (enabled) cardModifier.clickable(onClick = onClick) else cardModifier,
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
