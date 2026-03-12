@@ -9,9 +9,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### UI & Settings
 
-- [ ] **UI-01**: Settings UI uses Material 3 (Material You) components + theming
-- [ ] **SET-01**: All core behavior is configurable in settings (providers/models, prompts, per-app/per-language overrides, dictation/enhancement/command toggles)
-- [ ] **SET-02**: User can export/import full settings (providers/models/profiles/mappings/toggles) and share the export file; settings can be backed up and restored
+- [x] **UI-01**: Settings UI uses Material 3 (Material You) components + theming
+- [x] **SET-01**: All core behavior is configurable in settings (providers/models, prompts, per-app/per-language overrides, dictation/enhancement/command toggles)
+- [x] **SET-02**: User can export/import full settings (providers/models/profiles/mappings/toggles) and share the export file; settings can be backed up and restored
 
 ### Providers & Models
 
@@ -109,9 +109,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| UI-01 | 8 | Pending |
-| SET-01 | 8 | Pending |
-| SET-02 | 8 | Pending |
+| UI-01 | 8 | Complete |
+| SET-01 | 8 | Complete |
+| SET-02 | 8 | Complete |
 | PROV-01 | 2 | Complete |
 | PROV-02 | 2 | Complete |
 | PROV-03 | 2 | Complete |

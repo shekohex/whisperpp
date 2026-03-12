@@ -2,31 +2,31 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 07
-current_phase_name: Local Analytics Dashboard
-current_plan: Not started
-status: completed
-stopped_at: Completed 07-local-analytics-dashboard-03-PLAN.md
-last_updated: "2026-03-11T04:56:28.412Z"
+current_phase: 08
+current_phase_name: Phase 06 Verification Recovery
+current_plan: 2
+status: in_progress
+stopped_at: Completed 08-phase-06-verification-recovery-01-PLAN.md
+last_updated: "2026-03-12T21:45:34.425Z"
 progress:
-  total_phases: 7
+  total_phases: 9
   completed_phases: 7
-  total_plans: 32
-  completed_plans: 32
-  percent: 100
+  total_plans: 34
+  completed_plans: 33
+  percent: 97
 ---
 
 # STATE: Whisper++
 
 **Core value:** Speak anywhere; get accurate, context-appropriate text inserted instantly.
 
-**Current Phase:** 07
-**Current Phase Name:** Local Analytics Dashboard
-**Status:** Milestone complete
-**Current Plan:** Not started
-**Total Plans in Phase:** 3
+**Current Phase:** 08
+**Current Phase Name:** Phase 06 Verification Recovery
+**Status:** In progress
+**Current Plan:** 2
+**Total Plans in Phase:** 2
 
-**Progress:** [██████████] 100%
+**Progress:** [██████████] 97%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ progress:
 | Phase 07-local-analytics-dashboard P01 | 16 min | 3 tasks | 9 files |
 | Phase 07-local-analytics-dashboard P02 | 8 min | 2 tasks | 3 files |
 | Phase 07-local-analytics-dashboard P03 | 19 min | 3 tasks | 7 files |
+| Phase 08-phase-06-verification-recovery P01 | 14 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -123,10 +124,12 @@ progress:
 - [Phase 07-local-analytics-dashboard]: Completed analytics are emitted only after the raw insert and enhancement outcome are known, with Smart Fix cancellation after raw insertion treated as a raw completion instead of a cancelled run.
 - [Phase 07-local-analytics-dashboard]: Analytics dashboard instrumentation injects AnalyticsSnapshot directly into Compose content so empty, populated, and reset scenarios remain deterministic.
 - [Phase 07-local-analytics-dashboard]: Stable analytics UI coverage uses minimal test tags on the home card and numeric values plus scroll-aware assertions for offscreen sections.
+- [Phase 08]: Use explicit root test tags for shipped settings/import-export surfaces instead of copy-only selectors.
+- [Phase 08]: Expose ImportPreviewCard and RestoreSummaryCard as internal composables so androidTests can render deterministic fixtures without changing production state wiring.
 
 ### Blockers
 
-None
+- `connectedDebugAndroidTest` for phase 08 plan 01 still needs a real device or a KVM-capable emulator host; current environment has neither a connected device nor usable x86_64 emulator acceleration.
 
 ### Notes / To Watch
 
@@ -134,6 +137,6 @@ None
 
 ## Session Continuity
 
-**Last session:** 2026-03-11T03:54:53.562Z
-**Stopped At:** Completed 07-local-analytics-dashboard-03-PLAN.md
+**Last session:** 2026-03-12T21:45:34.423Z
+**Stopped At:** Completed 08-phase-06-verification-recovery-01-PLAN.md
 **Resume file:** None
