@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
@@ -217,9 +218,18 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    DisclosureCard(dictationDisclosure)
-                    DisclosureCard(enhancementDisclosure)
-                    DisclosureCard(commandDisclosure)
+                    DisclosureCard(
+                        disclosure = dictationDisclosure,
+                        modifier = Modifier.testTag("privacy_disclosure_card_dictation_audio"),
+                    )
+                    DisclosureCard(
+                        disclosure = enhancementDisclosure,
+                        modifier = Modifier.testTag("privacy_disclosure_card_enhancement_text"),
+                    )
+                    DisclosureCard(
+                        disclosure = commandDisclosure,
+                        modifier = Modifier.testTag("privacy_disclosure_card_command_text"),
+                    )
                 }
             }
 
@@ -269,7 +279,9 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
                                 }
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("privacy_reset_disclosures_button"),
                     ) {
                         Text("Reset first-use disclosures")
                     }
@@ -302,7 +314,9 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("privacy_search_installed_apps_input"),
                         label = { Text("Search installed apps") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                         singleLine = true,
@@ -375,7 +389,9 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
                     OutlinedTextField(
                         value = manualPackageName,
                         onValueChange = { manualPackageName = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("privacy_manual_package_input"),
                         label = { Text("Package name") },
                         singleLine = true,
                     )
@@ -390,7 +406,9 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
                             }
                         },
                         enabled = manualPackageName.trim().isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("privacy_block_package_button"),
                     ) {
                         Icon(Icons.Default.Block, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
@@ -405,8 +423,12 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
 }
 
 @Composable
-private fun DisclosureCard(disclosure: PrivacyDisclosureFormatter.ModeDisclosure) {
+private fun DisclosureCard(
+    disclosure: PrivacyDisclosureFormatter.ModeDisclosure,
+    modifier: Modifier = Modifier,
+) {
     Surface(
+        modifier = modifier,
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
     ) {
