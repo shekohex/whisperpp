@@ -1,10 +1,6 @@
 package com.github.shekohex.whisperpp.command
 
-import com.github.shekohex.whisperpp.data.ModelConfig
-import com.github.shekohex.whisperpp.data.ModelKind
-import com.github.shekohex.whisperpp.data.ProviderType
-import com.github.shekohex.whisperpp.data.ServiceProvider
-import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -13,157 +9,123 @@ import org.junit.Test
 class CommandDisclosureFlowTest {
 
     @Test
-    fun disclosureIsRequired_beforeRecordingStarts() {
-        val disclosure = commandDisclosureFixture(useContext = false)
-        val harness = CommandDisclosureFlowHarness(disclosureDecision = DisclosureDecision.CONTINUE)
-
-        val outcome = harness.startListening(disclosure)
-
-        assertEquals(CommandListeningOutcome.LISTENING, outcome)
-        assertTrue(harness.recordingStarted)
-        assertEquals(
-            listOf("listening_requested", "disclosure_required", "recording_started"),
-            harness.events,
-        )
-    }
-
-    @Test
-    fun cancelOrOpenSettings_preventsRecording() {
-        val disclosure = commandDisclosureFixture(useContext = true)
-
-        val cancelled = CommandDisclosureFlowHarness(disclosureDecision = DisclosureDecision.CANCEL)
-        assertEquals(CommandListeningOutcome.CANCELLED, cancelled.startListening(disclosure))
-        assertFalse(cancelled.recordingStarted)
-        assertEquals(
-            listOf("listening_requested", "disclosure_required", "cancelled"),
-            cancelled.events,
-        )
-
-        val redirected = CommandDisclosureFlowHarness(disclosureDecision = DisclosureDecision.OPEN_SETTINGS)
-        assertEquals(CommandListeningOutcome.OPEN_SETTINGS, redirected.startListening(disclosure))
-        assertFalse(redirected.recordingStarted)
-        assertEquals(
-            listOf("listening_requested", "disclosure_required", "open_settings"),
-            redirected.events,
-        )
-    }
-
-    @Test
-    fun commandDisclosure_includesInstructionAudioAndTextTransformHops() {
-        val disclosure = commandDisclosureFixture(useContext = true)
-
-        assertEquals(2, disclosure.hops.size)
-        assertEquals("Instruction audio transcription", disclosure.hops[0].label)
-        assertEquals("https://stt.example.com", disclosure.hops[0].endpoint.baseUrl)
-        assertEquals("/v1/audio/transcriptions", disclosure.hops[0].endpoint.path)
-        assertEquals("Text transform", disclosure.hops[1].label)
-        assertEquals("https://generativelanguage.googleapis.com", disclosure.hops[1].endpoint.baseUrl)
-        assertEquals("/v1beta/models/gemini-1.5-pro:generateContent", disclosure.hops[1].endpoint.path)
-        assertTrue(disclosure.dataSent.contains("instruction audio", ignoreCase = true))
-        assertTrue(disclosure.dataSent.contains("selected text", ignoreCase = true))
-        assertTrue(disclosure.contextLine.contains("Context text may be sent"))
-    }
-
-    private fun commandDisclosureFixture(useContext: Boolean): CommandDisclosureSeam {
-        val sttProvider = ServiceProvider(
-            id = "stt",
-            name = "STT",
-            type = ProviderType.OPENAI,
-            endpoint = "https://stt.example.com/v1",
-            models = listOf(ModelConfig(id = "whisper-1", name = "Whisper 1", kind = ModelKind.STT)),
-        )
-        val textProvider = ServiceProvider(
-            id = "text",
-            name = "Gemini",
-            type = ProviderType.GEMINI,
-            endpoint = "https://generativelanguage.googleapis.com/v1beta",
-            models = listOf(ModelConfig(id = "gemini-1.5-pro", name = "Gemini 1.5 Pro", kind = ModelKind.MULTIMODAL)),
-        )
-        val sttDisclosure = PrivacyDisclosureFormatter.disclosureForDictation(
-            provider = sttProvider,
-            selectedModelId = "whisper-1",
-            useContext = false,
-        )
-        val textDisclosure = PrivacyDisclosureFormatter.disclosureForEnhancement(
-            provider = textProvider,
-            selectedModelId = "gemini-1.5-pro",
-            useContext = useContext,
-        )
-
-        return CommandDisclosureSeam(
-            hops = listOf(
-                CommandDisclosureHop(
-                    label = "Instruction audio transcription",
-                    endpoint = sttDisclosure.endpoints.single(),
-                ),
-                CommandDisclosureHop(
-                    label = "Text transform",
-                    endpoint = textDisclosure.endpoints.single(),
-                ),
-            ),
-            dataSent = "Command mode uploads instruction audio for transcription, then sends the selected text plus transcribed instruction for transformation.",
-            contextLine = if (useContext) {
-                "Context text may be sent with the selected text when Use Context is enabled."
-            } else {
-                "Only the selected text and transcribed instruction are sent when Use Context is disabled."
+    fun firstTimeCommandMode_requestsDisclosureBeforeRecordingStarts() = runBlocking {
+        val events = mutableListOf<String>()
+        val coordinator = CommandDisclosureGateCoordinator(
+            shouldBlockExternalSend = {
+                events += "gate_before_recording"
+                false
             },
         )
+
+        val outcome = coordinator.startListening(
+            awaitDisclosure = {
+                events += "disclosure_requested"
+                CommandDisclosureDecision.CONTINUE
+            },
+            startRecording = {
+                events += "recording_started"
+            },
+        )
+
+        assertEquals(CommandListeningStartResult.STARTED, outcome)
+        assertEquals(
+            listOf("disclosure_requested", "gate_before_recording", "recording_started"),
+            events,
+        )
     }
 
-    private enum class DisclosureDecision {
-        CONTINUE,
-        CANCEL,
-        OPEN_SETTINGS,
+    @Test
+    fun cancelOrOpenPrivacySafety_exitsWithoutRecordingOrSending() = runBlocking {
+        val cancelledEvents = mutableListOf<String>()
+        val cancelledCoordinator = CommandDisclosureGateCoordinator(
+            shouldBlockExternalSend = {
+                cancelledEvents += "gate_before_recording"
+                false
+            },
+        )
+
+        val cancelled = cancelledCoordinator.startListening(
+            awaitDisclosure = {
+                cancelledEvents += "disclosure_requested"
+                CommandDisclosureDecision.CANCEL
+            },
+            startRecording = {
+                cancelledEvents += "recording_started"
+            },
+        )
+
+        assertEquals(CommandListeningStartResult.CANCELLED, cancelled)
+        assertFalse(cancelledEvents.contains("recording_started"))
+        assertEquals(listOf("disclosure_requested"), cancelledEvents)
+
+        val redirectedEvents = mutableListOf<String>()
+        val redirectedCoordinator = CommandDisclosureGateCoordinator(
+            shouldBlockExternalSend = {
+                redirectedEvents += "gate_before_recording"
+                false
+            },
+        )
+
+        val redirected = redirectedCoordinator.startListening(
+            awaitDisclosure = {
+                redirectedEvents += "disclosure_requested"
+                CommandDisclosureDecision.OPEN_SETTINGS
+            },
+            startRecording = {
+                redirectedEvents += "recording_started"
+            },
+        )
+
+        assertEquals(CommandListeningStartResult.OPEN_SETTINGS, redirected)
+        assertFalse(redirectedEvents.contains("recording_started"))
+        assertEquals(listOf("disclosure_requested"), redirectedEvents)
     }
 
-    private enum class CommandListeningOutcome {
-        LISTENING,
-        CANCELLED,
-        OPEN_SETTINGS,
-    }
-
-    private data class CommandDisclosureHop(
-        val label: String,
-        val endpoint: PrivacyDisclosureFormatter.EndpointDisclosure,
-    )
-
-    private data class CommandDisclosureSeam(
-        val hops: List<CommandDisclosureHop>,
-        val dataSent: String,
-        val contextLine: String,
-    )
-
-    private class CommandDisclosureFlowHarness(
-        private val disclosureDecision: DisclosureDecision,
-    ) {
+    @Test
+    fun afterConsent_sharedGateStillRunsBeforeRecordingTranscriptionAndTransform() = runBlocking {
         val events = mutableListOf<String>()
-        var recordingStarted = false
-            private set
+        val coordinator = CommandDisclosureGateCoordinator(
+            shouldBlockExternalSend = {
+                events += "gate_check"
+                false
+            },
+        )
 
-        fun startListening(disclosure: CommandDisclosureSeam): CommandListeningOutcome {
-            events += "listening_requested"
-            if (disclosure.hops.isEmpty()) {
-                throw IllegalStateException("command disclosure must exist before recording")
-            }
-            events += "disclosure_required"
+        val startOutcome = coordinator.startListening(
+            awaitDisclosure = {
+                events += "disclosure_requested"
+                CommandDisclosureDecision.CONTINUE
+            },
+            startRecording = {
+                events += "recording_started"
+            },
+        )
 
-            return when (disclosureDecision) {
-                DisclosureDecision.CONTINUE -> {
-                    recordingStarted = true
-                    events += "recording_started"
-                    CommandListeningOutcome.LISTENING
-                }
+        val finishOutcome = coordinator.finishListening(
+            stopRecording = {
+                events += "recording_stopped"
+            },
+            transcribeInstruction = {
+                events += "instruction_transcribed"
+                "Rewrite politely"
+            },
+            restartListening = {
+                events += "listening_restarted"
+            },
+            transform = {
+                events += "transform_called:$it"
+            },
+            cancel = {
+                events += "command_cancelled"
+            },
+        )
 
-                DisclosureDecision.CANCEL -> {
-                    events += "cancelled"
-                    CommandListeningOutcome.CANCELLED
-                }
-
-                DisclosureDecision.OPEN_SETTINGS -> {
-                    events += "open_settings"
-                    CommandListeningOutcome.OPEN_SETTINGS
-                }
-            }
-        }
+        assertEquals(CommandListeningStartResult.STARTED, startOutcome)
+        assertEquals(CommandPostRecordingResult.TRANSFORMED, finishOutcome)
+        assertEquals(3, events.count { it == "gate_check" })
+        assertTrue(events.indexOf("recording_started") < events.indexOf("instruction_transcribed"))
+        assertTrue(events.indexOf("instruction_transcribed") < events.indexOf("transform_called:Rewrite politely"))
+        assertFalse(events.contains("command_cancelled"))
     }
 }
