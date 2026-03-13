@@ -133,10 +133,18 @@ fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHos
             useContext = useContext,
         )
     }
-    val commandDisclosure = remember(commandProvider, validation.effective.commandText.modelId, useContext) {
+    val commandDisclosure = remember(
+        dictationProvider,
+        validation.effective.stt.modelId,
+        commandProvider,
+        validation.effective.commandText.modelId,
+        useContext,
+    ) {
         PrivacyDisclosureFormatter.disclosureForCommand(
-            provider = commandProvider,
-            selectedModelId = validation.effective.commandText.modelId,
+            sttProvider = dictationProvider,
+            sttModelId = validation.effective.stt.modelId,
+            textProvider = commandProvider,
+            textModelId = validation.effective.commandText.modelId,
             useContext = useContext,
         )
     }
@@ -450,7 +458,8 @@ private fun DisclosureCard(
             )
             disclosure.endpoints.forEach { endpoint ->
                 Text(
-                    text = "Endpoint: ${endpoint.baseUrl}${endpoint.path}",
+                    text = endpoint.label?.let { "$it: ${endpoint.baseUrl}${endpoint.path}" }
+                        ?: "Endpoint: ${endpoint.baseUrl}${endpoint.path}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface,
                 )

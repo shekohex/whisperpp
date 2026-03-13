@@ -13,6 +13,7 @@ object PrivacyDisclosureFormatter {
     }
 
     data class EndpointDisclosure(
+        val label: String? = null,
         val baseUrl: String,
         val path: String,
     )
@@ -64,20 +65,33 @@ object PrivacyDisclosureFormatter {
     }
 
     fun disclosureForCommand(
-        provider: ServiceProvider?,
-        selectedModelId: String,
+        sttProvider: ServiceProvider?,
+        sttModelId: String,
+        textProvider: ServiceProvider?,
+        textModelId: String,
         useContext: Boolean,
     ): ModeDisclosure {
-        val endpoint = resolveEndpoint(provider, selectedModelId, Mode.COMMAND_TEXT)
+        val instructionAudioHop = resolveEndpoint(
+            provider = sttProvider,
+            selectedModelId = sttModelId,
+            mode = Mode.DICTATION_AUDIO,
+            label = "Instruction audio transcription",
+        )
+        val textTransformHop = resolveEndpoint(
+            provider = textProvider,
+            selectedModelId = textModelId,
+            mode = Mode.COMMAND_TEXT,
+            label = "Text transform",
+        )
         return ModeDisclosure(
             mode = Mode.COMMAND_TEXT,
-            title = "Command mode (text)",
-            dataSent = "Command mode is planned. Selection text + spoken instruction will be sent when enabled.",
-            endpoints = listOf(endpoint),
+            title = "Command mode",
+            dataSent = "Instruction audio is uploaded for transcription. Then selected text plus the transcribed instruction are sent for transformation.",
+            endpoints = listOf(instructionAudioHop, textTransformHop),
             contextLine = if (useContext) {
-                "Use Context is enabled and may include nearby text when command mode is introduced."
+                "Use Context is enabled. Context text may be sent with the selected text and transcribed instruction."
             } else {
-                "Use Context is disabled for command mode placeholders."
+                "Use Context is disabled. Only the selected text and transcribed instruction are sent after transcription."
             },
         )
     }
@@ -86,13 +100,14 @@ object PrivacyDisclosureFormatter {
         provider: ServiceProvider?,
         selectedModelId: String,
         mode: Mode,
+        label: String? = null,
     ): EndpointDisclosure {
         if (provider == null || provider.endpoint.isBlank()) {
-            return EndpointDisclosure(baseUrl = "Not configured", path = "Not configured")
+            return EndpointDisclosure(label = label, baseUrl = "Not configured", path = "Not configured")
         }
 
         val parsed = provider.endpoint.toHttpUrlOrNull()
-            ?: return EndpointDisclosure(baseUrl = "Invalid endpoint", path = "Invalid endpoint")
+            ?: return EndpointDisclosure(label = label, baseUrl = "Invalid endpoint", path = "Invalid endpoint")
 
         val baseUrl = toBaseUrl(parsed)
         val basePath = parsed.encodedPath.ifBlank { "/" }
@@ -115,7 +130,7 @@ object PrivacyDisclosureFormatter {
             }
         }
 
-        return EndpointDisclosure(baseUrl = baseUrl, path = path)
+        return EndpointDisclosure(label = label, baseUrl = baseUrl, path = path)
     }
 
     private fun toBaseUrl(url: HttpUrl): String {

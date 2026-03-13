@@ -1007,7 +1007,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             title = disclosure.title,
             dataSent = disclosure.dataSent,
             endpointLines = disclosure.endpoints.map { endpoint ->
-                "Endpoint: ${endpoint.baseUrl}${endpoint.path}"
+                endpoint.label?.let { "$it: ${endpoint.baseUrl}${endpoint.path}" }
+                    ?: "Endpoint: ${endpoint.baseUrl}${endpoint.path}"
             },
             contextLine = disclosure.contextLine,
         )
@@ -1740,8 +1741,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
         val useContext = prefs[USE_CONTEXT] ?: false
         val disclosure = PrivacyDisclosureFormatter.disclosureForCommand(
-            provider = provider,
-            selectedModelId = modelId,
+            sttProvider = null,
+            sttModelId = "",
+            textProvider = provider,
+            textModelId = modelId,
             useContext = useContext,
         )
         val disclosureDecision = awaitFirstUseDisclosure(
