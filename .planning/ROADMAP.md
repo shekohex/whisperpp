@@ -190,3 +190,10 @@ Plans:
 **Requirements:** PRIV-01, PRIV-02, PRIV-03, PRIV-04, PRIV-05, CMD-03
 
 **Gap Closure:** Closes the audit partial gaps for PRIV-01 through PRIV-05, fixes the phase-01 to phase-05 command disclosure integration issue, and restores the first-time command-mode privacy and consent flow before spoken instruction capture.
+
+**Plans:** 3 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — Create missing privacy regression harnesses for secure fields, logging, send policy, and command disclosure
+- [ ] 09-02-PLAN.md — Align command disclosure content and pre-capture timing across IME and Privacy & Safety
+- [ ] 09-03-PLAN.md — Restore privacy requirement traceability with verification and summary metadata
