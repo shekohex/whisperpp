@@ -134,6 +134,72 @@ private enum class FirstUseDisclosureDecision {
     OPEN_SETTINGS,
 }
 
+internal enum class CommandDisclosureDecision {
+    CONTINUE,
+    CANCEL,
+    OPEN_SETTINGS,
+}
+
+internal enum class CommandListeningStartResult {
+    STARTED,
+    CANCELLED,
+    OPEN_SETTINGS,
+    BLOCKED,
+}
+
+internal enum class CommandPostRecordingResult {
+    TRANSFORMED,
+    RETRY_LISTENING,
+    BLOCKED,
+}
+
+internal class CommandDisclosureGateCoordinator(
+    private val shouldBlockExternalSend: () -> Boolean,
+) {
+    suspend fun startListening(
+        awaitDisclosure: suspend () -> CommandDisclosureDecision,
+        startRecording: () -> Unit,
+    ): CommandListeningStartResult {
+        return when (awaitDisclosure()) {
+            CommandDisclosureDecision.CANCEL -> CommandListeningStartResult.CANCELLED
+            CommandDisclosureDecision.OPEN_SETTINGS -> CommandListeningStartResult.OPEN_SETTINGS
+            CommandDisclosureDecision.CONTINUE -> {
+                if (shouldBlockExternalSend()) {
+                    CommandListeningStartResult.BLOCKED
+                } else {
+                    startRecording()
+                    CommandListeningStartResult.STARTED
+                }
+            }
+        }
+    }
+
+    suspend fun finishListening(
+        stopRecording: () -> Unit,
+        transcribeInstruction: suspend () -> String,
+        restartListening: () -> Unit,
+        transform: suspend (String) -> Unit,
+    ): CommandPostRecordingResult {
+        stopRecording()
+        if (shouldBlockExternalSend()) {
+            return CommandPostRecordingResult.BLOCKED
+        }
+
+        val instruction = transcribeInstruction().trim()
+        if (instruction.isBlank()) {
+            restartListening()
+            return CommandPostRecordingResult.RETRY_LISTENING
+        }
+
+        if (shouldBlockExternalSend()) {
+            return CommandPostRecordingResult.BLOCKED
+        }
+
+        transform(instruction)
+        return CommandPostRecordingResult.TRANSFORMED
+    }
+}
+
 class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
     private val whisperTranscriber: WhisperTranscriber = WhisperTranscriber()
     private lateinit var smartFixer: SmartFixer
@@ -1074,6 +1140,59 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         resolveFirstUseDisclosure(FirstUseDisclosureDecision.OPEN_SETTINGS)
     }
 
+    private data class CommandRuntimeConfig(
+        val prefs: Preferences,
+        val effective: EffectiveRuntimeConfig,
+        val languageCode: String,
+        val useContext: Boolean,
+        val sttProvider: ServiceProvider,
+        val sttModelId: String,
+        val textProvider: ServiceProvider,
+        val textModelId: String,
+    )
+
+    private suspend fun resolveCommandRuntimeConfig(): CommandRuntimeConfig? {
+        val prefs = dataStore.data.first()
+        val providers = repository.providers.first()
+        val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
+        val effective = resolveEffectiveRuntimeConfig(
+            packageName = currentInputEditorInfo?.packageName,
+            languageCode = languageCode,
+            prefs = prefs,
+            providers = providers,
+        )
+
+        val sttProviderId = effective.sttProviderId
+        val sttModelId = effective.sttModelId
+        val sttProvider = providers.find { it.id == sttProviderId }
+        if (sttProvider == null || sttModelId.isBlank() || sttProvider.models.none { it.id == sttModelId }) {
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_setup_stt))
+            return null
+        }
+
+        val overrideProviderId = prefs[COMMAND_TEXT_PROVIDER_ID]?.trim().orEmpty()
+        val overrideModelId = prefs[COMMAND_TEXT_MODEL_ID]?.trim().orEmpty()
+        val overridePresent = overrideProviderId.isNotBlank() || overrideModelId.isNotBlank()
+        val textProviderId = if (overridePresent) overrideProviderId else effective.textProviderId
+        val textModelId = if (overridePresent) overrideModelId else effective.textModelId
+        val textProvider = providers.find { it.id == textProviderId }
+        if (textProvider == null || textModelId.isBlank() || textProvider.models.none { it.id == textModelId }) {
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_setup_text))
+            return null
+        }
+
+        return CommandRuntimeConfig(
+            prefs = prefs,
+            effective = effective,
+            languageCode = languageCode,
+            useContext = prefs[USE_CONTEXT] ?: false,
+            sttProvider = sttProvider,
+            sttModelId = sttModelId,
+            textProvider = textProvider,
+            textModelId = textModelId,
+        )
+    }
+
     private fun onMicAction() {
         if (shouldBlockExternalSend()) {
             handleBlockedExternalSendAction()
@@ -1501,6 +1620,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         resetCommandRunState()
         isCommandModeActive.value = true
         setCommandStage(CommandStage.WAITING, null)
+        commandSilenceRetryUsed = false
 
         commandRunFocusKey = currentFocusKey()
         commandController.startRun(commandRunFocusKey)
@@ -1564,6 +1684,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         commandConfirmedText = text
         val snapshot = commandSelectionSnapshot
         commandOriginalTextForUndo = if (snapshot != null && snapshot.start != snapshot.end) text else ""
+        commandSilenceRetryUsed = false
         startCommandListening()
     }
 
@@ -1575,83 +1696,109 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     private fun startCommandListening() {
         if (!isCommandModeActive.value) return
-        if (shouldBlockExternalSend()) {
-            cancelCommandMode(showError = true, message = blockedNotice())
-            return
-        }
-        if (recorderManager?.allPermissionsGranted(this) != true) {
-            launchMainActivity()
-            cancelCommandMode(showError = true, message = getString(R.string.command_error_permissions))
-            return
-        }
+        commandJob?.cancel()
+        commandJob = CoroutineScope(Dispatchers.Main).launch {
+            if (recorderManager?.allPermissionsGranted(this@WhisperInputService) != true) {
+                launchMainActivity()
+                cancelCommandMode(showError = true, message = getString(R.string.command_error_permissions))
+                return@launch
+            }
 
-        commandSpokenInstruction = null
-        commandSilenceRetryUsed = false
-        setCommandStage(CommandStage.LISTENING, null)
-        recorderManager?.start(recordedAudioFilename)
+            val runtimeConfig = resolveCommandRuntimeConfig() ?: return@launch
+            val disclosure = PrivacyDisclosureFormatter.disclosureForCommand(
+                sttProvider = runtimeConfig.sttProvider,
+                sttModelId = runtimeConfig.sttModelId,
+                textProvider = runtimeConfig.textProvider,
+                textModelId = runtimeConfig.textModelId,
+                useContext = runtimeConfig.useContext,
+            )
+
+            val startResult = CommandDisclosureGateCoordinator(::shouldBlockExternalSend).startListening(
+                awaitDisclosure = {
+                    when (
+                        awaitFirstUseDisclosure(
+                            mode = FirstUseDisclosureMode.COMMAND_TEXT,
+                            disclosure = disclosure,
+                        )
+                    ) {
+                        FirstUseDisclosureDecision.CONTINUE -> CommandDisclosureDecision.CONTINUE
+                        FirstUseDisclosureDecision.CANCEL -> CommandDisclosureDecision.CANCEL
+                        FirstUseDisclosureDecision.OPEN_SETTINGS -> CommandDisclosureDecision.OPEN_SETTINGS
+                    }
+                },
+                startRecording = {
+                    commandSpokenInstruction = null
+                    setCommandStage(CommandStage.LISTENING, null)
+                    recorderManager?.start(recordedAudioFilename)
+                },
+            )
+
+            when (startResult) {
+                CommandListeningStartResult.STARTED -> Unit
+                CommandListeningStartResult.CANCELLED,
+                CommandListeningStartResult.OPEN_SETTINGS,
+                -> cancelCommandMode(showError = false)
+                CommandListeningStartResult.BLOCKED -> cancelCommandMode(showError = true, message = blockedNotice())
+            }
+        }
     }
 
     private fun onCommandStopListening() {
         if (!isCommandModeActive.value) return
         if (commandStage.value != CommandStage.LISTENING) return
 
-        recorderManager?.stop()
-        setCommandStage(CommandStage.PROCESSING, null)
-
         commandJob?.cancel()
         commandJob = CoroutineScope(Dispatchers.Main).launch {
-            val prefs = dataStore.data.first()
-            val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
-            val providers = repository.providers.first()
-
-            val effective = resolveEffectiveRuntimeConfig(
-                packageName = currentInputEditorInfo?.packageName,
-                languageCode = languageCode,
-                prefs = prefs,
-                providers = providers,
+            val runtimeConfig = resolveCommandRuntimeConfig() ?: return@launch
+            val result = CommandDisclosureGateCoordinator(::shouldBlockExternalSend).finishListening(
+                stopRecording = {
+                    recorderManager?.stop()
+                    setCommandStage(CommandStage.PROCESSING, null)
+                },
+                transcribeInstruction = {
+                    val providerWithApiKey = runtimeConfig.sttProvider.copy(
+                        apiKey = secretsStore.getProviderApiKey(runtimeConfig.sttProvider.id).orEmpty(),
+                    )
+                    val staticPrompt = if (providerWithApiKey.prompt.isNotEmpty()) {
+                        providerWithApiKey.prompt
+                    } else {
+                        runtimeConfig.prefs[PROMPT] ?: ""
+                    }
+                    val postprocessing = runtimeConfig.prefs[POSTPROCESSING] ?: getString(R.string.settings_option_no_conversion)
+                    runCatching {
+                        transcribeInstruction(
+                            languageCode = runtimeConfig.languageCode,
+                            provider = providerWithApiKey,
+                            modelId = runtimeConfig.sttModelId,
+                            postprocessing = postprocessing,
+                            timeout = providerWithApiKey.timeout,
+                            staticPrompt = staticPrompt,
+                            temperature = providerWithApiKey.temperature,
+                        )
+                    }.getOrNull().orEmpty()
+                },
+                restartListening = {},
+                transform = { instruction ->
+                    commandSpokenInstruction = instruction
+                    runCommandTransformOrError(
+                        spokenInstruction = instruction,
+                        runtimeConfig = runtimeConfig,
+                    )
+                },
             )
 
-            val providerId = effective.sttProviderId
-            val modelId = effective.sttModelId
-            val provider = providers.find { it.id == providerId }
-            if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
-                cancelCommandMode(showError = true, message = getString(R.string.command_error_setup_stt))
-                return@launch
-            }
-            if (shouldBlockExternalSend()) {
-                cancelCommandMode(showError = true, message = blockedNotice())
-                return@launch
-            }
-
-            val providerWithApiKey = provider.copy(apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty())
-            val staticPrompt = if (providerWithApiKey.prompt.isNotEmpty()) providerWithApiKey.prompt else prefs[PROMPT] ?: ""
-            val temperature = providerWithApiKey.temperature
-            val postprocessing = prefs[POSTPROCESSING] ?: getString(R.string.settings_option_no_conversion)
-            val timeout = providerWithApiKey.timeout
-            val instruction = runCatching {
-                transcribeInstruction(
-                    languageCode = languageCode,
-                    provider = providerWithApiKey,
-                    modelId = modelId,
-                    postprocessing = postprocessing,
-                    timeout = timeout,
-                    staticPrompt = staticPrompt,
-                    temperature = temperature,
-                )
-            }.getOrNull()?.trim().orEmpty()
-
-            if (instruction.isBlank()) {
-                if (!commandSilenceRetryUsed) {
-                    commandSilenceRetryUsed = true
-                    startCommandListening()
-                    return@launch
+            when (result) {
+                CommandPostRecordingResult.TRANSFORMED -> Unit
+                CommandPostRecordingResult.RETRY_LISTENING -> {
+                    if (!commandSilenceRetryUsed) {
+                        commandSilenceRetryUsed = true
+                        startCommandListening()
+                    } else {
+                        cancelCommandMode(showError = false)
+                    }
                 }
-                cancelCommandMode(showError = false)
-                return@launch
+                CommandPostRecordingResult.BLOCKED -> cancelCommandMode(showError = true, message = blockedNotice())
             }
-
-            commandSpokenInstruction = instruction
-            runCommandTransformOrError(instruction)
         }
     }
 
@@ -1703,7 +1850,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
     }
 
-    private suspend fun runCommandTransformOrError(spokenInstruction: String) {
+    private suspend fun runCommandTransformOrError(
+        spokenInstruction: String,
+        runtimeConfig: CommandRuntimeConfig,
+    ) {
         val confirmedText = commandConfirmedText?.trim().orEmpty()
         val snapshot = commandSelectionSnapshot
         val focusKey = commandRunFocusKey
@@ -1712,56 +1862,14 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             return
         }
 
-        if (shouldBlockExternalSend()) {
-            cancelCommandMode(showError = true, message = blockedNotice())
-            return
-        }
-
-        val prefs = dataStore.data.first()
-        val providers = repository.providers.first()
-        val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
-        val effective = resolveEffectiveRuntimeConfig(
-            packageName = currentInputEditorInfo?.packageName,
-            languageCode = languageCode,
-            prefs = prefs,
-            providers = providers,
-        )
-
-        val overrideProviderId = prefs[COMMAND_TEXT_PROVIDER_ID]?.trim().orEmpty()
-        val overrideModelId = prefs[COMMAND_TEXT_MODEL_ID]?.trim().orEmpty()
-        val overridePresent = overrideProviderId.isNotBlank() || overrideModelId.isNotBlank()
-        val providerId = if (overridePresent) overrideProviderId else effective.textProviderId
-        val modelId = if (overridePresent) overrideModelId else effective.textModelId
-
-        val provider = providers.find { it.id == providerId }
-        if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
-            cancelCommandMode(showError = true, message = getString(R.string.command_error_setup_text))
-            return
-        }
-
-        val useContext = prefs[USE_CONTEXT] ?: false
-        val disclosure = PrivacyDisclosureFormatter.disclosureForCommand(
-            sttProvider = null,
-            sttModelId = "",
-            textProvider = provider,
-            textModelId = modelId,
-            useContext = useContext,
-        )
-        val disclosureDecision = awaitFirstUseDisclosure(
-            mode = FirstUseDisclosureMode.COMMAND_TEXT,
-            disclosure = disclosure,
-        )
-        if (disclosureDecision != FirstUseDisclosureDecision.CONTINUE) {
-            cancelCommandMode(showError = false)
-            return
-        }
-
-        if (provider.endpoint.isBlank()) {
+        if (runtimeConfig.textProvider.endpoint.isBlank()) {
             cancelCommandMode(showError = true, message = getString(R.string.command_error_missing_endpoint))
             return
         }
 
-        val providerWithApiKey = provider.copy(apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty())
+        val providerWithApiKey = runtimeConfig.textProvider.copy(
+            apiKey = secretsStore.getProviderApiKey(runtimeConfig.textProvider.id).orEmpty(),
+        )
         if (providerWithApiKey.authMode == ProviderAuthMode.API_KEY && providerWithApiKey.apiKey.isBlank()) {
             cancelCommandMode(showError = true, message = getString(R.string.command_error_missing_api_key))
             return
@@ -1769,13 +1877,17 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
         val presetInstruction = presetById(commandSelectedPresetId.value)?.promptInstruction
         val promptTemplate = TransformPromptBuilder.buildTemplate(
-            basePrompt = effective.prompt,
+            basePrompt = runtimeConfig.effective.prompt,
             presetInstruction = presetInstruction,
             spokenInstruction = spokenInstruction,
         )
 
-        val temperature = if (provider.temperature > 0) provider.temperature else prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
-        val contextPrompt = if (useContext) currentInputConnection?.getTextBeforeCursor(500, 0)?.toString() else null
+        val temperature = if (runtimeConfig.textProvider.temperature > 0) {
+            runtimeConfig.textProvider.temperature
+        } else {
+            runtimeConfig.prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
+        }
+        val contextPrompt = if (runtimeConfig.useContext) currentInputConnection?.getTextBeforeCursor(500, 0)?.toString() else null
 
         setCommandStage(CommandStage.PROCESSING, null)
 
@@ -1785,7 +1897,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                     text = confirmedText,
                     contextInformation = contextPrompt,
                     provider = providerWithApiKey,
-                    modelId = modelId,
+                    modelId = runtimeConfig.textModelId,
                     temperature = temperature,
                     promptTemplate = promptTemplate,
                 )
@@ -1877,7 +1989,11 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         val instruction = commandSpokenInstruction ?: return
         commandJob?.cancel()
         commandJob = CoroutineScope(Dispatchers.Main).launch {
-            runCommandTransformOrError(instruction)
+            val runtimeConfig = resolveCommandRuntimeConfig() ?: return@launch
+            runCommandTransformOrError(
+                spokenInstruction = instruction,
+                runtimeConfig = runtimeConfig,
+            )
         }
     }
 

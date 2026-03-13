@@ -1,5 +1,9 @@
 package com.github.shekohex.whisperpp.command
 
+import com.github.shekohex.whisperpp.CommandDisclosureDecision
+import com.github.shekohex.whisperpp.CommandDisclosureGateCoordinator
+import com.github.shekohex.whisperpp.CommandListeningStartResult
+import com.github.shekohex.whisperpp.CommandPostRecordingResult
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -113,11 +117,8 @@ class CommandDisclosureFlowTest {
             restartListening = {
                 events += "listening_restarted"
             },
-            transform = {
-                events += "transform_called:$it"
-            },
-            cancel = {
-                events += "command_cancelled"
+            transform = { instruction ->
+                events += "transform_called:$instruction"
             },
         )
 
@@ -126,6 +127,5 @@ class CommandDisclosureFlowTest {
         assertEquals(3, events.count { it == "gate_check" })
         assertTrue(events.indexOf("recording_started") < events.indexOf("instruction_transcribed"))
         assertTrue(events.indexOf("instruction_transcribed") < events.indexOf("transform_called:Rewrite politely"))
-        assertFalse(events.contains("command_cancelled"))
     }
 }
