@@ -51,7 +51,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **CMD-01**: User can enter command mode via a dedicated Command key
 - [x] **CMD-02**: Command mode uses selected text from the editor when available; otherwise uses a clipboard fallback workflow
-- [ ] **CMD-03**: User can speak an instruction; Whisper++ transcribes it and sends (instruction + selected text) to the selected text model/provider
+- [x] **CMD-03**: User can speak an instruction; Whisper++ transcribes it and sends (instruction + selected text) to the selected text model/provider
 - [x] **CMD-04**: Command mode replaces the selection with the result and provides 1-tap undo
 
 ### Analytics (Local)
@@ -61,11 +61,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Privacy & Safety
 
-- [ ] **PRIV-01**: Dictation and command mode are disabled in secure fields (password/OTP/etc) with a clear explanation
+- [x] **PRIV-01**: Dictation and command mode are disabled in secure fields (password/OTP/etc) with a clear explanation
 - [ ] **PRIV-02**: Provider API keys are stored securely (Keystore-backed) and excluded from logs
-- [ ] **PRIV-03**: Network logging redacts auth headers and does not log user audio/text payloads by default
-- [ ] **PRIV-04**: User can set per-app send policy to block sending audio/text to external providers and Whisper++ enforces it
-- [ ] **PRIV-05**: UI clearly discloses what data is sent (audio/text) and to which provider endpoint(s)
+- [x] **PRIV-03**: Network logging redacts auth headers and does not log user audio/text payloads by default
+- [x] **PRIV-04**: User can set per-app send policy to block sending audio/text to external providers and Whisper++ enforces it
+- [x] **PRIV-05**: UI clearly discloses what data is sent (audio/text) and to which provider endpoint(s)
 - [x] **PRIV-06**: Usage analytics are stored locally only, can be reset, and are not transmitted by default
 
 ## v2 Requirements
@@ -136,15 +136,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PROF-04 | 4 | Complete |
 | CMD-01 | 5 | Complete |
 | CMD-02 | 5 | Complete |
-| CMD-03 | 9 | Pending |
+| CMD-03 | 9 | Complete |
 | CMD-04 | 5 | Complete |
 | STATS-01 | 7 | Complete |
 | STATS-02 | 7 | Complete |
-| PRIV-01 | 9 | Pending |
+| PRIV-01 | 9 | Complete |
 | PRIV-02 | 9 | Pending |
-| PRIV-03 | 9 | Pending |
-| PRIV-04 | 9 | Pending |
-| PRIV-05 | 9 | Pending |
+| PRIV-03 | 9 | Complete |
+| PRIV-04 | 9 | Complete |
+| PRIV-05 | 9 | Complete |
 | PRIV-06 | 7 | Complete |
 
 **Coverage:**

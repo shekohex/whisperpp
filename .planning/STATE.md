@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 09
 current_phase_name: privacy traceability command disclosure alignment
-current_plan: Not started
-status: planning
-stopped_at: Completed 08-phase-06-verification-recovery-02-PLAN.md
-last_updated: "2026-03-12T23:45:52.162Z"
+current_plan: 2
+status: executing
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-03-13T15:12:52.974Z"
 progress:
   total_phases: 9
   completed_phases: 8
-  total_plans: 34
-  completed_plans: 34
-  percent: 100
+  total_plans: 37
+  completed_plans: 35
+  percent: 95
 ---
 
 # STATE: Whisper++
@@ -22,11 +22,11 @@ progress:
 
 **Current Phase:** 09
 **Current Phase Name:** privacy traceability command disclosure alignment
-**Status:** Ready to plan
-**Current Plan:** Not started
-**Total Plans in Phase:** 2
+**Status:** Executing
+**Current Plan:** 2
+**Total Plans in Phase:** 3
 
-**Progress:** [██████████] 100%
+**Progress:** [██████████] 95%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ progress:
 | Phase 07-local-analytics-dashboard P03 | 19 min | 3 tasks | 7 files |
 | Phase 08-phase-06-verification-recovery P01 | 14 min | 2 tasks | 3 files |
 | Phase 08-phase-06-verification-recovery P02 | 4 min | 2 tasks | 2 files |
+| Phase 09 P01 | 5 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -129,6 +130,8 @@ progress:
 - [Phase 08]: Expose ImportPreviewCard and RestoreSummaryCard as internal composables so androidTests can render deterministic fixtures without changing production state wiring.
 - [Phase 08]: Use completed 06-UAT evidence for real SAF interaction and final Material validation instead of overstating automation coverage.
 - [Phase 08]: Keep UI-01, SET-01, and SET-02 mapped to phase 8 in REQUIREMENTS because phase 8 closes the audit gap rather than changing the original feature delivery phase.
+- [Phase 09]: Use a task-local command disclosure seam that composes existing dictation/enhancement disclosures until wave-2 runtime alignment lands.
+- [Phase 09]: Expose stable Privacy & Safety test tags so Compose verification can target disclosure and send-policy controls deterministically.
 
 ### Blockers
 
@@ -140,6 +143,6 @@ progress:
 
 ## Session Continuity
 
-**Last session:** 2026-03-12T22:15:08.659Z
-**Stopped At:** Completed 08-phase-06-verification-recovery-02-PLAN.md
+**Last session:** 2026-03-13T15:12:52.972Z
+**Stopped At:** Completed 09-01-PLAN.md
 **Resume file:** None
