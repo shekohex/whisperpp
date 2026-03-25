@@ -20,7 +20,7 @@ Whisper++ is an Android keyboard (IME) that turns speech into text in any app, w
 | 6 | Settings UX + Import/Export | Users can configure and back up/restore all core behavior with polished settings UI | Complete (4/4, 2026-03-09) |
 | 7 | Local Analytics Dashboard | Users can view and reset local-only usage analytics and time-saved estimates | Complete (3/3, 2026-03-11) |
 | 8 | Phase 06 Verification Recovery | Users can verify shipped settings/import-export behavior so phase-06 requirements are no longer orphaned | Complete (2/2, 2026-03-12) |
-| 9 | Privacy Traceability & Command Disclosure Alignment | Users see accurate command disclosures before command-mode capture and privacy requirements regain traceable coverage | In Progress (1/3, 2026-03-13) |
+| 9 | Privacy Traceability & Command Disclosure Alignment | Users see accurate command disclosures before command-mode capture and privacy requirements regain traceable coverage | In Progress (2/3, 2026-03-25) |
 
 ---
 
@@ -195,5 +195,5 @@ Plans:
 
 Plans:
 - [x] 09-01-PLAN.md — Create missing privacy regression harnesses for secure fields, logging, send policy, and command disclosure
-- [ ] 09-02-PLAN.md — Align command disclosure content and pre-capture timing across IME and Privacy & Safety
+- [x] 09-02-PLAN.md — Align command disclosure content and pre-capture timing across IME and Privacy & Safety
 - [ ] 09-03-PLAN.md — Restore privacy requirement traceability with verification and summary metadata

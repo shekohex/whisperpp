@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 09
 current_phase_name: privacy traceability command disclosure alignment
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-03-13T15:12:52.974Z"
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-03-25T20:11:37.074Z"
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 37
-  completed_plans: 35
-  percent: 95
+  completed_plans: 36
+  percent: 97
 ---
 
 # STATE: Whisper++
@@ -22,11 +22,11 @@ progress:
 
 **Current Phase:** 09
 **Current Phase Name:** privacy traceability command disclosure alignment
-**Status:** Executing
-**Current Plan:** 2
+**Status:** Ready to execute
+**Current Plan:** 3
 **Total Plans in Phase:** 3
 
-**Progress:** [██████████] 95%
+**Progress:** [██████████] 97%
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ progress:
 | Phase 08-phase-06-verification-recovery P01 | 14 min | 2 tasks | 3 files |
 | Phase 08-phase-06-verification-recovery P02 | 4 min | 2 tasks | 2 files |
 | Phase 09 P01 | 5 min | 3 tasks | 7 files |
+| Phase 09 P02 | 53 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,8 @@ progress:
 - [Phase 08]: Keep UI-01, SET-01, and SET-02 mapped to phase 8 in REQUIREMENTS because phase 8 closes the audit gap rather than changing the original feature delivery phase.
 - [Phase 09]: Use a task-local command disclosure seam that composes existing dictation/enhancement disclosures until wave-2 runtime alignment lands.
 - [Phase 09]: Expose stable Privacy & Safety test tags so Compose verification can target disclosure and send-policy controls deterministically.
+- [Phase 09]: Command disclosure rows now come from the shared formatter for both IME and Privacy & Safety.
+- [Phase 09]: Command-mode first-use consent resolves before recorder start while shared send-block checks still wrap record, STT, and transform.
 
 ### Blockers
 
@@ -143,6 +146,6 @@ progress:
 
 ## Session Continuity
 
-**Last session:** 2026-03-13T15:12:52.972Z
-**Stopped At:** Completed 09-01-PLAN.md
+**Last session:** 2026-03-25T20:11:37.072Z
+**Stopped At:** Completed 09-02-PLAN.md
 **Resume file:** None
