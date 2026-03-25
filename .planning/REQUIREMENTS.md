@@ -62,7 +62,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Privacy & Safety
 
 - [x] **PRIV-01**: Dictation and command mode are disabled in secure fields (password/OTP/etc) with a clear explanation
-- [ ] **PRIV-02**: Provider API keys are stored securely (Keystore-backed) and excluded from logs
+- [x] **PRIV-02**: Provider API keys are stored securely (Keystore-backed) and excluded from logs
 - [x] **PRIV-03**: Network logging redacts auth headers and does not log user audio/text payloads by default
 - [x] **PRIV-04**: User can set per-app send policy to block sending audio/text to external providers and Whisper++ enforces it
 - [x] **PRIV-05**: UI clearly discloses what data is sent (audio/text) and to which provider endpoint(s)
@@ -141,7 +141,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | STATS-01 | 7 | Complete |
 | STATS-02 | 7 | Complete |
 | PRIV-01 | 9 | Complete |
-| PRIV-02 | 9 | Pending |
+| PRIV-02 | 9 | Complete |
 | PRIV-03 | 9 | Complete |
 | PRIV-04 | 9 | Complete |
 | PRIV-05 | 9 | Complete |
