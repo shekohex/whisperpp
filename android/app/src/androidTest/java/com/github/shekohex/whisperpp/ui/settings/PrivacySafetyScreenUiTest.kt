@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
 import androidx.navigation.compose.rememberNavController
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.shekohex.whisperpp.ACTIVE_STT_MODEL_ID
 import com.github.shekohex.whisperpp.ACTIVE_STT_PROVIDER_ID
 import com.github.shekohex.whisperpp.ACTIVE_TEXT_MODEL_ID
@@ -36,7 +37,9 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
 
+@RunWith(AndroidJUnit4::class)
 class PrivacySafetyScreenUiTest {
     @get:Rule
     val composeRule = createComposeRule()
@@ -49,8 +52,11 @@ class PrivacySafetyScreenUiTest {
         composeRule.onNodeWithTag("privacy_disclosure_card_dictation_audio").assertIsDisplayed()
         composeRule.onNodeWithTag("privacy_disclosure_card_enhancement_text").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("privacy_disclosure_card_command_text").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Command mode (text)").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Endpoint: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent")
+        composeRule.onNodeWithText("Command mode").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Instruction audio transcription: https://stt.example.com/v1/audio/transcriptions")
+            .performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText("Text transform: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent")
             .performScrollTo()
             .assertIsDisplayed()
 
@@ -63,6 +69,9 @@ class PrivacySafetyScreenUiTest {
                 composeRule.onNodeWithText("com.example.manual").performScrollTo().assertIsDisplayed()
             }.isSuccess
         }
+
+        composeRule.onNodeWithTag("privacy_search_installed_apps_input").performScrollTo().performTextInput("manual")
+        composeRule.onNodeWithText("com.example.manual").performScrollTo().assertIsDisplayed()
     }
 
     @Test
