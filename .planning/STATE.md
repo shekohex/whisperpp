@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 09
 current_phase_name: privacy traceability command disclosure alignment
 current_plan: 3
-status: executing
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-03-25T20:11:37.074Z"
+status: verifying
+stopped_at: Completed 09-03-PLAN.md
+last_updated: "2026-03-25T20:21:43.107Z"
 progress:
   total_phases: 9
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 37
-  completed_plans: 36
-  percent: 97
+  completed_plans: 37
+  percent: 100
 ---
 
 # STATE: Whisper++
@@ -22,11 +22,11 @@ progress:
 
 **Current Phase:** 09
 **Current Phase Name:** privacy traceability command disclosure alignment
-**Status:** Ready to execute
+**Status:** Phase complete — ready for verification
 **Current Plan:** 3
 **Total Plans in Phase:** 3
 
-**Progress:** [██████████] 97%
+**Progress:** [██████████] 100%
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ progress:
 | Phase 08-phase-06-verification-recovery P02 | 4 min | 2 tasks | 2 files |
 | Phase 09 P01 | 5 min | 3 tasks | 7 files |
 | Phase 09 P02 | 53 min | 3 tasks | 6 files |
+| Phase 09 P03 | 10 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -135,6 +136,8 @@ progress:
 - [Phase 09]: Expose stable Privacy & Safety test tags so Compose verification can target disclosure and send-policy controls deterministically.
 - [Phase 09]: Command disclosure rows now come from the shared formatter for both IME and Privacy & Safety.
 - [Phase 09]: Command-mode first-use consent resolves before recorder start while shared send-block checks still wrap record, STT, and transform.
+- [Phase 09]: Keep PRIV-01 through PRIV-05 and CMD-03 owned by phase 09 because this recovery phase closes the audit gap rather than rewriting original delivery history.
+- [Phase 09]: Reuse existing SecretsStore and SettingsBackupRepositoryExportTest evidence for PRIV-02 instead of inventing new privacy-storage work.
 
 ### Blockers
 
@@ -146,6 +149,6 @@ progress:
 
 ## Session Continuity
 
-**Last session:** 2026-03-25T20:11:37.072Z
-**Stopped At:** Completed 09-02-PLAN.md
+**Last session:** 2026-03-25T20:21:43.106Z
+**Stopped At:** Completed 09-03-PLAN.md
 **Resume file:** None
