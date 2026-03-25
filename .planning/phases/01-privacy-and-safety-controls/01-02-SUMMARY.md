@@ -41,6 +41,9 @@ patterns-established:
   - "SecureFieldDetector.detect(EditorInfo?) returns isSecure + reason and is reused by IME gate and UI"
   - "Blocked main action remains visible with lock icon while interaction is constrained to explanation path"
 
+requirements-completed:
+  - PRIV-01
+
 # Metrics
 duration: 10 min
 completed: 2026-02-26

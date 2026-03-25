@@ -40,6 +40,9 @@ patterns-established:
   - "Privacy disclosures and first-use modal share the same formatter source"
   - "Diagnostics toggles remain privacy-safe by constraining logs to redacted headers only"
 
+requirements-completed:
+  - PRIV-05
+
 # Metrics
 duration: 8m
 completed: 2026-02-26

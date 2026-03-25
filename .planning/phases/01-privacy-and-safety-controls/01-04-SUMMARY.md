@@ -41,6 +41,9 @@ patterns-established:
   - "IME send checks must run through shouldBlockExternalSend() before recorder/transcriber/smart-fix actions."
   - "Privacy controls in settings are exposed as dedicated routes consumable by MainActivity destination extras."
 
+requirements-completed:
+  - PRIV-04
+
 # Metrics
 duration: 6m
 completed: 2026-02-26

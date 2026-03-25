@@ -40,7 +40,9 @@ patterns-established:
   - "Blocked explanation UI text is selected via resource-id copy spec instead of hardcoded strings"
   - "IME UI fallbacks should reuse the exact same content composable to prevent drift"
 
-requirements-completed: []
+requirements-completed:
+  - PRIV-01
+  - PRIV-04
 
 # Metrics
 duration: 89h 19m

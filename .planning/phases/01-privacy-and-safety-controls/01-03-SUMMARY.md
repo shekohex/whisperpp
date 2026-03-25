@@ -41,6 +41,9 @@ patterns-established:
   - "SettingsNavigation blocks provider screens until migration finishes"
   - "WhisperInputService.onCreate runs migration before any provider flow is consumed"
 
+requirements-completed:
+  - PRIV-02
+
 # Metrics
 duration: 8 min
 completed: 2026-02-26

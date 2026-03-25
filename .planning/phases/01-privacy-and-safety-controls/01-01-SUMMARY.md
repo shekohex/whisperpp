@@ -35,6 +35,9 @@ patterns-established:
   - "Cancellation path owns both coroutine job cancel and OkHttp Call.cancel()"
   - "Safe error text = provider name/type + HTTP status + endpoint host"
 
+requirements-completed:
+  - PRIV-03
+
 # Metrics
 duration: 7 min
 completed: 2026-02-26
