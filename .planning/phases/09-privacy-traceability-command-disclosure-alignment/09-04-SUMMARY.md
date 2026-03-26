@@ -50,7 +50,7 @@ Each task was committed atomically:
 
 1. **task 1: update requirements footer metadata for the phase-09 recovery** - `29e0ff6` (docs)
 
-**Plan metadata:** pending final docs commit
+**Plan metadata:** `995138e` (docs)
 
 ## Files Created/Modified
 - `.planning/REQUIREMENTS.md` - updates the stale `Last updated` footer line to phase-09 recovery wording.
@@ -69,7 +69,7 @@ Each task was committed atomically:
 - **Fix:** Updated `.planning/STATE.md` and `.planning/ROADMAP.md` manually so phase-09 now reports `4/4` completion consistently.
 - **Files modified:** `.planning/STATE.md`, `.planning/ROADMAP.md`
 - **Verification:** `read` checks of `.planning/STATE.md` and `.planning/ROADMAP.md` show `Current Plan: 4`, `Total Plans in Phase: 4`, `Complete (4/4, 2026-03-26)`, and `[x] 09-04-PLAN.md`.
-- **Committed in:** pending final docs commit
+- **Committed in:** `995138e` (docs)
 
 ---
 
