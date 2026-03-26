@@ -76,6 +76,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.github.shekohex.whisperpp.ACTIVE_STT_MODEL_ID
 import com.github.shekohex.whisperpp.ACTIVE_STT_PROVIDER_ID
 import com.github.shekohex.whisperpp.ACTIVE_TEXT_MODEL_ID
@@ -116,7 +117,10 @@ fun SettingsHomeScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val repository = remember { SettingsRepository(dataStore) }
     val analyticsRepository = remember(context) { AnalyticsRepository(context.analyticsDataStore) }
-    val homeEntry = remember(navController) { navController.getBackStackEntry(SettingsScreen.Main.route) }
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val homeEntry = remember(currentBackStackEntry, navController) {
+        navController.getBackStackEntry(SettingsScreen.Main.route)
+    }
     val settingsState by dataStore.data.collectAsState(initial = emptyPreferences())
     val providers by repository.providers.collectAsState(initial = emptyList())
     val promptProfiles by repository.promptProfiles.collectAsState(initial = emptyList())
