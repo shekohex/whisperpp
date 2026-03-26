@@ -20,7 +20,7 @@ Whisper++ is an Android keyboard (IME) that turns speech into text in any app, w
 | 6 | Settings UX + Import/Export | Users can configure and back up/restore all core behavior with polished settings UI | Complete (4/4, 2026-03-09) |
 | 7 | Local Analytics Dashboard | Users can view and reset local-only usage analytics and time-saved estimates | Complete (3/3, 2026-03-11) |
 | 8 | Phase 06 Verification Recovery | Users can verify shipped settings/import-export behavior so phase-06 requirements are no longer orphaned | Complete (2/2, 2026-03-12) |
-| 9 | Privacy Traceability & Command Disclosure Alignment | Users see accurate command disclosures before command-mode capture and privacy requirements regain traceable coverage | Complete (3/3, 2026-03-25) |
+| 9 | Privacy Traceability & Command Disclosure Alignment | Users see accurate command disclosures before command-mode capture and privacy requirements regain traceable coverage | In progress (3/4) |
 
 ---
 
@@ -158,7 +158,7 @@ Plans:
 2. Settings home includes an analytics dashboard with an estimated time-saved summary.
 3. Users can reset analytics, and analytics are not transmitted by default.
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
 - [x] 07-01-PLAN.md — Build the local-only analytics repository, formatter, and backup/privacy boundary
@@ -191,9 +191,10 @@ Plans:
 
 **Gap Closure:** Closes the audit partial gaps for PRIV-01 through PRIV-05, fixes the phase-01 to phase-05 command disclosure integration issue, and restores the first-time command-mode privacy and consent flow before spoken instruction capture.
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
 - [x] 09-01-PLAN.md — Create missing privacy regression harnesses for secure fields, logging, send policy, and command disclosure
 - [x] 09-02-PLAN.md — Align command disclosure content and pre-capture timing across IME and Privacy & Safety
 - [x] 09-03-PLAN.md — Restore privacy requirement traceability with verification and summary metadata
+- [ ] 09-04-PLAN.md — Update REQUIREMENTS footer metadata so phase-09 traceability artifacts no longer contradict each other
