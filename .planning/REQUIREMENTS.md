@@ -154,4 +154,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-26*
-*Last updated: 2026-03-12 after phase-08 verification recovery execution*
+*Last updated: 2026-03-25 after phase-09 privacy traceability recovery execution*
