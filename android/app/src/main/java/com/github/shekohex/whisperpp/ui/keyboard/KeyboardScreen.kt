@@ -273,59 +273,26 @@ fun KeyboardScreen(
     }
 
     if (firstUseDisclosure != null) {
-        ModalBottomSheet(onDismissRequest = onFirstUseDisclosureCancel) {
-            Column(
+        Popup(
+            alignment = Alignment.BottomCenter,
+            onDismissRequest = onFirstUseDisclosureCancel,
+            properties = PopupProperties(focusable = true, clippingEnabled = false),
+        ) {
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp,
+                shadowElevation = 8.dp,
             ) {
-                Text(
-                    text = firstUseDisclosure.title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
+                FirstUseDisclosureContent(
+                    disclosure = firstUseDisclosure,
+                    onContinue = onFirstUseDisclosureContinue,
+                    onOpenPrivacySafety = onFirstUseDisclosureOpenPrivacySafety,
+                    onCancel = onFirstUseDisclosureCancel,
                 )
-                Text(
-                    text = firstUseDisclosure.dataSent,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                firstUseDisclosure.endpointLines.forEach { endpointLine ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    ) {
-                        Text(
-                            text = endpointLine,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        )
-                    }
-                }
-                Text(
-                    text = firstUseDisclosure.contextLine,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Button(
-                    onClick = onFirstUseDisclosureContinue,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Continue")
-                }
-                OutlinedButton(
-                    onClick = onFirstUseDisclosureOpenPrivacySafety,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Open Privacy & Safety")
-                }
-                TextButton(
-                    onClick = onFirstUseDisclosureCancel,
-                    modifier = Modifier.align(Alignment.End),
-                ) {
-                    Text("Cancel")
-                }
-                Spacer(Modifier.height(12.dp))
             }
         }
     }
@@ -942,6 +909,70 @@ internal fun BlockedExplanationContent(
             ) {
                 Text(stringResource(R.string.secure_field_sheet_dont_show_again))
             }
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
+@Composable
+internal fun FirstUseDisclosureContent(
+    disclosure: FirstUseDisclosureUiState,
+    onContinue: () -> Unit,
+    onOpenPrivacySafety: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = disclosure.title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+            text = disclosure.dataSent,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        disclosure.endpointLines.forEach { endpointLine ->
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+            ) {
+                Text(
+                    text = endpointLine,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                )
+            }
+        }
+        Text(
+            text = disclosure.contextLine,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(
+            onClick = onContinue,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Continue")
+        }
+        OutlinedButton(
+            onClick = onOpenPrivacySafety,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Open Privacy & Safety")
+        }
+        TextButton(
+            onClick = onCancel,
+            modifier = Modifier.align(Alignment.End),
+        ) {
+            Text("Cancel")
         }
         Spacer(Modifier.height(12.dp))
     }
