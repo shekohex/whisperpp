@@ -127,6 +127,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                         type = safeType,
                         endpoint = safeEndpoint,
                         authMode = safeAuthMode,
+                        apiKey = "",
                         models = safeModels,
                         prompt = (provider.prompt as? String) ?: "",
                         languageCode = (provider.languageCode as? String) ?: "auto",
