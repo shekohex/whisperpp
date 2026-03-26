@@ -4,15 +4,15 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 09
 current_phase_name: privacy traceability command disclosure alignment
-current_plan: 3
-status: verifying
-stopped_at: Completed 09-03-PLAN.md
-last_updated: "2026-03-25T20:21:43.107Z"
+current_plan: 4
+status: ready_for_verification
+stopped_at: Completed 09-04-PLAN.md
+last_updated: "2026-03-26T21:03:09.639Z"
 progress:
   total_phases: 9
   completed_phases: 9
-  total_plans: 37
-  completed_plans: 37
+  total_plans: 38
+  completed_plans: 38
   percent: 100
 ---
 
@@ -23,8 +23,8 @@ progress:
 **Current Phase:** 09
 **Current Phase Name:** privacy traceability command disclosure alignment
 **Status:** Phase complete — ready for verification
-**Current Plan:** 3
-**Total Plans in Phase:** 3
+**Current Plan:** 4
+**Total Plans in Phase:** 4
 
 **Progress:** [██████████] 100%
 
@@ -63,6 +63,7 @@ progress:
 | Phase 09 P01 | 5 min | 3 tasks | 7 files |
 | Phase 09 P02 | 53 min | 3 tasks | 6 files |
 | Phase 09 P03 | 10 min | 3 tasks | 8 files |
+| Phase 09 P04 | 0 min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -138,6 +139,7 @@ progress:
 - [Phase 09]: Command-mode first-use consent resolves before recorder start while shared send-block checks still wrap record, STT, and transform.
 - [Phase 09]: Keep PRIV-01 through PRIV-05 and CMD-03 owned by phase 09 because this recovery phase closes the audit gap rather than rewriting original delivery history.
 - [Phase 09]: Reuse existing SecretsStore and SettingsBackupRepositoryExportTest evidence for PRIV-02 instead of inventing new privacy-storage work.
+- [Phase 09]: Preserve the phase-09 checklist and traceability rows exactly as shipped and fix only the stale REQUIREMENTS footer metadata.
 
 ### Blockers
 
@@ -149,6 +151,6 @@ progress:
 
 ## Session Continuity
 
-**Last session:** 2026-03-25T20:21:43.106Z
-**Stopped At:** Completed 09-03-PLAN.md
+**Last session:** 2026-03-26T21:03:09.637Z
+**Stopped At:** Completed 09-04-PLAN.md
 **Resume file:** None

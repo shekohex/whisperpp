@@ -20,7 +20,7 @@ Whisper++ is an Android keyboard (IME) that turns speech into text in any app, w
 | 6 | Settings UX + Import/Export | Users can configure and back up/restore all core behavior with polished settings UI | Complete (4/4, 2026-03-09) |
 | 7 | Local Analytics Dashboard | Users can view and reset local-only usage analytics and time-saved estimates | Complete (3/3, 2026-03-11) |
 | 8 | Phase 06 Verification Recovery | Users can verify shipped settings/import-export behavior so phase-06 requirements are no longer orphaned | Complete (2/2, 2026-03-12) |
-| 9 | Privacy Traceability & Command Disclosure Alignment | Users see accurate command disclosures before command-mode capture and privacy requirements regain traceable coverage | In progress (3/4) |
+| 9 | Privacy Traceability & Command Disclosure Alignment | Users see accurate command disclosures before command-mode capture and privacy requirements regain traceable coverage | Complete (4/4, 2026-03-26) |
 
 ---
 
@@ -137,7 +137,7 @@ Plans:
 2. Users can configure all core behavior in settings (providers/models, prompts, per-app/per-language overrides, dictation/enhancement/command toggles).
 3. Users can export full settings to a shareable file and import it to restore settings (with clear overwrite/merge behavior).
 
-**Plans:** 4 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 06-01-PLAN.md — Build the encrypted backup envelope and full export snapshot foundation
@@ -197,4 +197,4 @@ Plans:
 - [x] 09-01-PLAN.md — Create missing privacy regression harnesses for secure fields, logging, send policy, and command disclosure
 - [x] 09-02-PLAN.md — Align command disclosure content and pre-capture timing across IME and Privacy & Safety
 - [x] 09-03-PLAN.md — Restore privacy requirement traceability with verification and summary metadata
-- [ ] 09-04-PLAN.md — Update REQUIREMENTS footer metadata so phase-09 traceability artifacts no longer contradict each other
+- [x] 09-04-PLAN.md — Update REQUIREMENTS footer metadata so phase-09 traceability artifacts no longer contradict each other
