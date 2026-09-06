@@ -32,11 +32,14 @@ class OpenAiRealtimeSttClient(
         ): Request? {
             val base = providerEndpoint.toHttpUrlOrNull() ?: return null
 
-            val wsScheme = when (base.scheme) {
-                "https" -> "wss"
-                "http" -> "ws"
-                "wss" -> "wss"
-                "ws" -> "ws"
+            // okhttp3.HttpUrl.Builder.scheme() only accepts "http"/"https" (case-insensitive)
+            // and throws IllegalArgumentException for "ws"/"wss" (HttpUrl.kt:930). OkHttp's
+            // newWebSocket() performs the HTTP->WebSocket upgrade itself and expects an
+            // http(s) URL, not a ws(s) one - so normalize to http/https instead of rewriting
+            // to ws/wss. A user-entered ws(s) endpoint is accepted and normalized too.
+            val httpScheme = when (base.scheme) {
+                "https", "wss" -> "https"
+                "http", "ws" -> "http"
                 else -> return null
             }
 
@@ -47,7 +50,7 @@ class OpenAiRealtimeSttClient(
                 else -> base.newBuilder().addPathSegments("v1/realtime").build()
             }
 
-            val url = derived.newBuilder().scheme(wsScheme).apply {
+            val url = derived.newBuilder().scheme(httpScheme).apply {
                 if (modelId.isNotBlank()) {
                     setQueryParameter("model", modelId)
                 }
