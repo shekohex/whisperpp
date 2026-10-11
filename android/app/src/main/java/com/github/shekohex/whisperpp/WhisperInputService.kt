@@ -20,6 +20,8 @@
 package com.github.shekohex.whisperpp
 
 import android.content.Intent
+import android.content.res.Configuration
+import android.os.Bundle
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.inputmethodservice.InputMethodService
@@ -47,18 +49,6 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
-import androidx.savedstate.SavedStateRegistry
-import androidx.savedstate.SavedStateRegistryController
-import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.DictationAnalyticsSession
 import com.github.shekohex.whisperpp.app.appContainer
@@ -69,6 +59,7 @@ import com.github.shekohex.whisperpp.core.audio.SoundCues
 import com.github.shekohex.whisperpp.core.audio.SystemAudioFocusGateway
 import com.github.shekohex.whisperpp.core.permissions.MicPermission
 import com.github.shekohex.whisperpp.data.EffectiveRuntimeConfig
+import com.github.shekohex.whisperpp.ime.ImeViewLifecycle
 import com.github.shekohex.whisperpp.ime.MicPermissionBus
 import com.github.shekohex.whisperpp.ime.MicPermissionGate
 import com.github.shekohex.whisperpp.ime.PermissionRequestActivity
@@ -85,6 +76,7 @@ import com.github.shekohex.whisperpp.dictation.DictationController
 import com.github.shekohex.whisperpp.dictation.EnhancementOutcome
 import com.github.shekohex.whisperpp.dictation.EnhancementRunner
 import com.github.shekohex.whisperpp.dictation.FailureReason
+import com.github.shekohex.whisperpp.dictation.FocusIdentity
 import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.dictation.OpenAiRealtimeSttClient
 import com.github.shekohex.whisperpp.dictation.SkipReason
@@ -129,8 +121,6 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_TEMPERATURE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED
-import com.github.liuyueyi.quick.transfer.ChineseUtils
-import com.github.liuyueyi.quick.transfer.constants.TransType
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -142,12 +132,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
@@ -161,6 +151,7 @@ private const val IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL = 28
 // Maps AmplitudeMeter's 0..1 level onto the legacy VoiceWaveform amplitude range (replaced in WP-1.4).
 private const val WAVEFORM_AMPLITUDE_SCALE = 25_000
 private const val TAG = "WhisperInputService"
+private const val MIGRATIONS_WAIT_MS = 2_000L
 private const val PRIVACY_SAFETY_DESTINATION = "privacy_safety"
 
 private enum class FirstUseDisclosureMode {
@@ -241,7 +232,7 @@ internal class CommandDisclosureGateCoordinator(
     }
 }
 
-class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
+class WhisperInputService : InputMethodService() {
     private val dataStore: DataStore<Preferences>
         get() = appContainer.settingsDataStore
     private val whisperTranscriber: WhisperTranscriber by lazy { WhisperTranscriber(appContainer.okHttpClient) }
@@ -261,19 +252,13 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private lateinit var secretsStore: SecretsStore
     private lateinit var sendPolicyRepository: SendPolicyRepository
 
-    // Lifecycle & SavedState & ViewModelStore
-    private val lifecycleRegistry = LifecycleRegistry(this)
-    private val savedStateRegistryController = SavedStateRegistryController.create(this)
-    private val store = ViewModelStore()
-
-    override val lifecycle: Lifecycle
-        get() = lifecycleRegistry
-
-    override val savedStateRegistry: SavedStateRegistry
-        get() = savedStateRegistryController.savedStateRegistry
-
-    override val viewModelStore: ViewModelStore
-        get() = store
+    // Owners for the current input view only; replaced on every onCreateInputView().
+    private var viewLifecycle: ImeViewLifecycle? = null
+    // Saved state carried from a destroyed input view to its replacement (e.g. across rotation).
+    private var savedViewState: Bundle? = null
+    private var inputViewGeneration: Int = 0
+    // Per-app send policy rules; null until DataStore delivered the first value.
+    private lateinit var sendPolicyRules: StateFlow<Map<String, Boolean>?>
     
     // Compose State
     private var keyboardState = mutableStateOf(KeyboardState.Ready)
@@ -325,7 +310,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var commandJob: Job? = null
     private var commandUndoJob: Job? = null
 
-    private var focusInstanceId: Long = 0L
+    private val focusIdentity = FocusIdentity()
+    private var lastFocusKey: FocusKey? = null
     private lateinit var dictationController: DictationController
     private val enhancementRunner = EnhancementRunner()
 
@@ -341,18 +327,15 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var dictationAnalyticsSession: DictationAnalyticsSession? = null
 
     override fun onCreate() {
-
         super.onCreate()
-        savedStateRegistryController.performRestore(null)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        logLifecycle("onCreate")
         val container = appContainer
         repository = container.settingsRepository
         analyticsRepository = container.analyticsRepository
         secretsStore = container.secretsStore
         sendPolicyRepository = container.sendPolicyRepository
-        runBlocking {
-            repository.migrateProviderSchemaV2IfNeeded(secretsStore)
-        }
+        sendPolicyRules = sendPolicyRepository.getAllRulesFlow()
+            .stateIn(serviceScope, SharingStarted.Eagerly, null)
         audioRecorder = AudioRecorder(this, serviceScope, AmplitudeMeter())
         audioFocus = AudioFocusController(
             SystemAudioFocusGateway(getSystemService(Context.AUDIO_SERVICE) as AudioManager),
@@ -380,9 +363,14 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         )
         refreshUndoState()
 
-        lifecycleScope.launch {
+        serviceScope.launch {
             // The retry runs from onStartInputView once the host app regains focus.
             MicPermissionBus.results.collect { micPermissionGate.onResult(it.granted, it.retryAction) }
+        }
+        serviceScope.launch {
+            sendPolicyRules.collect { rules ->
+                if (rules != null) onExternalSendBlockMayHaveChanged(currentInputEditorInfo)
+            }
         }
 
         networkLoggingPreferenceJob = CoroutineScope(Dispatchers.Main).launch {
@@ -394,34 +382,71 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
-        focusInstanceId += 1
-        dictationController.onFocusChanged(FocusKey.from(attribute, focusInstanceId))
-        if (isCommandModeActive.value) {
-            cancelCommandMode(showError = true, message = getString(R.string.command_error_focus_changed))
+        logLifecycle("onStartInput restarting=$restarting")
+        // The single place a focus identity is minted: once per editor, not per restart or view start.
+        val focusKey = FocusKey.from(attribute, focusIdentity.onStartInput(restarting))
+        if (focusKey != lastFocusKey) {
+            lastFocusKey = focusKey
+            dictationController.onFocusChanged(focusKey)
+            if (isCommandModeActive.value) {
+                cancelCommandMode(showError = true, message = getString(R.string.command_error_focus_changed))
+            }
         }
         showUndoQuickActionIfAvailable()
         refreshEnhancementUndoState()
-        refreshExternalSendBlock(attribute)
-        if (isExternalSendBlocked() && isExternalSendingActive()) {
-            dictationController.onWindowHidden(toastMessage = blockedNotice())
-        }
+        onExternalSendBlockMayHaveChanged(attribute)
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        focusInstanceId += 1
-        dictationController.onFocusChanged(FocusKey.from(info, focusInstanceId))
-        if (isCommandModeActive.value) {
-            cancelCommandMode(showError = true, message = getString(R.string.command_error_focus_changed))
-        }
+        viewLifecycle?.onShown()
+        logLifecycle("onStartInputView restarting=$restarting")
         showUndoQuickActionIfAvailable()
         refreshEnhancementUndoState()
-        refreshExternalSendBlock(info)
-        if (isExternalSendBlocked() && isExternalSendingActive()) {
-            dictationController.onWindowHidden(toastMessage = blockedNotice())
-        }
+        onExternalSendBlockMayHaveChanged(info)
         micPermissionGate.onInputViewStarted()
     }
+
+    override fun onFinishInputView(finishingInput: Boolean) {
+        super.onFinishInputView(finishingInput)
+        viewLifecycle?.onHidden()
+        logLifecycle("onFinishInputView finishingInput=$finishingInput")
+        // Transient overlays belong to the view that is going away.
+        onFirstUseDisclosureCancel()
+        showLongPressHint.value = false
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        val generationBefore = inputViewGeneration
+        super.onConfigurationChanged(newConfig)
+        // uiMode / orientation / density / locale changes need a fresh composition with new resources.
+        // The framework already rebuilds the view when it restarts the IME for this config; only do it
+        // ourselves when it did not, so the view is never built twice.
+        if (inputViewGeneration == generationBefore) {
+            setInputView(onCreateInputView())
+            if (isInputViewShown) viewLifecycle?.onShown()
+        }
+        logLifecycle("onConfigurationChanged rebuiltByFramework=${inputViewGeneration != generationBefore}")
+    }
+
+    /**
+     * The framework hides the soft input view while a hardware keyboard is attached. This keyboard has
+     * no keys to replace — it is a voice bar — so it must stay visible whenever the editor wants input.
+     */
+    override fun onEvaluateInputViewShown(): Boolean {
+        val shown = super.onEvaluateInputViewShown() || isInputViewHiddenOnlyByHardwareKeyboard()
+        logLifecycle("onEvaluateInputViewShown -> $shown")
+        return shown
+    }
+
+    private fun isInputViewHiddenOnlyByHardwareKeyboard(): Boolean {
+        val config = resources.configuration
+        return config.keyboard != Configuration.KEYBOARD_NOKEYS &&
+            config.hardKeyboardHidden != Configuration.HARDKEYBOARDHIDDEN_YES
+    }
+
+    /** Extract (fullscreen) mode in landscape would replace the bar with an empty extract view. */
+    override fun onEvaluateFullscreenMode(): Boolean = false
 
     private fun transcriptionCallback(token: DictationController.SendToken, text: String?, contextPrompt: String?) {
         val effectiveText = if (!text.isNullOrEmpty()) {
@@ -744,7 +769,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             val modelId = activeDictationSttModelId.orEmpty()
             val provider = providers.find { it.id == providerId }
             if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
-                dictationController.onTranscriptionError(token, "Setup required: select STT provider + model in Settings")
+                dictationController.onTranscriptionError(token, getString(R.string.toast_setup_required_stt))
                 clearActiveDictationSelection()
                 return@launch
             }
@@ -774,16 +799,11 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
     }
 
-    private fun decorViewOwners(decor: View) {
-        decor.setViewTreeLifecycleOwner(this)
-        decor.setViewTreeSavedStateRegistryOwner(this)
-        decor.setViewTreeViewModelStoreOwner(this)
-    }
-
     override fun onCreateInputView(): View {
-        ChineseUtils.preLoad(true, TransType.SIMPLE_TO_TAIWAN)
-        ChineseUtils.preLoad(true, TransType.TAIWAN_TO_SIMPLE)
-        CoroutineScope(Dispatchers.Main).launch { updateAudioFormat() }
+        val viewOwners = replaceViewLifecycle()
+        inputViewGeneration += 1
+        logLifecycle("onCreateInputView generation=$inputViewGeneration")
+        serviceScope.launch { updateAudioFormat() }
 
         shouldOfferImeSwitch.value = if (Build.VERSION.SDK_INT >= IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL) {
             shouldOfferSwitchingToNextInputMethod()
@@ -793,10 +813,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             imm.shouldOfferSwitchingToNextInputMethod(window?.window?.attributes?.token)
         }
 
-        // Ensure the window's decor view has the owners for components that search up the tree
         window?.window?.let { win ->
-            decorViewOwners(win.decorView)
-            
             // Edge-to-Edge Support
             WindowCompat.setDecorFitsSystemWindows(win, false)
             win.navigationBarColor = Color.TRANSPARENT
@@ -812,9 +829,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
             )
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setViewTreeLifecycleOwner(this@WhisperInputService)
-            setViewTreeSavedStateRegistryOwner(this@WhisperInputService)
-            setViewTreeViewModelStoreOwner(this@WhisperInputService)
+            // Decor view too: dialogs/popups/sheets look the owners up from the window root.
+            viewOwners.attach(this, window?.window?.decorView)
 
             setContent {
                 WhisperToInputTheme {
@@ -884,6 +900,22 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                     )
                 }
             }
+        }
+    }
+
+    /** Destroys the previous input view's owners (saving its state) and creates fresh ones. */
+    private fun replaceViewLifecycle(): ImeViewLifecycle {
+        viewLifecycle?.let { previous ->
+            val outState = Bundle()
+            previous.destroy(outState)
+            savedViewState = outState
+        }
+        return ImeViewLifecycle(savedViewState).also { viewLifecycle = it }
+    }
+
+    private fun logLifecycle(event: String) {
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "lifecycle: $event view=${viewLifecycle?.currentState ?: "none"}")
         }
     }
 
@@ -1038,17 +1070,16 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private fun refreshExternalSendBlock(editorInfo: EditorInfo?) {
         externalSendBlockReason.value = currentExternalSendBlock(editorInfo)?.reason
         val packageName = editorInfo?.packageName?.trim().orEmpty().ifBlank { null }
-        val blockedByPolicy = if (packageName == null) {
-            false
-        } else {
-            runCatching {
-                runBlocking {
-                    sendPolicyRepository.isBlockedFlow(packageName).first()
-                }
-            }.getOrDefault(false)
-        }
+        val blockedByPolicy = packageName != null && sendPolicyRules.value?.get(packageName) == true
         externalSendBlockedByAppPolicy.value = blockedByPolicy
         externalSendBlockedPackageName.value = if (blockedByPolicy) packageName else null
+    }
+
+    private fun onExternalSendBlockMayHaveChanged(editorInfo: EditorInfo?) {
+        refreshExternalSendBlock(editorInfo)
+        if (isExternalSendBlocked() && isExternalSendingActive()) {
+            dictationController.onWindowHidden(toastMessage = blockedNotice())
+        }
     }
 
     private fun isExternalSendBlocked(): Boolean {
@@ -1350,6 +1381,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         )
     }
 
+    private fun showSetupRequiredToast() {
+        Toast.makeText(this, getString(R.string.toast_setup_required_stt), Toast.LENGTH_SHORT).show()
+    }
+
     private fun onMicAction() {
         if (shouldBlockExternalSend()) {
             handleBlockedExternalSendAction()
@@ -1363,6 +1398,17 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             KeyboardState.Ready -> {
                 if (recordingStartJob?.isActive == true) return
                 CoroutineScope(Dispatchers.Main).launch {
+                    // Providers must be read post-migration; the app starts migrations in WhisperApp.onCreate.
+                    if (!appContainer.awaitMigrations(MIGRATIONS_WAIT_MS)) {
+                        showSetupRequiredToast()
+                        return@launch
+                    }
+                    // Fail closed: never start before the per-app send policy is known.
+                    sendPolicyRules.first { it != null }
+                    if (shouldBlockExternalSend()) {
+                        handleBlockedExternalSendAction()
+                        return@launch
+                    }
                     val prefs = dataStore.data.first()
                     val providers = repository.providers.first()
 
@@ -1382,7 +1428,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                     val modelId = effective.sttModelId
                     val provider = providers.find { it.id == providerId }
                     if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
-                        Toast.makeText(this@WhisperInputService, "Setup required: select STT provider + model in Settings", Toast.LENGTH_SHORT).show()
+                        showSetupRequiredToast()
                         return@launch
                     }
                     val useContext = prefs[USE_CONTEXT] ?: false
@@ -1659,7 +1705,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun currentFocusKey(): FocusKey? {
-        return FocusKey.from(currentInputEditorInfo, focusInstanceId)
+        return FocusKey.from(currentInputEditorInfo, focusIdentity.currentId)
     }
 
     private fun refreshCommandUndoState() {
@@ -2408,9 +2454,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     override fun onWindowShown() {
         super.onWindowShown()
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-        CoroutineScope(Dispatchers.Main).launch {
+        logLifecycle("onWindowShown")
+        serviceScope.launch {
             updateAudioFormat()
             updateLanguageLabel()
             secureFieldExplanationDontShowAgain.value = dataStore.data
@@ -2422,10 +2467,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     override fun onWindowHidden() {
         super.onWindowHidden()
-        Log.d(TAG, "onWindowHidden")
+        logLifecycle("onWindowHidden")
         onFirstUseDisclosureCancel()
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
 
         if (isExternalSendingActive()) {
             dictationController.onWindowHidden(toastMessage = "Dictation paused")
@@ -2445,10 +2488,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
     override fun onDestroy() {
         super.onDestroy()
+        logLifecycle("onDestroy")
         networkLoggingPreferenceJob?.cancel()
         onFirstUseDisclosureCancel()
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-        store.clear()
+        viewLifecycle?.destroy()
+        viewLifecycle = null
+        savedViewState = null
         whisperTranscriber.stop()
         smartFixer.cancel()
         closeRealtimeSession()

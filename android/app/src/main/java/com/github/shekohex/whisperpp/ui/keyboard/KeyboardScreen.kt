@@ -131,6 +131,7 @@ fun KeyboardScreen(
     onCommandPresetSelected: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
+    val overlayMaxHeight = keyboardOverlayMaxHeight()
     var swipeProgress by remember { mutableFloatStateOf(0f) }
     var swipeUpProgress by remember { mutableFloatStateOf(0f) }
     val isSwiping = swipeProgress > 0.05f
@@ -214,6 +215,7 @@ fun KeyboardScreen(
             contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             BlockedExplanationContent(
+                modifier = Modifier.heightIn(max = overlayMaxHeight),
                 copy = copy,
                 onOpenSettings = {
                     showBlockedExplanation = false
@@ -246,7 +248,8 @@ fun KeyboardScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 12.dp)
+                    .heightIn(max = overlayMaxHeight),
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 8.dp,
@@ -283,7 +286,8 @@ fun KeyboardScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 12.dp)
+                    .heightIn(max = overlayMaxHeight),
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 8.dp,
@@ -307,6 +311,7 @@ fun KeyboardScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = overlayMaxHeight)
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -423,6 +428,7 @@ fun KeyboardScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = overlayMaxHeight)
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -487,7 +493,11 @@ fun KeyboardScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding(),
+    ) {
         AnimatedVisibility(
             visible = enhancementNotice != null,
             enter = fadeIn() + slideInVertically { it / 2 },
@@ -542,7 +552,8 @@ fun KeyboardScreen(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .heightIn(max = overlayMaxHeight),
                 shape = RoundedCornerShape(14.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 tonalElevation = 6.dp,
@@ -623,8 +634,8 @@ fun KeyboardScreen(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 15.dp)
-                .height(72.dp)
+                .padding(bottom = KeyboardMetrics.barBottomGap)
+                .height(KeyboardMetrics.baseHeight)
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             shape = RoundedCornerShape(36.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,

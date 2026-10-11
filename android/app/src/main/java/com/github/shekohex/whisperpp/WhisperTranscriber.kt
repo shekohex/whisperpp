@@ -32,14 +32,17 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import com.github.liuyueyi.quick.transfer.ChineseUtils
+import com.github.liuyueyi.quick.transfer.constants.TransType
 import org.json.JSONObject
 
 class WhisperTranscriber(private val httpClient: OkHttpClient) {
     private val TAG = "WhisperTranscriber"
     private var currentTranscriptionJob: Job? = null
     private var inFlightCall: Call? = null
+    private val loadedChineseDictionaries: MutableSet<TransType> = ConcurrentHashMap.newKeySet()
 
     private fun getClient(timeout: Int): OkHttpClient {
         return httpClient.newBuilder()
@@ -146,8 +149,14 @@ class WhisperTranscriber(private val httpClient: OkHttpClient) {
             }
             
             val processedText = when (postprocessing) {
-                context.getString(R.string.settings_option_to_simplified) -> ChineseUtils.tw2s(rawText)
-                context.getString(R.string.settings_option_to_traditional) -> ChineseUtils.s2tw(rawText)
+                context.getString(R.string.settings_option_to_simplified) -> {
+                    ensureChineseDictionaryLoaded(TransType.TAIWAN_TO_SIMPLE)
+                    ChineseUtils.tw2s(rawText)
+                }
+                context.getString(R.string.settings_option_to_traditional) -> {
+                    ensureChineseDictionaryLoaded(TransType.SIMPLE_TO_TAIWAN)
+                    ChineseUtils.s2tw(rawText)
+                }
                 else -> rawText // No conversion
             }
 
@@ -190,6 +199,12 @@ class WhisperTranscriber(private val httpClient: OkHttpClient) {
         }
 
         registerTranscriptionJob(job)
+    }
+
+    /** Loads the conversion dictionary once, off the main thread, right before its first use. */
+    private suspend fun ensureChineseDictionaryLoaded(type: TransType) {
+        if (!loadedChineseDictionaries.add(type)) return
+        withContext(Dispatchers.IO) { ChineseUtils.preLoad(false, type) }
     }
 
     fun stop() {

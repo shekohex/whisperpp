@@ -163,16 +163,8 @@ fun SettingsNavigation(
 ) {
     val context = LocalContext.current
     val navController = rememberNavController()
-    val repository = LocalContext.current.appContainer.settingsRepository
-    var migrationReady by remember { mutableStateOf(false) }
+    val migrationReady by context.appContainer.migrationsDone.collectAsState()
     val startDestination = SettingsScreen.resolveStartRoute(startRoute)
-
-    LaunchedEffect(Unit) {
-        repository.migrateProviderSchemaV2IfNeeded(context.appContainer.secretsStore)
-        repository.migrateProviderSelectionsV2IfNeeded()
-        repository.migratePromptsProfilesSchemaV1IfNeeded()
-        migrationReady = true
-    }
 
     if (!migrationReady) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

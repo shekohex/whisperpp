@@ -6,6 +6,11 @@ import com.github.shekohex.whisperpp.di.AppContainer
 
 class WhisperApp : Application() {
     val container: AppContainer by lazy { AppContainer(this) }
+
+    override fun onCreate() {
+        super.onCreate()
+        container.startMigrations()
+    }
 }
 
 val Context.appContainer: AppContainer

@@ -17,6 +17,7 @@
     <string name="input_transcribing">Transcribing</string>
     <string name="input_smart_fixing">Smart Fixing</string>
     <string name="toast_transcription_empty">Transcription was empty</string>
+    <string name="toast_setup_required_stt">Setup required: select STT provider + model in Settings</string>
     <string name="cancel_confirmation_title">Cancel recording?</string>
     <string name="cancel_confirmation_message">This will discard the current audio.</string>
     <string name="cancel_confirmation_confirm">Cancel</string>
