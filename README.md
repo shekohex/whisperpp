@@ -37,8 +37,8 @@ An Android keyboard that performs speech-to-text (STT/ASR) using OpenAI Whisper.
 
 1. Download the latest APK from the [Releases](https://github.com/shekohex/whisperpp/releases) page.
 2. Install the APK (allow "Install from unknown sources").
-3. Grant `RECORD_AUDIO` and `POST_NOTIFICATIONS` permissions.
-4. Enable **Whisper++** in your system Language & Input settings.
+3. Enable **Whisper++** in your system keyboard settings (Language & Input → On-screen keyboard), then select it as the current keyboard (keyboard switcher icon, or from the Whisper++ settings home screen).
+4. Tap the mic on the keyboard. Microphone permission is requested the first time you record.
 
 ## Configuration
 
@@ -50,8 +50,10 @@ Open the **Whisper++** app from your launcher to configure your preferred STT ba
 - **API Key**: Your OpenAI secret key.
 
 ### Self-Hosted (Whisper ASR / NVIDIA NIM / Custom)
-- **Endpoint**: `http://<YOUR_IP>:9000/asr` (or `/v1/audio/transcriptions`)
+- **Endpoint**: `https://<YOUR_SERVER>:9000/asr` (or `/v1/audio/transcriptions`)
 - **API Key**: Optional (if required by your proxy).
+- **HTTPS is required** for all servers. Plain `http://` is only allowed for local-network servers
+  (`localhost`, `10.x.x.x`, `172.16–31.x.x`, `192.168.x.x`, link-local, or `*.local`), e.g. `http://192.168.1.10:9000/asr`.
 
 ### SmartFix Configuration
 Enable **SmartFix** in settings to use an LLM for post-processing:

@@ -16,6 +16,10 @@ object SettingsBackupCrypto {
     const val PBKDF2_ITERATIONS = 120_000
     const val DERIVED_KEY_LENGTH_BITS = 256
     const val GCM_AUTH_TAG_BITS = 128
+    const val MIN_PBKDF2_ITERATIONS = 100_000
+    const val MAX_PBKDF2_ITERATIONS = 2_000_000
+    const val MIN_SALT_LENGTH_BYTES = 16
+    const val GCM_IV_LENGTH_BYTES = 12
     private const val SALT_LENGTH_BYTES = 16
     private val secureRandom = SecureRandom()
 
@@ -85,6 +89,7 @@ object SettingsBackupCrypto {
 
         val salt = decodeBase64(envelope.crypto.kdf.saltBase64)
         val iv = decodeBase64(envelope.crypto.ivBase64)
+        validateImportedParams(envelope.crypto, salt, iv)
         val ciphertext = decodeBase64(envelope.encryptedPayloadBase64)
         val key = deriveKey(
             password = password,
@@ -103,6 +108,29 @@ object SettingsBackupCrypto {
         password: String,
     ): String {
         return String(decryptPayload(envelope, password), StandardCharsets.UTF_8)
+    }
+
+    private fun validateImportedParams(
+        header: SettingsBackupCryptoHeader,
+        salt: ByteArray,
+        iv: ByteArray,
+    ) {
+        val iterations = header.kdf.iterations
+        if (iterations !in MIN_PBKDF2_ITERATIONS..MAX_PBKDF2_ITERATIONS) {
+            throw InvalidBackupCryptoParamsException("Unsupported KDF iteration count: $iterations")
+        }
+        if (header.kdf.keyLengthBits != DERIVED_KEY_LENGTH_BITS) {
+            throw InvalidBackupCryptoParamsException("Unsupported KDF key length: ${header.kdf.keyLengthBits}")
+        }
+        if (salt.size < MIN_SALT_LENGTH_BYTES) {
+            throw InvalidBackupCryptoParamsException("KDF salt too short: ${salt.size} bytes")
+        }
+        if (iv.size != GCM_IV_LENGTH_BYTES) {
+            throw InvalidBackupCryptoParamsException("Unsupported IV length: ${iv.size} bytes")
+        }
+        if (header.authTagBits != GCM_AUTH_TAG_BITS) {
+            throw InvalidBackupCryptoParamsException("Unsupported auth tag length: ${header.authTagBits}")
+        }
     }
 
     private fun deriveKey(

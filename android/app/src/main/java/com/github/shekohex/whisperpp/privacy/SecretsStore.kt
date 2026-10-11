@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -28,11 +29,20 @@ class SecretsStore(context: Context) {
     }
 
     fun getProviderApiKey(providerId: String): String? {
+        return (readProviderApiKey(providerId) as? SecretReadResult.Present)?.value
+    }
+
+    fun readProviderApiKey(providerId: String): SecretReadResult {
         if (providerId.isBlank()) {
-            return null
+            return SecretReadResult.Missing
         }
-        val encrypted = sharedPreferences.getString(secretKey(providerId), null) ?: return null
-        return decrypt(encrypted)
+        val encrypted = sharedPreferences.getString(secretKey(providerId), null) ?: return SecretReadResult.Missing
+        val decrypted = decrypt(encrypted)
+        if (decrypted == null) {
+            Log.w(TAG, "Stored API key could not be decrypted; it must be re-entered")
+            return SecretReadResult.DecryptionFailed
+        }
+        return SecretReadResult.Present(decrypted)
     }
 
     fun clearProviderApiKey(providerId: String) {
@@ -103,6 +113,7 @@ class SecretsStore(context: Context) {
     }
 
     companion object {
+        private const val TAG = "SecretsStore"
         private const val KEYSTORE_PROVIDER = "AndroidKeyStore"
         private const val KEY_ALIAS = "whisperpp_provider_api_key"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"

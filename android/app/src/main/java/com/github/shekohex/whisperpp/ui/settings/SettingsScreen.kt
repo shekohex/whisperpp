@@ -51,6 +51,7 @@ import com.github.shekohex.whisperpp.analytics.analyticsDataStore
 import com.github.shekohex.whisperpp.ui.components.VoiceWaveform
 import com.github.shekohex.whisperpp.*
 import com.github.shekohex.whisperpp.R
+import com.github.shekohex.whisperpp.core.network.isLocalNetworkHost
 import com.github.shekohex.whisperpp.data.*
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.updater.*
@@ -2649,7 +2650,9 @@ fun ProviderEditScreen(
 
     val parsedBaseUrl = remember(baseUrl) { baseUrl.trim().toHttpUrlOrNull() }
     val isHttpsBaseUrl = parsedBaseUrl?.scheme == "https"
-    val isBaseUrlValid = parsedBaseUrl != null && isHttpsBaseUrl
+    val isLocalHttpBaseUrl = parsedBaseUrl != null && parsedBaseUrl.scheme == "http" && isLocalNetworkHost(parsedBaseUrl.host)
+    val isRemoteHttpBaseUrl = parsedBaseUrl?.scheme == "http" && !isLocalHttpBaseUrl
+    val isBaseUrlValid = parsedBaseUrl != null && (isHttpsBaseUrl || isLocalHttpBaseUrl)
     val isNameValid = name.trim().isNotEmpty()
     val hasAnyApiKey = hasStoredApiKey || apiKeyInput.trim().isNotEmpty() || (isCloning && hasCloneStoredApiKey)
     val isAuthValid = when (authMode) {
@@ -3164,8 +3167,12 @@ fun ProviderEditScreen(
 
             if (baseUrl.isBlank()) {
                 Text("Base URL is required", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else if (isRemoteHttpBaseUrl) {
+                Text(stringResource(R.string.provider_url_insecure_http_local_only), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             } else if (!isBaseUrlValid) {
                 Text("Use a valid https:// URL", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            } else if (isLocalHttpBaseUrl) {
+                Text(stringResource(R.string.provider_url_insecure_http_local_only), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
 
             if (duplicateProvider != null) {

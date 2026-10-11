@@ -15,15 +15,7 @@ class DownloadCompletedReceiver : BroadcastReceiver() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.action ?: return
-        
-        if (action == Intent.ACTION_BOOT_COMPLETED) {
-            // Nothing to do here specifically, as the app starting will trigger
-            // UpdateManager.observeExistingDownload via SettingsScreen.
-            return
-        }
-
-        if (action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
+        if (intent.action != DownloadManager.ACTION_DOWNLOAD_COMPLETE) return
 
         val downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
         if (downloadId == -1L) return

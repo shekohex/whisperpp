@@ -89,4 +89,93 @@ class SettingsBackupCryptoTest {
         assertFalse(envelope.categoryManifest.first { it.id == SETTINGS_BACKUP_CATEGORY_PROVIDERS_MODELS }.containsSensitiveContent)
         assertTrue(envelope.categoryManifest.first { it.id == SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS }.containsSensitiveContent)
     }
+
+    @Test
+    fun decryptUtf8_rejectsIterationsOutsideBounds() {
+        val envelope = validEnvelope()
+
+        listOf(99_999, 2_000_001, 1, 0, -1, Int.MAX_VALUE).forEach { iterations ->
+            val tampered = envelope.withKdf { it.copy(iterations = iterations) }
+            assertThrows(InvalidBackupCryptoParamsException::class.java) {
+                SettingsBackupCrypto.decryptUtf8(tampered, PASSWORD)
+            }
+        }
+    }
+
+    @Test
+    fun decryptUtf8_minimumIterationsPassValidationAndFailOnlyAuthentication() {
+        val envelope = validEnvelope()
+        // Avoid deriving with MAX_PBKDF2_ITERATIONS here to keep the test fast.
+        val tampered = envelope.withKdf { it.copy(iterations = SettingsBackupCrypto.MIN_PBKDF2_ITERATIONS) }
+
+        val error = assertThrows(GeneralSecurityException::class.java) {
+            SettingsBackupCrypto.decryptUtf8(tampered, PASSWORD)
+        }
+        assertFalse(error is InvalidBackupCryptoParamsException)
+    }
+
+    @Test
+    fun decryptUtf8_rejectsKeyLengthOtherThan256() {
+        val envelope = validEnvelope()
+
+        listOf(0, 64, 128, 192, 512).forEach { keyLengthBits ->
+            val tampered = envelope.withKdf { it.copy(keyLengthBits = keyLengthBits) }
+            assertThrows(InvalidBackupCryptoParamsException::class.java) {
+                SettingsBackupCrypto.decryptUtf8(tampered, PASSWORD)
+            }
+        }
+    }
+
+    @Test
+    fun decryptUtf8_rejectsShortSalt() {
+        val envelope = validEnvelope()
+        val tampered = envelope.withKdf { it.copy(saltBase64 = Base64.getEncoder().encodeToString(ByteArray(15))) }
+
+        assertThrows(InvalidBackupCryptoParamsException::class.java) {
+            SettingsBackupCrypto.decryptUtf8(tampered, PASSWORD)
+        }
+    }
+
+    @Test
+    fun decryptUtf8_rejectsIvOtherThan12Bytes() {
+        val envelope = validEnvelope()
+
+        listOf(0, 8, 11, 13, 16).forEach { ivLength ->
+            val tampered = envelope.copy(
+                crypto = envelope.crypto.copy(ivBase64 = Base64.getEncoder().encodeToString(ByteArray(ivLength)))
+            )
+            assertThrows(InvalidBackupCryptoParamsException::class.java) {
+                SettingsBackupCrypto.decryptUtf8(tampered, PASSWORD)
+            }
+        }
+    }
+
+    @Test
+    fun decryptUtf8_rejectsUnexpectedAuthTagLength() {
+        val envelope = validEnvelope()
+        val tampered = envelope.copy(crypto = envelope.crypto.copy(authTagBits = 96))
+
+        assertThrows(InvalidBackupCryptoParamsException::class.java) {
+            SettingsBackupCrypto.decryptUtf8(tampered, PASSWORD)
+        }
+    }
+
+    private fun validEnvelope(): SettingsBackupEnvelope {
+        return SettingsBackupCrypto.encryptUtf8(
+            plaintext = "secret",
+            password = PASSWORD,
+            appVersionName = "0.1.3",
+            exportedAtUtc = "2026-03-09T17:00:00Z",
+        )
+    }
+
+    private fun SettingsBackupEnvelope.withKdf(
+        transform: (SettingsBackupKdfHeader) -> SettingsBackupKdfHeader,
+    ): SettingsBackupEnvelope {
+        return copy(crypto = crypto.copy(kdf = transform(crypto.kdf)))
+    }
+
+    private companion object {
+        const val PASSWORD = "correct horse battery staple"
+    }
 }

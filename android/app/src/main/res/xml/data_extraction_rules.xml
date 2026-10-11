@@ -2,8 +2,10 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="datastore/analytics.preferences_pb" />
+        <exclude domain="sharedpref" path="whisperpp_secrets.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="datastore/analytics.preferences_pb" />
+        <exclude domain="sharedpref" path="whisperpp_secrets.xml" />
     </device-transfer>
 </data-extraction-rules>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android's network security config cannot express IP ranges, so LAN servers on RFC 1918 /
+    link-local addresses cannot be whitelisted declaratively. Cleartext therefore stays permitted
+    at the platform level, and every outgoing provider request is checked at runtime with
+    core/network/LocalNetworkHosts.kt (HTTP only for loopback, private, link-local and *.local hosts).
+-->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config
+        cleartextTrafficPermitted="true"
+        tools:ignore="InsecureBaseConfiguration">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

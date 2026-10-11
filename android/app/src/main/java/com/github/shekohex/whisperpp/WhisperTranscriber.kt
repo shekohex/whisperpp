@@ -21,6 +21,7 @@ package com.github.shekohex.whisperpp
 
 import android.content.Context
 import android.util.Log
+import com.github.shekohex.whisperpp.core.network.isTransportAllowed
 import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
@@ -119,6 +120,9 @@ class WhisperTranscriber {
                 temperature,
                 languageCode,
             )
+            if (!isTransportAllowed(request.url.scheme, request.url.host)) {
+                throw IOException(context.getString(R.string.error_insecure_http_endpoint))
+            }
             val call = client.newCall(request)
             inFlightCall = call
 

@@ -95,6 +95,8 @@
     <!-- Warning and Error Messages -->
     <string name="error_endpoint_unset">Error: Endpoint is not set in settings.</string>
     <string name="error_apikey_unset">Error: OpenAI API Key is not set in settings.</string>
+    <string name="error_insecure_http_endpoint">Error: Insecure HTTP is only allowed for local-network servers. Use an https:// endpoint.</string>
+    <string name="provider_url_insecure_http_local_only">Insecure HTTP is only allowed for local-network servers</string>
 
     <!-- Settings -->
     <string name="whisper_to_input_settings_title">Whisper++ Settings</string>
