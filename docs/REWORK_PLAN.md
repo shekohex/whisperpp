@@ -146,7 +146,7 @@ Current state machine (verified):
 | G-08 | M | `SmartFixer.kt:103` | Unsupported enhancement provider type silently returns the original text. | Surface `EnhancementSkipped(reason)` notice. |
 | G-09 | M | `WhisperTranscriber.kt:181-184` | Audio file deleted only on success. | Delete in `finally` unless "keep last recording for retry" is enabled (VoiceInk feature; see §5). |
 | G-10 | L | `SmartFixer`, strings | "SmartFix" / "Smart Fix" / "enhancement" / "post-processing" used interchangeably. | One term everywhere: **Enhancement** (code: `Enhancement*`). |
-| G-11 | H | `dictation/OpenAiRealtimeSttClient.kt`, `WhisperInputService.kt:283-288, 1248-1415` | Realtime (WebSocket) STT exists but is OpenAI-only, selected by a string heuristic (`supportsOpenAiRealtime`), and wired into the service through six mutable fields (`realtimeSttClient`, `realtimeToken`, `realtimeFinalTranscript`, `realtimeBestEffortTranscript`, `pendingRealtimeProvider`, `pendingRealtimeModelId`). No protocol abstraction, no reconnect, no timeout, no explicit commit/finalise contract, fallback to batch is implicit and racy (G-02). | `StreamingTranscriptionSession` protocol (§4.5.1) implemented per provider; selected from model capabilities, owned by `DictationSession`. |
+| G-11 | H | `dictation/OpenAiRealtimeSttClient.kt`, `WhisperInputService.kt:283-288, 1248-1415` | Realtime (WebSocket) STT exists but is OpenAI-only, selected by a string heuristic (`supportsOpenAiRealtime`), and wired into the service through six mutable fields (`realtimeSttClient`, `realtimeToken`, `realtimeFinalTranscript`, `realtimeBestEffortTranscript`, `pendingRealtimeProvider`, `pendingRealtimeModelId`). No protocol abstraction, no reconnect, no timeout, no explicit commit/finalise contract, fallback to batch is implicit and racy (G-02). | `StreamingTranscriptionSession` protocol (§4.5.1) implemented per provider; selected from model capabilities, owned by `DictationSession`. Also apply the `isTransportAllowed` guard (WP-0.3) to the `ws://` upgrade path, which the old client lacks. |
 | G-12 | M | `ui/settings/SettingsScreen.kt:2845-2934, 3315-3323` | "Import models" is a one-off HTTP call inside a composable that assumes the OpenAI `/v1/models` shape, dumps raw JSON in a dialog, and does not classify models (STT vs text vs realtime). Users otherwise hand-type model IDs. | `ModelDiscovery` capability per provider (§4.5.2) with classification + caching; UI "Refresh models" in the provider editor and model pickers. |
 
 ### H. Settings app UI/UX
@@ -518,7 +518,7 @@ Reference: VoiceInk `Features/Dictionary/*` (incl. `AutoLearn/*`, 3 453 lines) a
 Each work package (WP) is sized for one agent session, lists its problem IDs, files, and acceptance criteria.
 Order within a phase is flexible unless a dependency is noted. Commit per WP with the WP id in the message.
 
-### Phase 0 — Foundation (unblocks everything)
+### Phase 0 — Foundation (unblocks everything) — DONE (39f2d0a, 975582c, 6ac0ced)
 
 **WP-0.1 Toolchain upgrade** — M-01, M-02, M-03, H-13
 - `android/build.gradle.kts`, `android/app/build.gradle.kts`, `gradle-wrapper.properties`, new `gradle/libs.versions.toml`, `AGENTS.md`.
