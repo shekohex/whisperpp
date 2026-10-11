@@ -3,10 +3,10 @@ package com.github.shekohex.whisperpp.privacy
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import com.github.shekohex.whisperpp.PER_APP_SEND_POLICY_JSON
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONObject
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PER_APP_SEND_POLICY_JSON
 
 class SendPolicyRepository(private val dataStore: DataStore<Preferences>) {
     fun isBlockedFlow(packageName: String?): Flow<Boolean> {

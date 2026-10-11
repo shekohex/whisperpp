@@ -21,10 +21,8 @@ import androidx.work.WorkerParameters
 import com.github.shekohex.whisperpp.BuildConfig
 import com.github.shekohex.whisperpp.MainActivity
 import com.github.shekohex.whisperpp.R
-import com.github.shekohex.whisperpp.UPDATE_CHANNEL
-import com.github.shekohex.whisperpp.dataStore
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
+import com.github.shekohex.whisperpp.app.appContainer
+import com.github.shekohex.whisperpp.data.PreferenceKeys.UPDATE_CHANNEL
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.TimeUnit
@@ -35,10 +33,10 @@ class UpdateCheckWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val httpClient = HttpClient(OkHttp)
-        val checker = UpdateChecker(httpClient)
+        val container = applicationContext.appContainer
+        val checker = UpdateChecker(container.updaterHttpClient)
 
-        val channelPref = applicationContext.dataStore.data
+        val channelPref = container.settingsDataStore.data
             .map { it[UPDATE_CHANNEL] ?: BuildConfig.UPDATE_CHANNEL }
             .first()
         val channel = UpdateChannel.fromString(channelPref)
@@ -54,8 +52,6 @@ class UpdateCheckWorker(
             }
         } catch (e: Exception) {
             Result.retry()
-        } finally {
-            httpClient.close()
         }
     }
 

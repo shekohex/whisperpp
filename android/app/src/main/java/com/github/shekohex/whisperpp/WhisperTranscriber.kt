@@ -30,38 +30,19 @@ import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.asRequestBody
-import okhttp3.logging.HttpLoggingInterceptor
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import com.github.liuyueyi.quick.transfer.ChineseUtils
 import org.json.JSONObject
 
-class WhisperTranscriber {
+class WhisperTranscriber(private val httpClient: OkHttpClient) {
     private val TAG = "WhisperTranscriber"
     private var currentTranscriptionJob: Job? = null
     private var inFlightCall: Call? = null
-    
-    private val loggingInterceptor = HttpLoggingInterceptor { message ->
-        val sanitized = message.replace(Regex("([?&]key=)[^&\\s]+"), "${'$'}1REDACTED")
-        Log.d("HTTP_Whisper", sanitized)
-    }.apply {
-        level = HttpLoggingInterceptor.Level.NONE
-        redactHeader("Authorization")
-        redactHeader("x-goog-api-key")
-    }
-
-    fun setNetworkLoggingEnabled(enabled: Boolean) {
-        loggingInterceptor.level = if (enabled) {
-            HttpLoggingInterceptor.Level.HEADERS
-        } else {
-            HttpLoggingInterceptor.Level.NONE
-        }
-    }
 
     private fun getClient(timeout: Int): OkHttpClient {
-        return OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
+        return httpClient.newBuilder()
             .connectTimeout(timeout.toLong(), TimeUnit.MILLISECONDS)
             .readTimeout(timeout.toLong(), TimeUnit.MILLISECONDS)
             .writeTimeout(timeout.toLong(), TimeUnit.MILLISECONDS)

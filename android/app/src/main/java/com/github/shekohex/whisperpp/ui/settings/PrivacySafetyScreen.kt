@@ -55,21 +55,22 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.navigation.NavHostController
-import com.github.shekohex.whisperpp.ACTIVE_STT_MODEL_ID
-import com.github.shekohex.whisperpp.ACTIVE_STT_PROVIDER_ID
-import com.github.shekohex.whisperpp.ACTIVE_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.ACTIVE_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.COMMAND_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.COMMAND_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_COMMAND_TEXT
-import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_DICTATION_AUDIO
-import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
-import com.github.shekohex.whisperpp.USE_CONTEXT
-import com.github.shekohex.whisperpp.VERBOSE_NETWORK_LOGS_ENABLED
+import com.github.shekohex.whisperpp.app.appContainer
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.data.validateSelections
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_COMMAND_TEXT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_DICTATION_AUDIO
+import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -82,11 +83,14 @@ private data class PrivacySafetyApp(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrivacySafetyScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
+fun PrivacySafetyScreen(
+    dataStore: DataStore<Preferences>,
+    navController: NavHostController,
+    sendPolicyRepository: SendPolicyRepository = LocalContext.current.appContainer.sendPolicyRepository,
+    settingsRepository: SettingsRepository = LocalContext.current.appContainer.settingsRepository,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val sendPolicyRepository = remember { SendPolicyRepository(dataStore) }
-    val settingsRepository = remember { SettingsRepository(dataStore) }
     val rules by sendPolicyRepository.getAllRulesFlow().collectAsState(initial = emptyMap())
     val providers by settingsRepository.providers.collectAsState(initial = emptyList())
     val settingsState by dataStore.data.collectAsState(initial = emptyPreferences())

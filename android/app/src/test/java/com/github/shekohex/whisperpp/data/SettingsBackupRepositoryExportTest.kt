@@ -2,9 +2,7 @@ package com.github.shekohex.whisperpp.data
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
-import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import kotlinx.coroutines.flow.Flow
@@ -115,7 +113,7 @@ class SettingsBackupRepositoryExportTest {
 
     private fun seedPreferences(): Preferences {
         return mutablePreferencesOf(
-            stringPreferencesKey("providers_json") to gson.toJson(
+            PreferenceKeys.PROVIDERS_JSON to gson.toJson(
                 listOf(
                     ServiceProvider(
                         id = "provider-openai",
@@ -138,7 +136,7 @@ class SettingsBackupRepositoryExportTest {
                     )
                 )
             ),
-            stringPreferencesKey("profiles_json") to gson.toJson(
+            PreferenceKeys.PROFILES_JSON to gson.toJson(
                 listOf(
                     LanguageProfile(
                         languageCode = "en-US",
@@ -149,8 +147,8 @@ class SettingsBackupRepositoryExportTest {
                     )
                 )
             ),
-            stringPreferencesKey("global_base_prompt") to "Base prompt",
-            stringPreferencesKey("prompt_profiles_json") to gson.toJson(
+            PreferenceKeys.GLOBAL_BASE_PROMPT to "Base prompt",
+            PreferenceKeys.PROMPT_PROFILES_JSON to gson.toJson(
                 listOf(
                     PromptProfile(
                         id = "profile-1",
@@ -159,7 +157,7 @@ class SettingsBackupRepositoryExportTest {
                     )
                 )
             ),
-            stringPreferencesKey("app_prompt_mappings_json") to gson.toJson(
+            PreferenceKeys.APP_PROMPT_MAPPINGS_JSON to gson.toJson(
                 listOf(
                     AppPromptMapping(
                         packageName = "com.example.app",
@@ -176,30 +174,30 @@ class SettingsBackupRepositoryExportTest {
                     )
                 )
             ),
-            stringPreferencesKey("active-stt-provider-id") to "provider-openai",
-            stringPreferencesKey("active-stt-model-id") to "model-whisper",
-            stringPreferencesKey("active-text-provider-id") to "provider-openai",
-            stringPreferencesKey("active-text-model-id") to "model-gpt",
-            stringPreferencesKey("command-text-provider-id") to "provider-openai",
-            stringPreferencesKey("command-text-model-id") to "model-gpt",
-            stringPreferencesKey("enhancement-preset-id") to "cleanup",
-            stringPreferencesKey("command-preset-id") to "tone_rewrite",
-            booleanPreferencesKey("is-auto-recording-start") to true,
-            booleanPreferencesKey("auto-switch-back") to true,
-            booleanPreferencesKey("auto-transcribe-on-pause") to false,
-            booleanPreferencesKey("cancel-confirmation") to true,
-            booleanPreferencesKey("add-trailing-space") to true,
-            booleanPreferencesKey("haptic-feedback-enabled") to true,
-            booleanPreferencesKey("sound-effects-enabled") to false,
-            booleanPreferencesKey("smart-fix-enabled") to true,
-            booleanPreferencesKey("use-context") to true,
-            stringPreferencesKey("per-app-send-policy-json") to gson.toJson(mapOf("com.example.blocked" to true)),
-            booleanPreferencesKey("secure-field-explanation-dont-show-again") to true,
-            booleanPreferencesKey("verbose-network-logs-enabled") to true,
-            booleanPreferencesKey("disclosure-shown-dictation-audio") to true,
-            booleanPreferencesKey("disclosure-shown-enhancement-text") to false,
-            booleanPreferencesKey("disclosure-shown-command-text") to true,
-            stringPreferencesKey("update-channel") to "nightly",
+            PreferenceKeys.ACTIVE_STT_PROVIDER_ID to "provider-openai",
+            PreferenceKeys.ACTIVE_STT_MODEL_ID to "model-whisper",
+            PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID to "provider-openai",
+            PreferenceKeys.ACTIVE_TEXT_MODEL_ID to "model-gpt",
+            PreferenceKeys.COMMAND_TEXT_PROVIDER_ID to "provider-openai",
+            PreferenceKeys.COMMAND_TEXT_MODEL_ID to "model-gpt",
+            PreferenceKeys.ENHANCEMENT_PRESET_ID to "cleanup",
+            PreferenceKeys.COMMAND_PRESET_ID to "tone_rewrite",
+            PreferenceKeys.AUTO_RECORDING_START to true,
+            PreferenceKeys.AUTO_SWITCH_BACK to true,
+            PreferenceKeys.AUTO_TRANSCRIBE_ON_PAUSE to false,
+            PreferenceKeys.CANCEL_CONFIRMATION to true,
+            PreferenceKeys.ADD_TRAILING_SPACE to true,
+            PreferenceKeys.HAPTIC_FEEDBACK_ENABLED to true,
+            PreferenceKeys.SOUND_EFFECTS_ENABLED to false,
+            PreferenceKeys.SMART_FIX_ENABLED to true,
+            PreferenceKeys.USE_CONTEXT to true,
+            PreferenceKeys.PER_APP_SEND_POLICY_JSON to gson.toJson(mapOf("com.example.blocked" to true)),
+            PreferenceKeys.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN to true,
+            PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED to true,
+            PreferenceKeys.DISCLOSURE_SHOWN_DICTATION_AUDIO to true,
+            PreferenceKeys.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT to false,
+            PreferenceKeys.DISCLOSURE_SHOWN_COMMAND_TEXT to true,
+            PreferenceKeys.UPDATE_CHANNEL to "nightly",
         )
     }
 

@@ -14,21 +14,23 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.shekohex.whisperpp.ACTIVE_STT_MODEL_ID
-import com.github.shekohex.whisperpp.ACTIVE_STT_PROVIDER_ID
-import com.github.shekohex.whisperpp.ACTIVE_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.ACTIVE_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.COMMAND_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.COMMAND_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_COMMAND_TEXT
-import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_DICTATION_AUDIO
-import com.github.shekohex.whisperpp.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
-import com.github.shekohex.whisperpp.USE_CONTEXT
 import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.data.ModelKind
-import com.github.shekohex.whisperpp.data.PROVIDERS_JSON
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
+import com.github.shekohex.whisperpp.data.SettingsRepository
+import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_COMMAND_TEXT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_DICTATION_AUDIO
+import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDERS_JSON
+import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,6 +106,8 @@ class PrivacySafetyScreenUiTest {
                 PrivacySafetyScreen(
                     dataStore = dataStore,
                     navController = rememberNavController(),
+                    sendPolicyRepository = SendPolicyRepository(dataStore),
+                    settingsRepository = SettingsRepository(dataStore),
                 )
             }
         }

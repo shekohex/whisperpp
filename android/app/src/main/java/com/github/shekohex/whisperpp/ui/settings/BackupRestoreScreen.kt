@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.navigation.NavHostController
+import com.github.shekohex.whisperpp.app.appContainer
 import com.github.shekohex.whisperpp.data.ImportAnalysis
 import com.github.shekohex.whisperpp.data.RestoreMode
 import com.github.shekohex.whisperpp.data.RestoreRepairArea
@@ -77,7 +78,6 @@ import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_PROVIDER_CRED
 import com.github.shekohex.whisperpp.data.SecretsStoreProviderCredentials
 import com.github.shekohex.whisperpp.data.SettingsBackupEnvelope
 import com.github.shekohex.whisperpp.data.SettingsBackupRepository
-import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.google.gson.Gson
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -129,7 +129,7 @@ fun BackupRestoreScreen(
         }
     }
     val credentials = remember(context) {
-        SecretsStoreProviderCredentials(SecretsStore(context))
+        SecretsStoreProviderCredentials(context.appContainer.secretsStore)
     }
     val repository = remember(dataStore, credentials, appVersionName) {
         SettingsBackupRepository(

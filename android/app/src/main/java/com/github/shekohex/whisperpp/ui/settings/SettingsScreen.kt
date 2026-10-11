@@ -45,16 +45,34 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
+import com.github.shekohex.whisperpp.app.appContainer
 import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
-import com.github.shekohex.whisperpp.analytics.analyticsDataStore
 import com.github.shekohex.whisperpp.ui.components.VoiceWaveform
 import com.github.shekohex.whisperpp.*
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.core.network.isLocalNetworkHost
 import com.github.shekohex.whisperpp.data.*
-import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.updater.*
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ADD_TRAILING_SPACE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_RECORDING_START
+import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SWITCH_BACK
+import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_TRANSCRIBE_ON_PAUSE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.CANCEL_CONFIRMATION
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.HAPTIC_FEEDBACK_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_BACKEND
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_MODEL
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_PROMPT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SPEECH_TO_TEXT_BACKEND
+import com.github.shekohex.whisperpp.data.PreferenceKeys.UPDATE_CHANNEL
+import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -64,7 +82,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -148,12 +165,12 @@ fun SettingsNavigation(
 ) {
     val context = LocalContext.current
     val navController = rememberNavController()
-    val repository = remember { SettingsRepository(dataStore) }
+    val repository = LocalContext.current.appContainer.settingsRepository
     var migrationReady by remember { mutableStateOf(false) }
     val startDestination = SettingsScreen.resolveStartRoute(startRoute)
 
     LaunchedEffect(Unit) {
-        repository.migrateProviderSchemaV2IfNeeded(context)
+        repository.migrateProviderSchemaV2IfNeeded(context.appContainer.secretsStore)
         repository.migrateProviderSelectionsV2IfNeeded()
         repository.migratePromptsProfilesSchemaV1IfNeeded()
         migrationReady = true
@@ -186,7 +203,7 @@ fun SettingsNavigation(
             BackupRestoreScreen(dataStore, navController)
         }
         composable(SettingsScreen.Analytics.route) {
-            val analyticsRepository = remember(context) { AnalyticsRepository(context.analyticsDataStore) }
+            val analyticsRepository = context.appContainer.analyticsRepository
             val snapshot by analyticsRepository.snapshot.collectAsState(initial = AnalyticsSnapshot())
             val scope = rememberCoroutineScope()
             AnalyticsDashboardScreen(
@@ -256,7 +273,7 @@ fun SettingsNavigation(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PromptsProfilesScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
-    val repository = remember { SettingsRepository(dataStore) }
+    val repository = LocalContext.current.appContainer.settingsRepository
     val basePrompt by repository.globalBasePrompt.collectAsState(initial = "")
     val promptProfiles by repository.promptProfiles.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
@@ -454,7 +471,7 @@ fun PromptProfileEditScreen(
     navController: NavHostController,
     profileId: String?,
 ) {
-    val repository = remember { SettingsRepository(dataStore) }
+    val repository = LocalContext.current.appContainer.settingsRepository
     val profiles by repository.promptProfiles.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -577,7 +594,7 @@ private data class AppMappingPickerApp(
 fun AppMappingsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val repository = remember { SettingsRepository(dataStore) }
+    val repository = LocalContext.current.appContainer.settingsRepository
     val appMappings by repository.appPromptMappings.collectAsState(initial = emptyList())
     val promptProfiles by repository.promptProfiles.collectAsState(initial = emptyList())
 
@@ -901,7 +918,7 @@ fun AppMappingDetailScreen(
     navController: NavHostController,
     packageName: String,
 ) {
-    val repository = remember { SettingsRepository(dataStore) }
+    val repository = LocalContext.current.appContainer.settingsRepository
     val providers by repository.providers.collectAsState(initial = emptyList())
     val appMappings by repository.appPromptMappings.collectAsState(initial = emptyList())
     val promptProfiles by repository.promptProfiles.collectAsState(initial = emptyList())
@@ -1321,7 +1338,7 @@ private fun ProviderModelSelectionEditor(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LanguageDefaultsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
-    val repository = remember { SettingsRepository(dataStore) }
+    val repository = LocalContext.current.appContainer.settingsRepository
     val providers by repository.providers.collectAsState(initial = emptyList())
     val languageDefaults by repository.profiles.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
@@ -1569,7 +1586,7 @@ fun LanguageDefaultsScreen(dataStore: DataStore<Preferences>, navController: Nav
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PresetsSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
-    val repository = remember { SettingsRepository(dataStore) }
+    val repository = LocalContext.current.appContainer.settingsRepository
     val enhancementPresetId by repository.enhancementPresetId.collectAsState(initial = TRANSFORM_PRESET_ID_CLEANUP)
     val commandPresetId by repository.commandPresetId.collectAsState(initial = TRANSFORM_PRESET_ID_TONE_REWRITE)
     val scope = rememberCoroutineScope()
@@ -1725,7 +1742,7 @@ fun PresetsSettingsScreen(dataStore: DataStore<Preferences>, navController: NavH
 @Composable
 fun ProviderSelectionsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
     val settingsState by dataStore.data.collectAsState(initial = null)
-    val repository = remember { SettingsRepository(dataStore) }
+    val repository = LocalContext.current.appContainer.settingsRepository
     val providers by repository.providers.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
 
@@ -2189,8 +2206,8 @@ fun SettingsEditDialog(
 @Composable
 fun BackendSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
     val context = LocalContext.current
-    val repository = remember { SettingsRepository(dataStore) }
-    val secretsStore = remember { SecretsStore(context) }
+    val repository = LocalContext.current.appContainer.settingsRepository
+    val secretsStore = context.appContainer.secretsStore
     val providers by repository.providers.collectAsState(initial = emptyList())
     val settingsState by dataStore.data.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
@@ -2426,14 +2443,14 @@ fun ProviderEditScreen(
     cloneFromId: String?
 ) {
     val context = LocalContext.current
-    val repository = remember { SettingsRepository(dataStore) }
-    val secretsStore = remember { SecretsStore(context) }
+    val repository = LocalContext.current.appContainer.settingsRepository
+    val secretsStore = context.appContainer.secretsStore
     val providers by repository.providers.collectAsState(initial = emptyList())
     val settingsState by dataStore.data.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
 
-    val httpClient = remember {
-        OkHttpClient.Builder()
+    val httpClient = remember(context) {
+        context.appContainer.okHttpClient.newBuilder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -3749,7 +3766,7 @@ fun ModelEditCard(model: ModelConfig, onUpdate: (ModelConfig) -> Unit, onDelete:
 @Composable
 fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
     val settingsState by dataStore.data.collectAsState(initial = null)
-    val repository = remember { SettingsRepository(dataStore) }
+    val repository = LocalContext.current.appContainer.settingsRepository
     val providers by repository.providers.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     
@@ -4187,7 +4204,7 @@ fun UpdateSettingsSection(dataStore: DataStore<Preferences>, showUpdate: Boolean
     val settingsState by dataStore.data.collectAsState(initial = null)
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    val updateManager = remember { UpdateManager(context) }
+    val updateManager = remember { UpdateManager(context, context.appContainer.updaterHttpClient) }
     val checkResult by updateManager.checkResult.collectAsState()
     val downloadState by updateManager.downloadState.collectAsState()
     val isChecking by updateManager.isChecking.collectAsState()
@@ -4216,7 +4233,6 @@ fun UpdateSettingsSection(dataStore: DataStore<Preferences>, showUpdate: Boolean
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            updateManager.close()
         }
     }
 

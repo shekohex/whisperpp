@@ -3,7 +3,6 @@ package com.github.shekohex.whisperpp.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.mutablePreferencesOf
-import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
@@ -63,8 +62,8 @@ class SettingsBackupApplyTest {
             includedCategoryIds = setOf(SETTINGS_BACKUP_CATEGORY_PROVIDERS_MODELS),
         )
 
-        val mergedProviders = decodeProviders(mergeDataStore.data.first()[stringPreferencesKey("providers_json")].orEmpty())
-        val mergedPromptProfiles = decodePromptProfiles(mergeDataStore.data.first()[stringPreferencesKey("prompt_profiles_json")].orEmpty())
+        val mergedProviders = decodeProviders(mergeDataStore.data.first()[PreferenceKeys.PROVIDERS_JSON].orEmpty())
+        val mergedPromptProfiles = decodePromptProfiles(mergeDataStore.data.first()[PreferenceKeys.PROMPT_PROFILES_JSON].orEmpty())
         assertEquals(3, mergedProviders.size)
         assertEquals("Imported Shared", mergedProviders.first { it.id == "provider-shared" }.name)
         assertEquals(listOf("profile-local"), mergedPromptProfiles.map { it.id })
@@ -89,7 +88,7 @@ class SettingsBackupApplyTest {
         val overwriteAnalysis = overwriteRepository.analyzeEncryptedBackup(importEnvelope, PASSWORD, RestoreMode.OVERWRITE)
         overwriteRepository.applyImportAnalysis(overwriteAnalysis)
 
-        val overwrittenProviders = decodeProviders(overwriteDataStore.data.first()[stringPreferencesKey("providers_json")].orEmpty())
+        val overwrittenProviders = decodeProviders(overwriteDataStore.data.first()[PreferenceKeys.PROVIDERS_JSON].orEmpty())
         assertEquals(listOf("provider-remote", "provider-shared"), overwrittenProviders.map { it.id }.sorted())
         assertFalse(overwrittenProviders.any { it.id == "provider-local" })
     }
@@ -128,7 +127,7 @@ class SettingsBackupApplyTest {
 
         repository.applyImportAnalysis(analysis)
 
-        val providersJson = dataStore.data.first()[stringPreferencesKey("providers_json")].orEmpty()
+        val providersJson = dataStore.data.first()[PreferenceKeys.PROVIDERS_JSON].orEmpty()
         assertEquals("live-secret-key", credentialStore.getProviderApiKey("provider-openai"))
         assertFalse(providersJson.contains("live-secret-key"))
         assertFalse(providersJson.contains("apiKey"))
@@ -164,8 +163,8 @@ class SettingsBackupApplyTest {
         val summary = repository.applyImportAnalysis(analysis)
         val prefs = dataStore.data.first()
 
-        assertNull(prefs[stringPreferencesKey("active-stt-provider-id")])
-        assertNull(prefs[stringPreferencesKey("active-stt-model-id")])
+        assertNull(prefs[PreferenceKeys.ACTIVE_STT_PROVIDER_ID])
+        assertNull(prefs[PreferenceKeys.ACTIVE_STT_MODEL_ID])
         assertTrue(summary.clearedSelections.any { it.selectionType == RestoreSelectionType.ACTIVE_STT })
         assertTrue(summary.repairChecklist.any { it.area == RestoreRepairArea.ACTIVE_STT })
     }
@@ -207,8 +206,8 @@ class SettingsBackupApplyTest {
         val summary = repository.applyImportAnalysis(analysis)
         val prefs = dataStore.data.first()
 
-        assertNull(prefs[stringPreferencesKey("active-text-provider-id")])
-        assertNull(prefs[stringPreferencesKey("active-text-model-id")])
+        assertNull(prefs[PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID])
+        assertNull(prefs[PreferenceKeys.ACTIVE_TEXT_MODEL_ID])
         assertTrue(summary.clearedSelections.any { it.selectionType == RestoreSelectionType.ACTIVE_TEXT })
         assertTrue(summary.repairChecklist.any { it.area == RestoreRepairArea.PROVIDER_CREDENTIALS && it.providerId == "provider-openai" })
         assertTrue(summary.repairChecklist.any { it.area == RestoreRepairArea.ACTIVE_TEXT && it.providerId == "provider-openai" })
@@ -228,8 +227,8 @@ class SettingsBackupApplyTest {
         promptProfiles: List<PromptProfile> = emptyList(),
     ): Preferences {
         return mutablePreferencesOf(
-            stringPreferencesKey("providers_json") to gson.toJson(providers),
-            stringPreferencesKey("prompt_profiles_json") to gson.toJson(promptProfiles),
+            PreferenceKeys.PROVIDERS_JSON to gson.toJson(providers),
+            PreferenceKeys.PROMPT_PROFILES_JSON to gson.toJson(promptProfiles),
         )
     }
 

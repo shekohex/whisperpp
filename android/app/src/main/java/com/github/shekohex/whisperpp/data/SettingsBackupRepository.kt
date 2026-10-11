@@ -3,9 +3,7 @@ package com.github.shekohex.whisperpp.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.google.gson.Gson
 import com.google.gson.JsonElement
@@ -15,36 +13,6 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-
-private val backupProvidersJsonKey = stringPreferencesKey("providers_json")
-private val backupProfilesJsonKey = stringPreferencesKey("profiles_json")
-private val backupGlobalBasePromptKey = stringPreferencesKey("global_base_prompt")
-private val backupPromptProfilesJsonKey = stringPreferencesKey("prompt_profiles_json")
-private val backupAppPromptMappingsJsonKey = stringPreferencesKey("app_prompt_mappings_json")
-private val backupActiveSttProviderIdKey = stringPreferencesKey("active-stt-provider-id")
-private val backupActiveSttModelIdKey = stringPreferencesKey("active-stt-model-id")
-private val backupActiveTextProviderIdKey = stringPreferencesKey("active-text-provider-id")
-private val backupActiveTextModelIdKey = stringPreferencesKey("active-text-model-id")
-private val backupCommandTextProviderIdKey = stringPreferencesKey("command-text-provider-id")
-private val backupCommandTextModelIdKey = stringPreferencesKey("command-text-model-id")
-private val backupEnhancementPresetIdKey = stringPreferencesKey("enhancement-preset-id")
-private val backupCommandPresetIdKey = stringPreferencesKey("command-preset-id")
-private val backupAutoRecordingStartKey = booleanPreferencesKey("is-auto-recording-start")
-private val backupAutoSwitchBackKey = booleanPreferencesKey("auto-switch-back")
-private val backupAutoTranscribeOnPauseKey = booleanPreferencesKey("auto-transcribe-on-pause")
-private val backupCancelConfirmationKey = booleanPreferencesKey("cancel-confirmation")
-private val backupAddTrailingSpaceKey = booleanPreferencesKey("add-trailing-space")
-private val backupHapticFeedbackEnabledKey = booleanPreferencesKey("haptic-feedback-enabled")
-private val backupSoundEffectsEnabledKey = booleanPreferencesKey("sound-effects-enabled")
-private val backupSmartFixEnabledKey = booleanPreferencesKey("smart-fix-enabled")
-private val backupUseContextKey = booleanPreferencesKey("use-context")
-private val backupPerAppSendPolicyJsonKey = stringPreferencesKey("per-app-send-policy-json")
-private val backupSecureFieldExplanationDontShowAgainKey = booleanPreferencesKey("secure-field-explanation-dont-show-again")
-private val backupVerboseNetworkLogsEnabledKey = booleanPreferencesKey("verbose-network-logs-enabled")
-private val backupDisclosureShownDictationAudioKey = booleanPreferencesKey("disclosure-shown-dictation-audio")
-private val backupDisclosureShownEnhancementTextKey = booleanPreferencesKey("disclosure-shown-enhancement-text")
-private val backupDisclosureShownCommandTextKey = booleanPreferencesKey("disclosure-shown-command-text")
-private val backupUpdateChannelKey = stringPreferencesKey("update-channel")
 
 interface ProviderCredentialSource {
     fun getProviderApiKey(providerId: String): String?
@@ -89,8 +57,8 @@ private data class ParsedImportPayload(
 
 private data class SelectionSnapshot(
     val type: RestoreSelectionType,
-    val providerKey: Preferences.Key<String>,
-    val modelKey: Preferences.Key<String>,
+    val providerKey: PreferenceKey<String>,
+    val modelKey: PreferenceKey<String>,
     val providerId: String,
     val modelId: String,
 )
@@ -110,7 +78,7 @@ class SettingsBackupRepository(
 ) {
     suspend fun buildExportPayload(): SettingsBackupPayload {
         val prefs = dataStore.data.first()
-        val providers = parseProviders(prefs[backupProvidersJsonKey])
+        val providers = parseProviders(prefs[PreferenceKeys.PROVIDERS_JSON])
 
         return SettingsBackupPayload(
             providersModels = ProvidersModelsBackup(
@@ -131,48 +99,48 @@ class SettingsBackupRepository(
                 },
             ),
             activeSelections = ActiveSelectionsBackup(
-                activeSttProviderId = prefs.stringValue(backupActiveSttProviderIdKey),
-                activeSttModelId = prefs.stringValue(backupActiveSttModelIdKey),
-                activeTextProviderId = prefs.stringValue(backupActiveTextProviderIdKey),
-                activeTextModelId = prefs.stringValue(backupActiveTextModelIdKey),
-                commandTextProviderId = prefs.stringValue(backupCommandTextProviderIdKey),
-                commandTextModelId = prefs.stringValue(backupCommandTextModelIdKey),
+                activeSttProviderId = prefs.stringValue(PreferenceKeys.ACTIVE_STT_PROVIDER_ID),
+                activeSttModelId = prefs.stringValue(PreferenceKeys.ACTIVE_STT_MODEL_ID),
+                activeTextProviderId = prefs.stringValue(PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID),
+                activeTextModelId = prefs.stringValue(PreferenceKeys.ACTIVE_TEXT_MODEL_ID),
+                commandTextProviderId = prefs.stringValue(PreferenceKeys.COMMAND_TEXT_PROVIDER_ID),
+                commandTextModelId = prefs.stringValue(PreferenceKeys.COMMAND_TEXT_MODEL_ID),
             ),
             languageDefaults = LanguageDefaultsBackup(
-                profiles = parseLanguageProfiles(prefs[backupProfilesJsonKey]),
+                profiles = parseLanguageProfiles(prefs[PreferenceKeys.PROFILES_JSON]),
             ),
             promptsProfiles = PromptsProfilesBackup(
-                globalBasePrompt = prefs.stringValue(backupGlobalBasePromptKey),
-                promptProfiles = parsePromptProfiles(prefs[backupPromptProfilesJsonKey]),
+                globalBasePrompt = prefs.stringValue(PreferenceKeys.GLOBAL_BASE_PROMPT),
+                promptProfiles = parsePromptProfiles(prefs[PreferenceKeys.PROMPT_PROFILES_JSON]),
             ),
             appMappings = AppMappingsBackup(
-                mappings = parseAppPromptMappings(prefs[backupAppPromptMappingsJsonKey]),
+                mappings = parseAppPromptMappings(prefs[PreferenceKeys.APP_PROMPT_MAPPINGS_JSON]),
             ),
             transformPresets = TransformPresetsBackup(
-                enhancementPresetId = prefs.stringValue(backupEnhancementPresetIdKey).ifBlank { TRANSFORM_PRESET_ID_CLEANUP },
-                commandPresetId = prefs.stringValue(backupCommandPresetIdKey).ifBlank { TRANSFORM_PRESET_ID_TONE_REWRITE },
+                enhancementPresetId = prefs.stringValue(PreferenceKeys.ENHANCEMENT_PRESET_ID).ifBlank { TRANSFORM_PRESET_ID_CLEANUP },
+                commandPresetId = prefs.stringValue(PreferenceKeys.COMMAND_PRESET_ID).ifBlank { TRANSFORM_PRESET_ID_TONE_REWRITE },
             ),
             keyboardBehavior = KeyboardBehaviorBackup(
-                autoRecordingStart = prefs[backupAutoRecordingStartKey] ?: true,
-                autoSwitchBack = prefs[backupAutoSwitchBackKey] ?: false,
-                autoTranscribeOnPause = prefs[backupAutoTranscribeOnPauseKey] ?: true,
-                cancelConfirmation = prefs[backupCancelConfirmationKey] ?: true,
-                addTrailingSpace = prefs[backupAddTrailingSpaceKey] ?: false,
-                hapticFeedbackEnabled = prefs[backupHapticFeedbackEnabledKey] ?: true,
-                soundEffectsEnabled = prefs[backupSoundEffectsEnabledKey] ?: true,
+                autoRecordingStart = prefs[PreferenceKeys.AUTO_RECORDING_START] ?: true,
+                autoSwitchBack = prefs[PreferenceKeys.AUTO_SWITCH_BACK] ?: false,
+                autoTranscribeOnPause = prefs[PreferenceKeys.AUTO_TRANSCRIBE_ON_PAUSE] ?: true,
+                cancelConfirmation = prefs[PreferenceKeys.CANCEL_CONFIRMATION] ?: true,
+                addTrailingSpace = prefs[PreferenceKeys.ADD_TRAILING_SPACE] ?: false,
+                hapticFeedbackEnabled = prefs[PreferenceKeys.HAPTIC_FEEDBACK_ENABLED] ?: true,
+                soundEffectsEnabled = prefs[PreferenceKeys.SOUND_EFFECTS_ENABLED] ?: true,
             ),
             privacySafety = PrivacySafetyBackup(
-                smartFixEnabled = prefs[backupSmartFixEnabledKey] ?: false,
-                useContext = prefs[backupUseContextKey] ?: false,
-                perAppSendPolicies = parseSendPolicies(prefs[backupPerAppSendPolicyJsonKey]),
-                secureFieldExplanationDontShowAgain = prefs[backupSecureFieldExplanationDontShowAgainKey] ?: false,
-                verboseNetworkLogsEnabled = prefs[backupVerboseNetworkLogsEnabledKey] ?: false,
-                disclosureShownDictationAudio = prefs[backupDisclosureShownDictationAudioKey] ?: false,
-                disclosureShownEnhancementText = prefs[backupDisclosureShownEnhancementTextKey] ?: false,
-                disclosureShownCommandText = prefs[backupDisclosureShownCommandTextKey] ?: false,
+                smartFixEnabled = prefs[PreferenceKeys.SMART_FIX_ENABLED] ?: false,
+                useContext = prefs[PreferenceKeys.USE_CONTEXT] ?: false,
+                perAppSendPolicies = parseSendPolicies(prefs[PreferenceKeys.PER_APP_SEND_POLICY_JSON]),
+                secureFieldExplanationDontShowAgain = prefs[PreferenceKeys.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN] ?: false,
+                verboseNetworkLogsEnabled = prefs[PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED] ?: false,
+                disclosureShownDictationAudio = prefs[PreferenceKeys.DISCLOSURE_SHOWN_DICTATION_AUDIO] ?: false,
+                disclosureShownEnhancementText = prefs[PreferenceKeys.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT] ?: false,
+                disclosureShownCommandText = prefs[PreferenceKeys.DISCLOSURE_SHOWN_COMMAND_TEXT] ?: false,
             ),
             advancedPreferences = AdvancedPreferencesBackup(
-                updateChannel = prefs.stringValue(backupUpdateChannelKey).ifBlank { "stable" },
+                updateChannel = prefs.stringValue(PreferenceKeys.UPDATE_CHANNEL).ifBlank { "stable" },
             ),
         )
     }
@@ -520,15 +488,15 @@ class SettingsBackupRepository(
         val repairEntries = mutableListOf<RestoreRepairEntry>()
 
         val prefsAfterApply = dataStore.data.first()
-        val providersAfterApply = parseProviders(prefsAfterApply[backupProvidersJsonKey])
+        val providersAfterApply = parseProviders(prefsAfterApply[PreferenceKeys.PROVIDERS_JSON])
         val selectionValidation = validateSelections(
             providers = providersAfterApply,
-            sttProviderId = prefsAfterApply.stringValue(backupActiveSttProviderIdKey),
-            sttModelId = prefsAfterApply.stringValue(backupActiveSttModelIdKey),
-            textProviderId = prefsAfterApply.stringValue(backupActiveTextProviderIdKey),
-            textModelId = prefsAfterApply.stringValue(backupActiveTextModelIdKey),
-            commandProviderId = prefsAfterApply.stringValue(backupCommandTextProviderIdKey),
-            commandModelId = prefsAfterApply.stringValue(backupCommandTextModelIdKey),
+            sttProviderId = prefsAfterApply.stringValue(PreferenceKeys.ACTIVE_STT_PROVIDER_ID),
+            sttModelId = prefsAfterApply.stringValue(PreferenceKeys.ACTIVE_STT_MODEL_ID),
+            textProviderId = prefsAfterApply.stringValue(PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID),
+            textModelId = prefsAfterApply.stringValue(PreferenceKeys.ACTIVE_TEXT_MODEL_ID),
+            commandProviderId = prefsAfterApply.stringValue(PreferenceKeys.COMMAND_TEXT_PROVIDER_ID),
+            commandModelId = prefsAfterApply.stringValue(PreferenceKeys.COMMAND_TEXT_MODEL_ID),
         )
         if (selectionValidation.keysToClear.isNotEmpty()) {
             val validationClears = buildSelectionValidationRepairs(
@@ -587,7 +555,7 @@ class SettingsBackupRepository(
     private suspend fun applyProviderCredentials(category: ProviderCredentialsBackup) {
         val sink = credentialSink ?: return
         val prefs = dataStore.data.first()
-        val currentProviderIds = parseProviders(prefs[backupProvidersJsonKey]).map { it.id }
+        val currentProviderIds = parseProviders(prefs[PreferenceKeys.PROVIDERS_JSON]).map { it.id }
         val importedProviderIds = category.credentials.map { it.providerId }
         (currentProviderIds + importedProviderIds).distinct().forEach { providerId ->
             sink.clearProviderApiKey(providerId)
@@ -685,24 +653,24 @@ class SettingsBackupRepository(
         return listOf(
             SelectionSnapshot(
                 type = RestoreSelectionType.ACTIVE_STT,
-                providerKey = backupActiveSttProviderIdKey,
-                modelKey = backupActiveSttModelIdKey,
-                providerId = prefs.stringValue(backupActiveSttProviderIdKey),
-                modelId = prefs.stringValue(backupActiveSttModelIdKey),
+                providerKey = PreferenceKeys.ACTIVE_STT_PROVIDER_ID,
+                modelKey = PreferenceKeys.ACTIVE_STT_MODEL_ID,
+                providerId = prefs.stringValue(PreferenceKeys.ACTIVE_STT_PROVIDER_ID),
+                modelId = prefs.stringValue(PreferenceKeys.ACTIVE_STT_MODEL_ID),
             ),
             SelectionSnapshot(
                 type = RestoreSelectionType.ACTIVE_TEXT,
-                providerKey = backupActiveTextProviderIdKey,
-                modelKey = backupActiveTextModelIdKey,
-                providerId = prefs.stringValue(backupActiveTextProviderIdKey),
-                modelId = prefs.stringValue(backupActiveTextModelIdKey),
+                providerKey = PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID,
+                modelKey = PreferenceKeys.ACTIVE_TEXT_MODEL_ID,
+                providerId = prefs.stringValue(PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID),
+                modelId = prefs.stringValue(PreferenceKeys.ACTIVE_TEXT_MODEL_ID),
             ),
             SelectionSnapshot(
                 type = RestoreSelectionType.COMMAND_TEXT,
-                providerKey = backupCommandTextProviderIdKey,
-                modelKey = backupCommandTextModelIdKey,
-                providerId = prefs.stringValue(backupCommandTextProviderIdKey),
-                modelId = prefs.stringValue(backupCommandTextModelIdKey),
+                providerKey = PreferenceKeys.COMMAND_TEXT_PROVIDER_ID,
+                modelKey = PreferenceKeys.COMMAND_TEXT_MODEL_ID,
+                providerId = prefs.stringValue(PreferenceKeys.COMMAND_TEXT_PROVIDER_ID),
+                modelId = prefs.stringValue(PreferenceKeys.COMMAND_TEXT_MODEL_ID),
             ),
         )
     }
@@ -723,76 +691,76 @@ class SettingsBackupRepository(
         }
     }
 
-    private fun selectionProviderKey(type: RestoreSelectionType): Preferences.Key<String> {
+    private fun selectionProviderKey(type: RestoreSelectionType): PreferenceKey<String> {
         return when (type) {
-            RestoreSelectionType.ACTIVE_STT -> backupActiveSttProviderIdKey
-            RestoreSelectionType.ACTIVE_TEXT -> backupActiveTextProviderIdKey
-            RestoreSelectionType.COMMAND_TEXT -> backupCommandTextProviderIdKey
+            RestoreSelectionType.ACTIVE_STT -> PreferenceKeys.ACTIVE_STT_PROVIDER_ID
+            RestoreSelectionType.ACTIVE_TEXT -> PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
+            RestoreSelectionType.COMMAND_TEXT -> PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
         }
     }
 
-    private fun selectionModelKey(type: RestoreSelectionType): Preferences.Key<String> {
+    private fun selectionModelKey(type: RestoreSelectionType): PreferenceKey<String> {
         return when (type) {
-            RestoreSelectionType.ACTIVE_STT -> backupActiveSttModelIdKey
-            RestoreSelectionType.ACTIVE_TEXT -> backupActiveTextModelIdKey
-            RestoreSelectionType.COMMAND_TEXT -> backupCommandTextModelIdKey
+            RestoreSelectionType.ACTIVE_STT -> PreferenceKeys.ACTIVE_STT_MODEL_ID
+            RestoreSelectionType.ACTIVE_TEXT -> PreferenceKeys.ACTIVE_TEXT_MODEL_ID
+            RestoreSelectionType.COMMAND_TEXT -> PreferenceKeys.COMMAND_TEXT_MODEL_ID
         }
     }
 
     private fun applyProvidersModels(prefs: MutablePreferences, category: ProvidersModelsBackup) {
-        prefs[backupProvidersJsonKey] = gson.toJson(category.providers)
+        prefs[PreferenceKeys.PROVIDERS_JSON] = gson.toJson(category.providers)
     }
 
     private fun applyActiveSelections(prefs: MutablePreferences, category: ActiveSelectionsBackup) {
-        prefs.putStringOrRemove(backupActiveSttProviderIdKey, category.activeSttProviderId)
-        prefs.putStringOrRemove(backupActiveSttModelIdKey, category.activeSttModelId)
-        prefs.putStringOrRemove(backupActiveTextProviderIdKey, category.activeTextProviderId)
-        prefs.putStringOrRemove(backupActiveTextModelIdKey, category.activeTextModelId)
-        prefs.putStringOrRemove(backupCommandTextProviderIdKey, category.commandTextProviderId)
-        prefs.putStringOrRemove(backupCommandTextModelIdKey, category.commandTextModelId)
+        prefs.putStringOrRemove(PreferenceKeys.ACTIVE_STT_PROVIDER_ID, category.activeSttProviderId)
+        prefs.putStringOrRemove(PreferenceKeys.ACTIVE_STT_MODEL_ID, category.activeSttModelId)
+        prefs.putStringOrRemove(PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID, category.activeTextProviderId)
+        prefs.putStringOrRemove(PreferenceKeys.ACTIVE_TEXT_MODEL_ID, category.activeTextModelId)
+        prefs.putStringOrRemove(PreferenceKeys.COMMAND_TEXT_PROVIDER_ID, category.commandTextProviderId)
+        prefs.putStringOrRemove(PreferenceKeys.COMMAND_TEXT_MODEL_ID, category.commandTextModelId)
     }
 
     private fun applyLanguageDefaults(prefs: MutablePreferences, category: LanguageDefaultsBackup) {
-        prefs[backupProfilesJsonKey] = gson.toJson(category.profiles)
+        prefs[PreferenceKeys.PROFILES_JSON] = gson.toJson(category.profiles)
     }
 
     private fun applyPromptsProfiles(prefs: MutablePreferences, category: PromptsProfilesBackup) {
-        prefs[backupGlobalBasePromptKey] = sanitizeBasePrompt(category.globalBasePrompt)
-        prefs[backupPromptProfilesJsonKey] = gson.toJson(category.promptProfiles)
+        prefs[PreferenceKeys.GLOBAL_BASE_PROMPT] = sanitizeBasePrompt(category.globalBasePrompt)
+        prefs[PreferenceKeys.PROMPT_PROFILES_JSON] = gson.toJson(category.promptProfiles)
     }
 
     private fun applyAppMappings(prefs: MutablePreferences, category: AppMappingsBackup) {
-        prefs[backupAppPromptMappingsJsonKey] = gson.toJson(category.mappings)
+        prefs[PreferenceKeys.APP_PROMPT_MAPPINGS_JSON] = gson.toJson(category.mappings)
     }
 
     private fun applyTransformPresets(prefs: MutablePreferences, category: TransformPresetsBackup) {
-        prefs.putStringOrRemove(backupEnhancementPresetIdKey, category.enhancementPresetId)
-        prefs.putStringOrRemove(backupCommandPresetIdKey, category.commandPresetId)
+        prefs.putStringOrRemove(PreferenceKeys.ENHANCEMENT_PRESET_ID, category.enhancementPresetId)
+        prefs.putStringOrRemove(PreferenceKeys.COMMAND_PRESET_ID, category.commandPresetId)
     }
 
     private fun applyKeyboardBehavior(prefs: MutablePreferences, category: KeyboardBehaviorBackup) {
-        prefs[backupAutoRecordingStartKey] = category.autoRecordingStart
-        prefs[backupAutoSwitchBackKey] = category.autoSwitchBack
-        prefs[backupAutoTranscribeOnPauseKey] = category.autoTranscribeOnPause
-        prefs[backupCancelConfirmationKey] = category.cancelConfirmation
-        prefs[backupAddTrailingSpaceKey] = category.addTrailingSpace
-        prefs[backupHapticFeedbackEnabledKey] = category.hapticFeedbackEnabled
-        prefs[backupSoundEffectsEnabledKey] = category.soundEffectsEnabled
+        prefs[PreferenceKeys.AUTO_RECORDING_START] = category.autoRecordingStart
+        prefs[PreferenceKeys.AUTO_SWITCH_BACK] = category.autoSwitchBack
+        prefs[PreferenceKeys.AUTO_TRANSCRIBE_ON_PAUSE] = category.autoTranscribeOnPause
+        prefs[PreferenceKeys.CANCEL_CONFIRMATION] = category.cancelConfirmation
+        prefs[PreferenceKeys.ADD_TRAILING_SPACE] = category.addTrailingSpace
+        prefs[PreferenceKeys.HAPTIC_FEEDBACK_ENABLED] = category.hapticFeedbackEnabled
+        prefs[PreferenceKeys.SOUND_EFFECTS_ENABLED] = category.soundEffectsEnabled
     }
 
     private fun applyPrivacySafety(prefs: MutablePreferences, category: PrivacySafetyBackup) {
-        prefs[backupSmartFixEnabledKey] = category.smartFixEnabled
-        prefs[backupUseContextKey] = category.useContext
-        prefs[backupPerAppSendPolicyJsonKey] = gson.toJson(category.perAppSendPolicies)
-        prefs[backupSecureFieldExplanationDontShowAgainKey] = category.secureFieldExplanationDontShowAgain
-        prefs[backupVerboseNetworkLogsEnabledKey] = category.verboseNetworkLogsEnabled
-        prefs[backupDisclosureShownDictationAudioKey] = category.disclosureShownDictationAudio
-        prefs[backupDisclosureShownEnhancementTextKey] = category.disclosureShownEnhancementText
-        prefs[backupDisclosureShownCommandTextKey] = category.disclosureShownCommandText
+        prefs[PreferenceKeys.SMART_FIX_ENABLED] = category.smartFixEnabled
+        prefs[PreferenceKeys.USE_CONTEXT] = category.useContext
+        prefs[PreferenceKeys.PER_APP_SEND_POLICY_JSON] = gson.toJson(category.perAppSendPolicies)
+        prefs[PreferenceKeys.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN] = category.secureFieldExplanationDontShowAgain
+        prefs[PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED] = category.verboseNetworkLogsEnabled
+        prefs[PreferenceKeys.DISCLOSURE_SHOWN_DICTATION_AUDIO] = category.disclosureShownDictationAudio
+        prefs[PreferenceKeys.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT] = category.disclosureShownEnhancementText
+        prefs[PreferenceKeys.DISCLOSURE_SHOWN_COMMAND_TEXT] = category.disclosureShownCommandText
     }
 
     private fun applyAdvancedPreferences(prefs: MutablePreferences, category: AdvancedPreferencesBackup) {
-        prefs.putStringOrRemove(backupUpdateChannelKey, category.updateChannel)
+        prefs.putStringOrRemove(PreferenceKeys.UPDATE_CHANNEL, category.updateChannel)
     }
 
     private fun parseImportPayload(payloadJson: String): ParsedImportPayload {
@@ -1457,7 +1425,7 @@ private inline fun <reified T : Enum<T>> JsonObject.enumValue(
 }
 
 private fun MutablePreferences.putStringOrRemove(
-    key: Preferences.Key<String>,
+    key: PreferenceKey<String>,
     value: String,
 ) {
     val trimmed = value.trim()
@@ -1468,6 +1436,6 @@ private fun MutablePreferences.putStringOrRemove(
     }
 }
 
-private fun Preferences.stringValue(key: Preferences.Key<String>): String {
+private fun Preferences.stringValue(key: PreferenceKey<String>): String {
     return this[key]?.trim().orEmpty()
 }

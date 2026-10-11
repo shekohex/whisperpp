@@ -3,7 +3,6 @@ package com.github.shekohex.whisperpp.data
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.mutablePreferencesOf
-import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,7 +66,7 @@ class SettingsBackupImportAnalysisTest {
         assertFalse(overwritePreview.selectable)
         assertTrue(mergePreview.conflictKeys.contains("provider-shared"))
 
-        val storedProvidersJson = dataStore.data.first()[stringPreferencesKey("providers_json")].orEmpty()
+        val storedProvidersJson = dataStore.data.first()[PreferenceKeys.PROVIDERS_JSON].orEmpty()
         assertTrue(storedProvidersJson.contains("Local Shared"))
         assertTrue(storedProvidersJson.contains("Local Only"))
         assertFalse(storedProvidersJson.contains("Imported Shared"))
@@ -184,7 +183,7 @@ class SettingsBackupImportAnalysisTest {
         providers: List<ServiceProvider> = emptyList(),
     ): Preferences {
         return mutablePreferencesOf(
-            stringPreferencesKey("providers_json") to gson.toJson(providers),
+            PreferenceKeys.PROVIDERS_JSON to gson.toJson(providers),
         )
     }
 

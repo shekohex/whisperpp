@@ -12,35 +12,19 @@ import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.logging.HttpLoggingInterceptor
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class SmartFixer(private val context: Context) {
+class SmartFixer(
+    private val context: Context,
+    httpClient: OkHttpClient,
+) {
     private val TAG = "SmartFixer"
     private var inFlightCall: Call? = null
-     
-    private val loggingInterceptor = HttpLoggingInterceptor { message ->
-        val sanitized = message.replace(Regex("([?&]key=)[^&\\s]+"), "${'$'}1REDACTED")
-        Log.d("HTTP_SmartFixer", sanitized)
-    }.apply {
-        level = HttpLoggingInterceptor.Level.NONE
-        redactHeader("Authorization")
-        redactHeader("x-goog-api-key")
-    }
 
-    fun setNetworkLoggingEnabled(enabled: Boolean) {
-        loggingInterceptor.level = if (enabled) {
-            HttpLoggingInterceptor.Level.HEADERS
-        } else {
-            HttpLoggingInterceptor.Level.NONE
-        }
-    }
-
-    private val client = OkHttpClient.Builder()
-        .addInterceptor(loggingInterceptor)
+    private val client = httpClient.newBuilder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)

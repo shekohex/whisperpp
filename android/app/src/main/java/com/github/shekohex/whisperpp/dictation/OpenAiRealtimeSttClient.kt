@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class OpenAiRealtimeSttClient(
-    private val okHttpClient: OkHttpClient,
+    okHttpClient: OkHttpClient,
     private val request: Request,
     private val listener: Listener,
 ) {
@@ -60,20 +60,19 @@ class OpenAiRealtimeSttClient(
                 .build()
         }
 
-        fun defaultOkHttpClient(): OkHttpClient {
-            return OkHttpClient.Builder()
-                .pingInterval(15, TimeUnit.SECONDS)
-                .build()
-        }
+        private const val PING_INTERVAL_SECONDS = 15L
     }
 
+    private val webSocketClient = okHttpClient.newBuilder()
+        .pingInterval(PING_INTERVAL_SECONDS, TimeUnit.SECONDS)
+        .build()
     private val closed = AtomicBoolean(false)
     private var webSocket: WebSocket? = null
     private val partialBuffer = StringBuilder()
 
     fun connect() {
         if (closed.get()) return
-        webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
+        webSocket = webSocketClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 if (closed.get()) return
                 listener.onConnected()

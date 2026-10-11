@@ -13,11 +13,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.datastore.preferences.core.edit
 import com.github.shekohex.whisperpp.EXTRA_SETTINGS_DESTINATION
 import com.github.shekohex.whisperpp.MainActivity
-import com.github.shekohex.whisperpp.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN
-import com.github.shekohex.whisperpp.dataStore
+import com.github.shekohex.whisperpp.app.appContainer
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import com.github.shekohex.whisperpp.ui.settings.SettingsScreen
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,7 +66,7 @@ class BlockedExplanationActivity : ComponentActivity() {
                         onClose = { finish() },
                         onDontShowAgain = {
                             scope.launch {
-                                this@BlockedExplanationActivity.dataStore.edit { prefs ->
+                                this@BlockedExplanationActivity.appContainer.settingsDataStore.edit { prefs ->
                                     prefs[SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN] = true
                                 }
                             }

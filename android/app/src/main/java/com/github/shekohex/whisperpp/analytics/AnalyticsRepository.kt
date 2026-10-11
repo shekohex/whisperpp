@@ -3,6 +3,7 @@ package com.github.shekohex.whisperpp.analytics
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import com.github.shekohex.whisperpp.data.PreferenceKeys
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
@@ -20,17 +21,17 @@ class AnalyticsRepository(
 ) {
     val snapshot: Flow<AnalyticsSnapshot> = dataStore.data.map { preferences ->
         val today = todayProvider()
-        val buckets = normalizeBuckets(parseBuckets(preferences[AnalyticsStore.dailyBucketsJson]), today)
-        val totalRecordingDurationMillis = preferences[AnalyticsStore.totalRecordingDurationMillis] ?: 0L
-        val totalFinalInsertedWordCount = preferences[AnalyticsStore.totalFinalInsertedWordCount] ?: 0
-        val totalInsertedCharacterCount = preferences[AnalyticsStore.totalInsertedCharacterCount] ?: 0
+        val buckets = normalizeBuckets(parseBuckets(preferences[PreferenceKeys.Analytics.DAILY_BUCKETS_JSON]), today)
+        val totalRecordingDurationMillis = preferences[PreferenceKeys.Analytics.TOTAL_RECORDING_DURATION_MILLIS] ?: 0L
+        val totalFinalInsertedWordCount = preferences[PreferenceKeys.Analytics.TOTAL_FINAL_INSERTED_WORD_COUNT] ?: 0
+        val totalInsertedCharacterCount = preferences[PreferenceKeys.Analytics.TOTAL_INSERTED_CHARACTER_COUNT] ?: 0
 
         AnalyticsSnapshot(
-            totalCompletedSessions = preferences[AnalyticsStore.totalCompletedSessions] ?: 0,
-            totalCancelledSessions = preferences[AnalyticsStore.totalCancelledSessions] ?: 0,
+            totalCompletedSessions = preferences[PreferenceKeys.Analytics.TOTAL_COMPLETED_SESSIONS] ?: 0,
+            totalCancelledSessions = preferences[PreferenceKeys.Analytics.TOTAL_CANCELLED_SESSIONS] ?: 0,
             totalRecordingDurationMillis = totalRecordingDurationMillis,
             totalRecordingDurationMinutes = durationMillisToRoundedMinutes(totalRecordingDurationMillis),
-            totalRawWordCount = preferences[AnalyticsStore.totalRawWordCount] ?: 0,
+            totalRawWordCount = preferences[PreferenceKeys.Analytics.TOTAL_RAW_WORD_COUNT] ?: 0,
             totalFinalInsertedWordCount = totalFinalInsertedWordCount,
             averageWordsPerMinute = AnalyticsFormatter.calculateWordsPerMinute(
                 finalInsertedWords = totalFinalInsertedWordCount,
@@ -59,17 +60,17 @@ class AnalyticsRepository(
         )
 
         dataStore.edit { preferences ->
-            preferences[AnalyticsStore.totalCompletedSessions] = (preferences[AnalyticsStore.totalCompletedSessions] ?: 0) + 1
-            preferences[AnalyticsStore.totalRecordingDurationMillis] =
-                (preferences[AnalyticsStore.totalRecordingDurationMillis] ?: 0L) + normalizedDuration
-            preferences[AnalyticsStore.totalRawWordCount] =
-                (preferences[AnalyticsStore.totalRawWordCount] ?: 0) + rawWordCount
-            preferences[AnalyticsStore.totalFinalInsertedWordCount] =
-                (preferences[AnalyticsStore.totalFinalInsertedWordCount] ?: 0) + finalWordCount
-            preferences[AnalyticsStore.totalInsertedCharacterCount] =
-                (preferences[AnalyticsStore.totalInsertedCharacterCount] ?: 0) + insertedCharacterCount
+            preferences[PreferenceKeys.Analytics.TOTAL_COMPLETED_SESSIONS] = (preferences[PreferenceKeys.Analytics.TOTAL_COMPLETED_SESSIONS] ?: 0) + 1
+            preferences[PreferenceKeys.Analytics.TOTAL_RECORDING_DURATION_MILLIS] =
+                (preferences[PreferenceKeys.Analytics.TOTAL_RECORDING_DURATION_MILLIS] ?: 0L) + normalizedDuration
+            preferences[PreferenceKeys.Analytics.TOTAL_RAW_WORD_COUNT] =
+                (preferences[PreferenceKeys.Analytics.TOTAL_RAW_WORD_COUNT] ?: 0) + rawWordCount
+            preferences[PreferenceKeys.Analytics.TOTAL_FINAL_INSERTED_WORD_COUNT] =
+                (preferences[PreferenceKeys.Analytics.TOTAL_FINAL_INSERTED_WORD_COUNT] ?: 0) + finalWordCount
+            preferences[PreferenceKeys.Analytics.TOTAL_INSERTED_CHARACTER_COUNT] =
+                (preferences[PreferenceKeys.Analytics.TOTAL_INSERTED_CHARACTER_COUNT] ?: 0) + insertedCharacterCount
 
-            val updatedBuckets = normalizeBuckets(parseBuckets(preferences[AnalyticsStore.dailyBucketsJson]), todayProvider())
+            val updatedBuckets = normalizeBuckets(parseBuckets(preferences[PreferenceKeys.Analytics.DAILY_BUCKETS_JSON]), todayProvider())
                 .map { bucket ->
                     if (bucket.date == recordedOn) {
                         bucket.copy(
@@ -84,14 +85,14 @@ class AnalyticsRepository(
                         bucket
                     }
                 }
-            preferences[AnalyticsStore.dailyBucketsJson] = encodeBuckets(updatedBuckets)
+            preferences[PreferenceKeys.Analytics.DAILY_BUCKETS_JSON] = encodeBuckets(updatedBuckets)
         }
     }
 
     suspend fun recordCancelledSession(durationMs: Long, recordedOn: LocalDate) {
         dataStore.edit { preferences ->
-            preferences[AnalyticsStore.totalCancelledSessions] = (preferences[AnalyticsStore.totalCancelledSessions] ?: 0) + 1
-            val updatedBuckets = normalizeBuckets(parseBuckets(preferences[AnalyticsStore.dailyBucketsJson]), todayProvider())
+            preferences[PreferenceKeys.Analytics.TOTAL_CANCELLED_SESSIONS] = (preferences[PreferenceKeys.Analytics.TOTAL_CANCELLED_SESSIONS] ?: 0) + 1
+            val updatedBuckets = normalizeBuckets(parseBuckets(preferences[PreferenceKeys.Analytics.DAILY_BUCKETS_JSON]), todayProvider())
                 .map { bucket ->
                     if (bucket.date == recordedOn) {
                         bucket.copy(cancelledSessionCount = bucket.cancelledSessionCount + 1)
@@ -99,14 +100,14 @@ class AnalyticsRepository(
                         bucket
                     }
                 }
-            preferences[AnalyticsStore.dailyBucketsJson] = encodeBuckets(updatedBuckets)
+            preferences[PreferenceKeys.Analytics.DAILY_BUCKETS_JSON] = encodeBuckets(updatedBuckets)
         }
     }
 
     suspend fun resetAnalytics() {
         dataStore.edit { preferences ->
             preferences.clear()
-            preferences[AnalyticsStore.dailyBucketsJson] = encodeBuckets(normalizeBuckets(emptyList(), todayProvider()))
+            preferences[PreferenceKeys.Analytics.DAILY_BUCKETS_JSON] = encodeBuckets(normalizeBuckets(emptyList(), todayProvider()))
         }
     }
 

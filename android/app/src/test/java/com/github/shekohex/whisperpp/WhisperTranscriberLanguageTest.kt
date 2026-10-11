@@ -4,6 +4,7 @@ import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -13,7 +14,7 @@ import java.io.File
 class WhisperTranscriberLanguageTest {
     @Test
     fun whisperAsr_usesAutoLanguageByDefault() {
-        val request = WhisperTranscriber().buildWhisperRequest(
+        val request = WhisperTranscriber(OkHttpClient()).buildWhisperRequest(
             filename = tempAudioFile().absolutePath,
             mediaType = "audio/wav",
             provider = provider(ProviderType.WHISPER_ASR),
@@ -28,7 +29,7 @@ class WhisperTranscriberLanguageTest {
 
     @Test
     fun whisperAsr_usesSelectedLanguage() {
-        val request = WhisperTranscriber().buildWhisperRequest(
+        val request = WhisperTranscriber(OkHttpClient()).buildWhisperRequest(
             filename = tempAudioFile().absolutePath,
             mediaType = "audio/wav",
             provider = provider(ProviderType.WHISPER_ASR),
@@ -43,7 +44,7 @@ class WhisperTranscriberLanguageTest {
 
     @Test
     fun openAiMultipart_omitsLanguageWhenAuto() {
-        val request = WhisperTranscriber().buildWhisperRequest(
+        val request = WhisperTranscriber(OkHttpClient()).buildWhisperRequest(
             filename = tempAudioFile().absolutePath,
             mediaType = "audio/wav",
             provider = provider(ProviderType.OPENAI),
@@ -59,7 +60,7 @@ class WhisperTranscriberLanguageTest {
 
     @Test
     fun openAiMultipart_includesLanguageWhenNotAuto() {
-        val request = WhisperTranscriber().buildWhisperRequest(
+        val request = WhisperTranscriber(OkHttpClient()).buildWhisperRequest(
             filename = tempAudioFile().absolutePath,
             mediaType = "audio/wav",
             provider = provider(ProviderType.OPENAI),
@@ -75,7 +76,7 @@ class WhisperTranscriberLanguageTest {
 
     @Test
     fun customMultipart_includesLanguageWhenNotAuto() {
-        val request = WhisperTranscriber().buildWhisperRequest(
+        val request = WhisperTranscriber(OkHttpClient()).buildWhisperRequest(
             filename = tempAudioFile().absolutePath,
             mediaType = "audio/wav",
             provider = provider(ProviderType.CUSTOM),

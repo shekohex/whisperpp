@@ -1,21 +1,21 @@
 package com.github.shekohex.whisperpp.data
 
 import androidx.datastore.preferences.core.mutablePreferencesOf
-import com.github.shekohex.whisperpp.ACTIVE_STT_MODEL_ID
-import com.github.shekohex.whisperpp.ACTIVE_STT_PROVIDER_ID
-import com.github.shekohex.whisperpp.ACTIVE_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.ACTIVE_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.COMMAND_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.COMMAND_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.MODEL
-import com.github.shekohex.whisperpp.SMART_FIX_BACKEND
-import com.github.shekohex.whisperpp.SMART_FIX_MODEL
-import com.github.shekohex.whisperpp.SPEECH_TO_TEXT_BACKEND
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.MODEL
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_BACKEND
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_MODEL
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SPEECH_TO_TEXT_BACKEND
 
 class ProviderSelectionsMigrationTest {
 

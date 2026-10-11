@@ -1,8 +1,7 @@
 package com.github.shekohex.whisperpp.privacy
 
-import android.content.ContextWrapper
-import com.github.shekohex.whisperpp.SmartFixer
-import com.github.shekohex.whisperpp.WhisperTranscriber
+import com.github.shekohex.whisperpp.core.network.HttpClientFactory
+import com.github.shekohex.whisperpp.core.network.RedactingLoggingInterceptor
 import okhttp3.logging.HttpLoggingInterceptor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -11,53 +10,47 @@ import org.junit.Test
 class NetworkLoggingPrivacyTest {
 
     @Test
-    fun whisperTranscriber_defaultsToNone_andRedactsSensitiveHeaders() {
-        val interceptor = loggingInterceptorOf(WhisperTranscriber())
+    fun loggingInterceptor_defaultsToNone_andRedactsSensitiveHeaders() {
+        val interceptor = RedactingLoggingInterceptor()
 
         assertEquals(HttpLoggingInterceptor.Level.NONE, interceptor.level)
-        assertSensitiveHeadersRedacted(interceptor)
+        assertSensitiveHeadersRedacted(interceptor.delegate)
     }
 
     @Test
-    fun whisperTranscriber_enablingLogging_capsAtHeaders() {
-        val transcriber = WhisperTranscriber()
+    fun loggingInterceptor_enablingLogging_capsAtHeaders() {
+        val interceptor = RedactingLoggingInterceptor()
 
-        transcriber.setNetworkLoggingEnabled(true)
-        assertEquals(HttpLoggingInterceptor.Level.HEADERS, loggingInterceptorOf(transcriber).level)
+        interceptor.setEnabled(true)
+        assertEquals(HttpLoggingInterceptor.Level.HEADERS, interceptor.level)
 
-        transcriber.setNetworkLoggingEnabled(false)
-        assertEquals(HttpLoggingInterceptor.Level.NONE, loggingInterceptorOf(transcriber).level)
-    }
-
-    @Test
-    fun smartFixer_defaultsToNone_andRedactsSensitiveHeaders() {
-        val interceptor = loggingInterceptorOf(SmartFixer(ContextWrapper(null)))
-
+        interceptor.setEnabled(false)
         assertEquals(HttpLoggingInterceptor.Level.NONE, interceptor.level)
-        assertSensitiveHeadersRedacted(interceptor)
     }
 
     @Test
-    fun smartFixer_enablingLogging_capsAtHeaders() {
-        val smartFixer = SmartFixer(ContextWrapper(null))
+    fun loggingInterceptor_redactsKeyQueryParameters() {
+        val message = "--> GET https://example.com/v1/models?key=secret123&alt=json"
 
-        smartFixer.setNetworkLoggingEnabled(true)
-        assertEquals(HttpLoggingInterceptor.Level.HEADERS, loggingInterceptorOf(smartFixer).level)
+        val redacted = RedactingLoggingInterceptor.redactQueryKeys(message)
 
-        smartFixer.setNetworkLoggingEnabled(false)
-        assertEquals(HttpLoggingInterceptor.Level.NONE, loggingInterceptorOf(smartFixer).level)
+        assertEquals("--> GET https://example.com/v1/models?key=REDACTED&alt=json", redacted)
+    }
+
+    @Test
+    fun sharedClient_usesRedactingInterceptor() {
+        val interceptor = RedactingLoggingInterceptor()
+
+        val client = HttpClientFactory.createOkHttpClient(interceptor)
+
+        assertTrue(client.interceptors.contains(interceptor))
+        assertEquals(HttpLoggingInterceptor.Level.NONE, interceptor.level)
     }
 
     private fun assertSensitiveHeadersRedacted(interceptor: HttpLoggingInterceptor) {
         val redactedHeaders = redactedHeadersOf(interceptor).map { it.lowercase() }.toSet()
         assertTrue(redactedHeaders.contains("authorization"))
         assertTrue(redactedHeaders.contains("x-goog-api-key"))
-    }
-
-    private fun loggingInterceptorOf(target: Any): HttpLoggingInterceptor {
-        val field = target.javaClass.getDeclaredField("loggingInterceptor")
-        field.isAccessible = true
-        return field.get(target) as HttpLoggingInterceptor
     }
 
     private fun redactedHeadersOf(interceptor: HttpLoggingInterceptor): Set<String> {

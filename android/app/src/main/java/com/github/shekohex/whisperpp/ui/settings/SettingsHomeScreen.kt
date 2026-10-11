@@ -77,27 +77,25 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.github.shekohex.whisperpp.ACTIVE_STT_MODEL_ID
-import com.github.shekohex.whisperpp.ACTIVE_STT_PROVIDER_ID
-import com.github.shekohex.whisperpp.ACTIVE_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.ACTIVE_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.AUTO_RECORDING_START
-import com.github.shekohex.whisperpp.AUTO_SWITCH_BACK
-import com.github.shekohex.whisperpp.COMMAND_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.COMMAND_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.HAPTIC_FEEDBACK_ENABLED
-import com.github.shekohex.whisperpp.PER_APP_SEND_POLICY_JSON
+import com.github.shekohex.whisperpp.app.appContainer
 import com.github.shekohex.whisperpp.R
-import com.github.shekohex.whisperpp.SOUND_EFFECTS_ENABLED
-import com.github.shekohex.whisperpp.VERBOSE_NETWORK_LOGS_ENABLED
-import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
-import com.github.shekohex.whisperpp.analytics.analyticsDataStore
-import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_CLEANUP
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
 import com.github.shekohex.whisperpp.data.presetById
 import com.github.shekohex.whisperpp.data.validateSelections
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_RECORDING_START
+import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SWITCH_BACK
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.HAPTIC_FEEDBACK_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PER_APP_SEND_POLICY_JSON
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED
 import org.json.JSONObject
 
 private data class SettingsSetupIssue(
@@ -115,8 +113,8 @@ fun SettingsHomeScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val repository = remember { SettingsRepository(dataStore) }
-    val analyticsRepository = remember(context) { AnalyticsRepository(context.analyticsDataStore) }
+    val repository = context.appContainer.settingsRepository
+    val analyticsRepository = context.appContainer.analyticsRepository
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val homeEntry = remember(currentBackStackEntry, navController) {
         navController.getBackStackEntry(SettingsScreen.Main.route)

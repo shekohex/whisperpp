@@ -35,6 +35,7 @@
 
     <attribution android:tag="whisper_recorder" android:label="@string/app_name" />
     <application
+        android:name=".app.WhisperApp"
         android:attributionTags="whisper_recorder"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

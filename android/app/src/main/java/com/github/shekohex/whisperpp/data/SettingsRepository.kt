@@ -1,27 +1,31 @@
 package com.github.shekohex.whisperpp.data
 
-import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.floatPreferencesKey
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
-import com.github.shekohex.whisperpp.ACTIVE_STT_MODEL_ID
-import com.github.shekohex.whisperpp.ACTIVE_STT_PROVIDER_ID
-import com.github.shekohex.whisperpp.ACTIVE_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.ACTIVE_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.COMMAND_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.COMMAND_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.COMMAND_PRESET_ID
-import com.github.shekohex.whisperpp.ENHANCEMENT_PRESET_ID
-import com.github.shekohex.whisperpp.MODEL
-import com.github.shekohex.whisperpp.SMART_FIX_BACKEND
-import com.github.shekohex.whisperpp.SMART_FIX_MODEL
-import com.github.shekohex.whisperpp.SPEECH_TO_TEXT_BACKEND
 import com.github.shekohex.whisperpp.privacy.SecretsStore
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.APP_PROMPT_MAPPINGS_JSON
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_PRESET_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_PRESET_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.GLOBAL_BASE_PROMPT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.MODEL
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PROFILES_JSON
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PROMPTS_PROFILES_SCHEMA_V1_MIGRATION_DONE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PROMPT_PROFILES_JSON
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDERS_JSON
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDER_API_KEY_MIGRATION_DONE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDER_SCHEMA_V2_MIGRATION_DONE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDER_SELECTIONS_V2_MIGRATION_DONE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_BACKEND
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_MODEL
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SPEECH_TO_TEXT_BACKEND
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
@@ -35,16 +39,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-val PROVIDERS_JSON = stringPreferencesKey("providers_json")
-val PROFILES_JSON = stringPreferencesKey("profiles_json")
-val GLOBAL_BASE_PROMPT = stringPreferencesKey("global_base_prompt")
-val PROMPT_PROFILES_JSON = stringPreferencesKey("prompt_profiles_json")
-val APP_PROMPT_MAPPINGS_JSON = stringPreferencesKey("app_prompt_mappings_json")
-val PROVIDER_API_KEY_MIGRATION_DONE = booleanPreferencesKey("provider_api_key_migration_done")
-val PROVIDER_SCHEMA_V2_MIGRATION_DONE = booleanPreferencesKey("provider_schema_v2_migration_done")
-val PROVIDER_SELECTIONS_V2_MIGRATION_DONE = booleanPreferencesKey("provider_selections_v2_migration_done")
-val PROMPTS_PROFILES_SCHEMA_V1_MIGRATION_DONE = booleanPreferencesKey("prompts_profiles_schema_v1_migration_done")
 
 data class SettingsExport(
     val version: Int,
@@ -66,31 +60,31 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     companion object {
         const val EXPORT_VERSION = 1
         private val EXPORTABLE_STRING_KEYS = listOf(
-            "speech-to-text-backend",
-            "endpoint",
-            "language-code",
-            "model",
-            "postprocessing",
-            "prompt",
-            "smart-fix-backend",
-            "smart-fix-endpoint",
-            "smart-fix-model",
-            "smart-fix-prompt",
-            "update-channel"
+            PreferenceKeys.SPEECH_TO_TEXT_BACKEND,
+            PreferenceKeys.ENDPOINT,
+            PreferenceKeys.LANGUAGE_CODE,
+            PreferenceKeys.MODEL,
+            PreferenceKeys.POSTPROCESSING,
+            PreferenceKeys.PROMPT,
+            PreferenceKeys.SMART_FIX_BACKEND,
+            PreferenceKeys.SMART_FIX_ENDPOINT,
+            PreferenceKeys.SMART_FIX_MODEL,
+            PreferenceKeys.SMART_FIX_PROMPT,
+            PreferenceKeys.UPDATE_CHANNEL
         )
         private val EXPORTABLE_BOOLEAN_KEYS = listOf(
-            "is-auto-recording-start",
-            "auto-switch-back",
-            "auto-transcribe-on-pause",
-            "cancel-confirmation",
-            "add-trailing-space",
-            "use-context",
-            "smart-fix-enabled",
-            "haptic-feedback-enabled",
-            "sound-effects-enabled"
+            PreferenceKeys.AUTO_RECORDING_START,
+            PreferenceKeys.AUTO_SWITCH_BACK,
+            PreferenceKeys.AUTO_TRANSCRIBE_ON_PAUSE,
+            PreferenceKeys.CANCEL_CONFIRMATION,
+            PreferenceKeys.ADD_TRAILING_SPACE,
+            PreferenceKeys.USE_CONTEXT,
+            PreferenceKeys.SMART_FIX_ENABLED,
+            PreferenceKeys.HAPTIC_FEEDBACK_ENABLED,
+            PreferenceKeys.SOUND_EFFECTS_ENABLED
         )
-        private val EXPORTABLE_INT_KEYS = listOf("timeout")
-        private val EXPORTABLE_FLOAT_KEYS = listOf("smart-fix-temperature")
+        private val EXPORTABLE_INT_KEYS = listOf(PreferenceKeys.TIMEOUT)
+        private val EXPORTABLE_FLOAT_KEYS = listOf(PreferenceKeys.SMART_FIX_TEMPERATURE)
     }
     
     val providers: Flow<List<ServiceProvider>> = dataStore.data.map { prefs ->
@@ -197,7 +191,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         saveProviders(currentList)
     }
 
-    suspend fun migrateProviderApiKeysIfNeeded(context: Context) {
+    suspend fun migrateProviderApiKeysIfNeeded(secretsStore: SecretsStore) {
         val migrationDone = dataStore.data.map { prefs ->
             prefs[PROVIDER_API_KEY_MIGRATION_DONE] ?: false
         }.first()
@@ -223,7 +217,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
 
         val providerArray = extractProviderArray(rootElement) ?: return
-        val secretsStore = SecretsStore(context.applicationContext)
 
         providerArray.forEach { providerElement ->
             if (providerElement.isJsonObject) {
@@ -254,7 +247,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    suspend fun migrateProviderSchemaV2IfNeeded(context: Context) {
+    suspend fun migrateProviderSchemaV2IfNeeded(secretsStore: SecretsStore) {
         val migrationDone = dataStore.data.map { prefs ->
             prefs[PROVIDER_SCHEMA_V2_MIGRATION_DONE] ?: false
         }.first()
@@ -263,7 +256,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             return
         }
 
-        migrateProviderApiKeysIfNeeded(context)
+        migrateProviderApiKeysIfNeeded(secretsStore)
 
         val prefs = dataStore.data.first()
         val rawProvidersJson = prefs[PROVIDERS_JSON]
@@ -421,16 +414,16 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
         val prefsMap = mutableMapOf<String, Any?>()
         EXPORTABLE_STRING_KEYS.forEach { key ->
-            prefs[stringPreferencesKey(key)]?.let { prefsMap[key] = it }
+            prefs[key]?.let { prefsMap[key.name] = it }
         }
         EXPORTABLE_BOOLEAN_KEYS.forEach { key ->
-            prefs[booleanPreferencesKey(key)]?.let { prefsMap[key] = it }
+            prefs[key]?.let { prefsMap[key.name] = it }
         }
         EXPORTABLE_INT_KEYS.forEach { key ->
-            prefs[intPreferencesKey(key)]?.let { prefsMap[key] = it }
+            prefs[key]?.let { prefsMap[key.name] = it }
         }
         EXPORTABLE_FLOAT_KEYS.forEach { key ->
-            prefs[floatPreferencesKey(key)]?.let { prefsMap[key] = it }
+            prefs[key]?.let { prefsMap[key.name] = it }
         }
 
         val export = SettingsExport(
@@ -477,16 +470,16 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                 prefs[PROFILES_JSON] = gson.toJson(importedProfiles)
 
                 EXPORTABLE_STRING_KEYS.forEach { key ->
-                    prefsObj.get(key)?.asString?.let { prefs[stringPreferencesKey(key)] = it }
+                    prefsObj.get(key.name)?.asString?.let { prefs[key] = it }
                 }
                 EXPORTABLE_BOOLEAN_KEYS.forEach { key ->
-                    prefsObj.get(key)?.asBoolean?.let { prefs[booleanPreferencesKey(key)] = it }
+                    prefsObj.get(key.name)?.asBoolean?.let { prefs[key] = it }
                 }
                 EXPORTABLE_INT_KEYS.forEach { key ->
-                    prefsObj.get(key)?.asInt?.let { prefs[intPreferencesKey(key)] = it }
+                    prefsObj.get(key.name)?.asInt?.let { prefs[key] = it }
                 }
                 EXPORTABLE_FLOAT_KEYS.forEach { key ->
-                    prefsObj.get(key)?.asFloat?.let { prefs[floatPreferencesKey(key)] = it }
+                    prefsObj.get(key.name)?.asFloat?.let { prefs[key] = it }
                 }
             }
 
@@ -542,7 +535,7 @@ internal data class SelectionValidationResult(
     val isSttValid: Boolean,
     val isTextValid: Boolean,
     val isCommandOverrideValid: Boolean,
-    val keysToClear: Set<Preferences.Key<String>>,
+    val keysToClear: Set<PreferenceKey<String>>,
     val effective: EffectiveSelections,
 )
 
@@ -577,7 +570,7 @@ internal fun validateSelections(
         commandProviderValid && commandModelValid
     }
 
-    val keysToClear = buildSet<Preferences.Key<String>> {
+    val keysToClear = buildSet<PreferenceKey<String>> {
         if (!sttProviderValid && sttProviderId.isNotBlank()) {
             add(ACTIVE_STT_PROVIDER_ID)
             add(ACTIVE_STT_MODEL_ID)

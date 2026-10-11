@@ -3,7 +3,6 @@ package com.github.shekohex.whisperpp.updater
 import android.content.Context
 import com.github.shekohex.whisperpp.BuildConfig
 import io.ktor.client.HttpClient
-import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -14,8 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 
-class UpdateManager(context: Context) {
-    private val httpClient = HttpClient(OkHttp)
+class UpdateManager(context: Context, httpClient: HttpClient) {
     private val checker = UpdateChecker(httpClient)
     private val repository = UpdateRepository(context)
     private val downloader = UpdateDownloader(context, repository)
@@ -124,9 +122,5 @@ class UpdateManager(context: Context) {
             downloader.cleanup()
             _downloadState.value = DownloadState.Idle
         }
-    }
-
-    fun close() {
-        httpClient.close()
     }
 }

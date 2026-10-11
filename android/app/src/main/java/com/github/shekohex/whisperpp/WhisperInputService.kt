@@ -45,6 +45,7 @@ import android.graphics.Color
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.Lifecycle
@@ -60,7 +61,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.DictationAnalyticsSession
-import com.github.shekohex.whisperpp.analytics.analyticsDataStore
+import com.github.shekohex.whisperpp.app.appContainer
 import com.github.shekohex.whisperpp.data.EffectiveRuntimeConfig
 import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.ProviderType
@@ -96,6 +97,29 @@ import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeStyle
 import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeUiState
 import com.github.shekohex.whisperpp.ui.keyboard.KeyboardScreen
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
+import com.github.shekohex.whisperpp.data.PreferenceKey
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ADD_TRAILING_SPACE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SWITCH_BACK
+import com.github.shekohex.whisperpp.data.PreferenceKeys.CANCEL_CONFIRMATION
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_COMMAND_TEXT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_DICTATION_AUDIO
+import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.HAPTIC_FEEDBACK_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.LANGUAGE_CODE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.POSTPROCESSING
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PROMPT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_TEMPERATURE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED
 import com.github.liuyueyi.quick.transfer.ChineseUtils
 import com.github.liuyueyi.quick.transfer.constants.TransType
 import kotlinx.coroutines.CancellableContinuation
@@ -201,7 +225,9 @@ internal class CommandDisclosureGateCoordinator(
 }
 
 class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
-    private val whisperTranscriber: WhisperTranscriber = WhisperTranscriber()
+    private val dataStore: DataStore<Preferences>
+        get() = appContainer.settingsDataStore
+    private val whisperTranscriber: WhisperTranscriber by lazy { WhisperTranscriber(appContainer.okHttpClient) }
     private lateinit var smartFixer: SmartFixer
     private var recorderManager: RecorderManager? = null
     private var recordedAudioFilename: String = ""
@@ -293,15 +319,16 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         super.onCreate()
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-        repository = SettingsRepository(dataStore)
-        analyticsRepository = AnalyticsRepository(analyticsDataStore)
-        secretsStore = SecretsStore(this)
-        sendPolicyRepository = SendPolicyRepository(dataStore)
+        val container = appContainer
+        repository = container.settingsRepository
+        analyticsRepository = container.analyticsRepository
+        secretsStore = container.secretsStore
+        sendPolicyRepository = container.sendPolicyRepository
         runBlocking {
-            repository.migrateProviderSchemaV2IfNeeded(this@WhisperInputService)
+            repository.migrateProviderSchemaV2IfNeeded(secretsStore)
         }
         recorderManager = RecorderManager(this)
-        smartFixer = SmartFixer(this)
+        smartFixer = SmartFixer(this, container.okHttpClient)
 
         dictationController = DictationController(
             DictationController.Deps(
@@ -323,8 +350,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
         networkLoggingPreferenceJob = CoroutineScope(Dispatchers.Main).launch {
             dataStore.data.map { it[VERBOSE_NETWORK_LOGS_ENABLED] ?: false }.collect { enabled ->
-                whisperTranscriber.setNetworkLoggingEnabled(enabled)
-                smartFixer.setNetworkLoggingEnabled(enabled)
+                appContainer.httpLoggingInterceptor.setEnabled(enabled)
             }
         }
     }
@@ -1058,7 +1084,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         return isExternalSendBlocked()
     }
 
-    private fun disclosurePreferenceKey(mode: FirstUseDisclosureMode): Preferences.Key<Boolean> {
+    private fun disclosurePreferenceKey(mode: FirstUseDisclosureMode): PreferenceKey<Boolean> {
         return when (mode) {
             FirstUseDisclosureMode.DICTATION_AUDIO -> DISCLOSURE_SHOWN_DICTATION_AUDIO
             FirstUseDisclosureMode.ENHANCEMENT_TEXT -> DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
@@ -1389,7 +1415,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         realtimeFinalTranscript = null
 
         val client = OpenAiRealtimeSttClient(
-            okHttpClient = OpenAiRealtimeSttClient.defaultOkHttpClient(),
+            okHttpClient = appContainer.okHttpClient,
             request = request,
             listener = object : OpenAiRealtimeSttClient.Listener {
                 override fun onConnected() = Unit
