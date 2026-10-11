@@ -146,6 +146,8 @@ Current state machine (verified):
 | G-08 | M | `SmartFixer.kt:103` | Unsupported enhancement provider type silently returns the original text. | Surface `EnhancementSkipped(reason)` notice. |
 | G-09 | M | `WhisperTranscriber.kt:181-184` | Audio file deleted only on success. | Delete in `finally` unless "keep last recording for retry" is enabled (VoiceInk feature; see §5). |
 | G-10 | L | `SmartFixer`, strings | "SmartFix" / "Smart Fix" / "enhancement" / "post-processing" used interchangeably. | One term everywhere: **Enhancement** (code: `Enhancement*`). |
+| G-11 | H | `dictation/OpenAiRealtimeSttClient.kt`, `WhisperInputService.kt:283-288, 1248-1415` | Realtime (WebSocket) STT exists but is OpenAI-only, selected by a string heuristic (`supportsOpenAiRealtime`), and wired into the service through six mutable fields (`realtimeSttClient`, `realtimeToken`, `realtimeFinalTranscript`, `realtimeBestEffortTranscript`, `pendingRealtimeProvider`, `pendingRealtimeModelId`). No protocol abstraction, no reconnect, no timeout, no explicit commit/finalise contract, fallback to batch is implicit and racy (G-02). | `StreamingTranscriptionSession` protocol (§4.5.1) implemented per provider; selected from model capabilities, owned by `DictationSession`. |
+| G-12 | M | `ui/settings/SettingsScreen.kt:2845-2934, 3315-3323` | "Import models" is a one-off HTTP call inside a composable that assumes the OpenAI `/v1/models` shape, dumps raw JSON in a dialog, and does not classify models (STT vs text vs realtime). Users otherwise hand-type model IDs. | `ModelDiscovery` capability per provider (§4.5.2) with classification + caching; UI "Refresh models" in the provider editor and model pickers. |
 
 ### H. Settings app UI/UX
 
@@ -314,10 +316,46 @@ interface EnhancementProvider {
   suspend fun verify(credentials: Credentials): Result<Unit>
 }
 ```
-- Implementations: `OpenAiCompatibleTranscription` (OpenAI, Groq, Whisper ASR webservice, NIM, custom), `GeminiTranscription` (inline audio `generateContent`) if we keep Gemini STT, `OpenAiRealtimeStreaming`; `OpenAiCompatibleChat`, `GeminiChat`, `AnthropicMessages` (optional).
+- `ModelConfig` gains `capabilities: ModelCapabilities(stt, text, realtime, thinking, vocabulary)` replacing the loose `kind`/`streamingPartialsSupported`/`isThinking` flags (with a DataStore migration). Capabilities are filled by discovery (§4.5.2) or edited manually.
+- Implementations: `OpenAiCompatibleTranscription` (OpenAI, Groq, Whisper ASR webservice, NIM, custom), `GeminiTranscription` (inline audio `generateContent`) if we keep Gemini STT, `OpenAiRealtimeStreaming`; `OpenAiCompatibleChat`, `GeminiChat`, `AnthropicMessages` (optional). Streaming implementations follow §4.5.1.
 - One `OkHttpClient` (shared, in `AppContainer`), `Call.await()`, typed `NetworkError { Unauthorized, RateLimited, Timeout, Http(status, host), Offline, InvalidResponse }` → `strings.xml` messages.
 - Enhancement: ≥ 1 s spacing, exponential backoff on 429/5xx (VoiceInk), total budget configurable, failure keeps raw text with a notice.
 - Prompt composition (VoiceInk `AIEnhancementService`): general system template + selected prompt + custom vocabulary + context sources (selected text/clipboard; opt-in per mode), transcript wrapped in `<TRANSCRIPT>`, strip reasoning blocks, reject empty.
+
+#### 4.5.1 Realtime / streaming protocol
+
+Every provider that supports realtime STT exposes it through one contract (VoiceInk `TranscriptionSession` + `TranscriptionServiceRegistry`):
+
+```kotlin
+interface StreamingTranscriptionSession {
+  val events: Flow<StreamEvent>            // Connected, Partial(text), Final(text), Error(NetworkError), Closed
+  suspend fun start()                      // open WS, send session config (model, language, vocabulary, VAD off)
+  suspend fun sendAudio(pcm16: ByteArray)  // 16 kHz mono PCM chunks straight from AudioRecorder
+  suspend fun commit(): Result<Transcript> // "input_audio_buffer.commit" (OpenAI) / Finalize (Deepgram) / end-of-stream; awaits the final transcript with a timeout
+  suspend fun cancel()                     // close without committing
+}
+```
+Rules:
+- `DictationSession` decides streaming vs batch from `ModelConfig.capabilities.realtime` (set by discovery or by the user), never from URL heuristics.
+- The recorder always writes the WAV too. On `commit()` timeout/error, or if PCM drops were counted (F-05), the session falls back to **batch** with the same file. Fallback is explicit and tested.
+- Partials go to the composing region via `TextCommitter.setComposing()`; `Final` replaces the composing region atomically (fixes G-03).
+- Reconnect once on transient WS failure before `commit()`; never after.
+- Implementations: `OpenAiRealtimeSession` (`wss://…/v1/realtime?intent=transcription`, `transcription_session.update`, `input_audio_buffer.append/commit`, events `conversation.item.input_audio_transcription.delta/completed`), `DeepgramLiveSession` (`wss://api.deepgram.com/v1/listen`, `Finalize`/`CloseStream`), `ElevenLabsScribeSession`, `MistralVoxtralSession` (as in VoiceInk). Ship OpenAI first, with the interface and fallback path proven; others as follow-ups.
+- Provider editor shows a "Realtime" badge per model and a toggle "Use realtime transcription when available" in Dictation settings.
+
+#### 4.5.2 Model discovery
+
+```kotlin
+interface ModelDiscovery {
+  suspend fun listModels(creds: Credentials): Result<List<DiscoveredModel>>
+}
+data class DiscoveredModel(val id: String, val displayName: String, val kinds: Set<ModelKind>, val realtime: Boolean, val thinking: Boolean, val raw: Map<String,String>)
+```
+- `OpenAiCompatibleDiscovery`: `GET {base}/v1/models` → classify by id patterns (`whisper*`, `*transcribe*` → STT; `*realtime*` → realtime STT; `gpt*`, `o*`, `llama*`, `mixtral*` → TEXT; `*tts*`, `*embedding*`, `dall-e*`, `*moderation*` → ignored). Works for OpenAI, Groq, OpenRouter, vLLM, LM-Studio-style servers.
+- `GeminiDiscovery`: `GET https://generativelanguage.googleapis.com/v1beta/models?key=…` → use `supportedGenerationMethods` (`generateContent` → TEXT/MULTIMODAL; `bidiGenerateContent` → realtime), `inputTokenLimit`, `displayName`.
+- Providers without a listing endpoint (Whisper ASR webservice, NIM, custom) return `Unsupported` → UI keeps manual entry.
+- Results cached in `ProviderRepository` with a timestamp; "Refresh models" button; discovered models can be added individually or "Add all STT models" / "Add all text models". Manual models are never deleted by a refresh; the editor marks models that disappeared from the listing as "not found".
+- Discovery is also used by the onboarding "Choose a provider" step and by the provider **Test connection** action (a successful listing proves auth + reachability).
 
 ### 4.6 Permission & onboarding flow
 
@@ -420,6 +458,8 @@ Home
 10. Shortcut semantics as settings: push-to-talk (hold) vs toggle vs hybrid (hold threshold 0.5 s in VoiceInk; we use 180 ms for touch).
 11. Auto-send option: after commit, send `KEYCODE_ENTER` / `performEditorAction(IME_ACTION_SEND)` after ~150 ms; per-app override.
 12. Onboarding sequencing and copy style (explain → act → verify), not the macOS screens.
+13. Streaming as a protocol: `TranscriptionSession` with prepare/append/finalize/cancel and automatic batch fallback (`TranscriptionSession.swift`, `TranscriptionServiceRegistry.swift`); per-provider realtime implementations (OpenAI, Deepgram, ElevenLabs, Mistral).
+14. Model discovery / "Import models" as a provider capability with classification, feeding the model picker and the connection test (`ProviderCloudManagementView.swift`, `CustomModelConnectionTester.swift`).
 
 **Do not port:** notch/mini-window UI, Accessibility-API paste, foreground app/URL detection beyond `EditorInfo.packageName`, system-wide mute, Ollama/local models, licensing.
 
@@ -487,6 +527,14 @@ Order within a phase is flexible unless a dependency is noted. Commit per WP wit
 **WP-2.3 Streaming correctness** — G-03, L-03
 - Composing-region-safe commit; `FakeInputConnection` upgrade.
 - Accept: regression test green.
+
+**WP-2.5 Streaming protocol + OpenAI Realtime** — G-11, G-02, F-05, §4.5.1
+- `domain/providers/StreamingTranscriptionSession.kt`, `providers/realtime/OpenAiRealtimeSession.kt`; remove the six `realtime*` fields from the service; `DictationSession` owns the session and the batch fallback. Delete `OpenAiRealtimeSttClient.kt`.
+- Accept: fake-WS unit tests for partial/final/commit-timeout/fallback; manual: partials appear as composing text and the final transcript replaces them without duplication; airplane mode mid-stream falls back to batch or shows a clean error.
+
+**WP-2.6 Model discovery** — G-12, §4.5.2
+- `domain/providers/ModelDiscovery.kt`, `providers/openai/OpenAiCompatibleDiscovery.kt`, `providers/gemini/GeminiDiscovery.kt`, cache in `ProviderRepository`; replace `importModels()` in the provider editor with a `ModelDiscoveryViewModel`-driven sheet (refresh, filter STT/Text/Realtime, add selected / add all, "not found" markers).
+- Accept: MockWebServer tests for both listing shapes and the classifier; manual: OpenAI key → list shows whisper/gpt-4o-transcribe/realtime models correctly classified; Gemini key → list shows flash/pro models.
 
 **WP-2.4 Pipeline extras from VoiceInk** — §5 items 3–5, 11
 - `core/text/TranscriptFilter.kt`, `WordReplacements.kt`, vocabulary in prompt/provider, prompt library seeds, backoff policy, auto-send option.
