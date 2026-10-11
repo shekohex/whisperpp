@@ -66,6 +66,7 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_BACKEND
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_MODEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_PROMPT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SPEECH_TO_TEXT_BACKEND
 import com.github.shekohex.whisperpp.data.PreferenceKeys.UPDATE_CHANNEL
@@ -3997,6 +3998,12 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     title = "Sound Effects",
                     checked = settingsState?.get(SOUND_EFFECTS_ENABLED) ?: true,
                     onCheckedChange = { scope.launch { dataStore.edit { s -> s[SOUND_EFFECTS_ENABLED] = it } } }
+                )
+                SettingsToggle(
+                    icon = Icons.Default.MusicOff,
+                    title = stringResource(R.string.settings_pause_media_while_recording),
+                    checked = settingsState?.get(PAUSE_MEDIA_WHILE_RECORDING) ?: true,
+                    onCheckedChange = { scope.launch { dataStore.edit { s -> s[PAUSE_MEDIA_WHILE_RECORDING] = it } } }
                 )
             }
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))

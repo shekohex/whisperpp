@@ -1,4 +1,4 @@
-package com.github.shekohex.whisperpp.recorder
+package com.github.shekohex.whisperpp.core.audio
 
 import java.io.ByteArrayOutputStream
 import java.io.File

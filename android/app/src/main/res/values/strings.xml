@@ -286,4 +286,11 @@
     <string name="update_verifying">Verifying…</string>
     <string name="update_failed">Update failed: %1$s</string>
 
+    <!-- Audio core -->
+    <string name="recording_error_permission">Microphone permission is required to record</string>
+    <string name="recording_error_mic_unavailable">Microphone unavailable. It may be in use by another app.</string>
+    <string name="recording_error_failed">Recording failed. Please try again.</string>
+    <string name="recording_interrupted">Recording paused: audio interrupted</string>
+    <string name="settings_pause_media_while_recording">Pause media while recording</string>
+
 </resources>

@@ -49,6 +49,7 @@ object PreferenceKeys {
 
     val HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic-feedback-enabled")
     val SOUND_EFFECTS_ENABLED = booleanPreferencesKey("sound-effects-enabled")
+    val PAUSE_MEDIA_WHILE_RECORDING = booleanPreferencesKey("pause-media-while-recording")
     val SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN = booleanPreferencesKey("secure-field-explanation-dont-show-again")
     val VERBOSE_NETWORK_LOGS_ENABLED = booleanPreferencesKey("verbose-network-logs-enabled")
     val DISCLOSURE_SHOWN_DICTATION_AUDIO = booleanPreferencesKey("disclosure-shown-dictation-audio")
@@ -101,6 +102,7 @@ object PreferenceKeys {
         SMART_FIX_PROMPT,
         HAPTIC_FEEDBACK_ENABLED,
         SOUND_EFFECTS_ENABLED,
+        PAUSE_MEDIA_WHILE_RECORDING,
         SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN,
         VERBOSE_NETWORK_LOGS_ENABLED,
         DISCLOSURE_SHOWN_DICTATION_AUDIO,

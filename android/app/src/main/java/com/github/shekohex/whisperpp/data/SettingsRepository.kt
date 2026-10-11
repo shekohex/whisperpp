@@ -33,6 +33,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -81,12 +82,21 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             PreferenceKeys.USE_CONTEXT,
             PreferenceKeys.SMART_FIX_ENABLED,
             PreferenceKeys.HAPTIC_FEEDBACK_ENABLED,
-            PreferenceKeys.SOUND_EFFECTS_ENABLED
+            PreferenceKeys.SOUND_EFFECTS_ENABLED,
+            PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING
         )
         private val EXPORTABLE_INT_KEYS = listOf(PreferenceKeys.TIMEOUT)
         private val EXPORTABLE_FLOAT_KEYS = listOf(PreferenceKeys.SMART_FIX_TEMPERATURE)
     }
     
+    val soundEffectsEnabled: Flow<Boolean> = dataStore.data
+        .map { prefs -> prefs[PreferenceKeys.SOUND_EFFECTS_ENABLED] ?: true }
+        .distinctUntilChanged()
+
+    val pauseMediaWhileRecording: Flow<Boolean> = dataStore.data
+        .map { prefs -> prefs[PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING] ?: true }
+        .distinctUntilChanged()
+
     val providers: Flow<List<ServiceProvider>> = dataStore.data.map { prefs ->
         val json = prefs[PROVIDERS_JSON]
         if (json.isNullOrEmpty()) {

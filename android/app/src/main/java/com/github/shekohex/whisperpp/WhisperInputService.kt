@@ -28,7 +28,6 @@ import android.os.IBinder
 import android.os.LocaleList
 import android.view.HapticFeedbackConstants
 import android.media.AudioManager
-import android.media.MediaPlayer
 import android.content.Context
 import android.text.TextUtils
 import android.util.Log
@@ -63,6 +62,11 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.DictationAnalyticsSession
 import com.github.shekohex.whisperpp.app.appContainer
+import com.github.shekohex.whisperpp.core.audio.AmplitudeMeter
+import com.github.shekohex.whisperpp.core.audio.AudioFocusController
+import com.github.shekohex.whisperpp.core.audio.AudioRecorder
+import com.github.shekohex.whisperpp.core.audio.SoundCues
+import com.github.shekohex.whisperpp.core.audio.SystemAudioFocusGateway
 import com.github.shekohex.whisperpp.core.permissions.MicPermission
 import com.github.shekohex.whisperpp.data.EffectiveRuntimeConfig
 import com.github.shekohex.whisperpp.ime.MicPermissionBus
@@ -91,12 +95,12 @@ import com.github.shekohex.whisperpp.command.SelectionResolver
 import com.github.shekohex.whisperpp.command.SelectionSnapshot
 import com.github.shekohex.whisperpp.command.TransformPromptBuilder
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.keyboard.isPaused
 import com.github.shekohex.whisperpp.keyboard.isRecording
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
-import com.github.shekohex.whisperpp.recorder.RecorderManager
 import com.github.shekohex.whisperpp.ui.keyboard.FirstUseDisclosureUiState
 import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeStyle
 import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeUiState
@@ -129,13 +133,19 @@ import com.github.liuyueyi.quick.transfer.ChineseUtils
 import com.github.liuyueyi.quick.transfer.constants.TransType
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -148,6 +158,8 @@ import java.util.Locale
 private const val RECORDED_AUDIO_FILENAME_WAV = "recorded.wav"
 private const val AUDIO_MEDIA_TYPE_WAV = "audio/wav"
 private const val IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL = 28
+// Maps AmplitudeMeter's 0..1 level onto the legacy VoiceWaveform amplitude range (replaced in WP-1.4).
+private const val WAVEFORM_AMPLITUDE_SCALE = 25_000
 private const val TAG = "WhisperInputService"
 private const val PRIVACY_SAFETY_DESTINATION = "privacy_safety"
 
@@ -187,7 +199,7 @@ internal class CommandDisclosureGateCoordinator(
 ) {
     suspend fun startListening(
         awaitDisclosure: suspend () -> CommandDisclosureDecision,
-        startRecording: () -> Unit,
+        startRecording: suspend () -> Unit,
     ): CommandListeningStartResult {
         return when (awaitDisclosure()) {
             CommandDisclosureDecision.CANCEL -> CommandListeningStartResult.CANCELLED
@@ -204,7 +216,7 @@ internal class CommandDisclosureGateCoordinator(
     }
 
     suspend fun finishListening(
-        stopRecording: () -> Unit,
+        stopRecording: suspend () -> Unit,
         transcribeInstruction: suspend () -> String,
         restartListening: () -> Unit,
         transform: suspend (String) -> Unit,
@@ -234,7 +246,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         get() = appContainer.settingsDataStore
     private val whisperTranscriber: WhisperTranscriber by lazy { WhisperTranscriber(appContainer.okHttpClient) }
     private lateinit var smartFixer: SmartFixer
-    private var recorderManager: RecorderManager? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private lateinit var audioRecorder: AudioRecorder
+    private lateinit var audioFocus: AudioFocusController
+    private lateinit var soundCues: SoundCues
+    private var recordingStartJob: Job? = null
+    private var pendingRecorderStop: Deferred<Result<File>>? = null
     private var recordedAudioFilename: String = ""
     private var audioMediaType: String = AUDIO_MEDIA_TYPE_WAV
     private var isFirstTime: Boolean = true
@@ -284,7 +301,6 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var pendingFirstUseDisclosureContinuation: CancellableContinuation<FirstUseDisclosureDecision>? = null
     private var networkLoggingPreferenceJob: Job? = null
     private var timerJob: Job? = null
-    private val activeMediaPlayers = mutableListOf<MediaPlayer>()
 
     private val commandController = CommandController()
     private val selectionResolver = SelectionResolver()
@@ -337,7 +353,13 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         runBlocking {
             repository.migrateProviderSchemaV2IfNeeded(secretsStore)
         }
-        recorderManager = RecorderManager(this)
+        audioRecorder = AudioRecorder(this, serviceScope, AmplitudeMeter())
+        audioFocus = AudioFocusController(
+            SystemAudioFocusGateway(getSystemService(Context.AUDIO_SERVICE) as AudioManager),
+            repository.pauseMediaWhileRecording.stateIn(serviceScope, SharingStarted.Eagerly, true),
+        )
+        soundCues = SoundCues(this, serviceScope, repository.soundEffectsEnabled)
+        observeAudioCore()
         smartFixer = SmartFixer(this, container.okHttpClient)
 
         dictationController = DictationController(
@@ -421,7 +443,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
 
         Log.d(TAG, "Transcription received length=${rawText.length}")
-        playCustomSound(R.raw.rec_done)
+        soundCues.play(SoundCues.Cue.DONE)
 
         CoroutineScope(Dispatchers.Main).launch {
             val prefs = dataStore.data.first()
@@ -701,9 +723,16 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             return
         }
 
-        performFeedback(customSoundId = R.raw.rec_stop)
-
         CoroutineScope(Dispatchers.Main).launch {
+            val stopResult = pendingRecorderStop?.await()
+            if (stopResult != null && stopResult.isFailure && !stopResult.isNotRecordingFailure()) {
+                dictationController.onTranscriptionError(token, getString(R.string.recording_error_failed))
+                closeRealtimeSession()
+                clearActiveDictationSelection()
+                return@launch
+            }
+            performFeedback(cue = SoundCues.Cue.STOP)
+
             val prefs = dataStore.data.first()
             val useContext = prefs[USE_CONTEXT] ?: false
             val contextPrompt = if (useContext) currentInputConnection?.getTextBeforeCursor(500, 0)?.toString() else null
@@ -763,8 +792,6 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             @Suppress("DEPRECATION")
             imm.shouldOfferSwitchingToNextInputMethod(window?.window?.attributes?.token)
         }
-
-        recorderManager?.setOnUpdateMicrophoneAmplitude { microphoneAmplitude.value = it }
 
         // Ensure the window's decor view has the owners for components that search up the tree
         window?.window?.let { win ->
@@ -1042,7 +1069,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun stopExternalSendingForBlockedPolicy() {
-        recorderManager?.stop()
+        cancelCapture()
         stopTimer()
         recordingTimeMs.value = 0L
         showLongPressHint.value = false
@@ -1062,10 +1089,96 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun stopRecordingForSend() {
-        recorderManager?.stop()
         stopTimer()
         showLongPressHint.value = false
-        realtimeSttClient?.commitAudio()
+        val client = realtimeSttClient
+        pendingRecorderStop = serviceScope.async {
+            val result = stopCapture()
+            client?.commitAudio()
+            result
+        }
+    }
+
+    private fun observeAudioCore() {
+        serviceScope.launch {
+            audioRecorder.level.collect { level ->
+                microphoneAmplitude.value = (level * WAVEFORM_AMPLITUDE_SCALE).toInt()
+            }
+        }
+        serviceScope.launch {
+            audioFocus.focusLoss.collect { onAudioFocusLost() }
+        }
+        serviceScope.launch {
+            audioRecorder.events.collect { event ->
+                if (event is AudioRecorder.Event.Error) onRecorderCaptureError(event.kind)
+            }
+        }
+    }
+
+    /** Focus order on start: acquire focus → start cue → capture. Releases focus on failure. */
+    private suspend fun startCapture(options: AudioRecorder.StartOptions = AudioRecorder.StartOptions()): Result<Unit> {
+        pendingRecorderStop?.join()
+        audioFocus.acquire()
+        performFeedback(cue = SoundCues.Cue.START)
+        val result = audioRecorder.start(File(recordedAudioFilename), options)
+        result.onFailure { error ->
+            audioFocus.release()
+            val kind = (error as? AudioRecorder.RecorderException)?.kind
+            if (kind != AudioRecorder.ErrorKind.CANCELLED) {
+                Toast.makeText(this, recorderErrorMessage(kind), Toast.LENGTH_SHORT).show()
+            }
+        }
+        return result
+    }
+
+    private suspend fun stopCapture(): Result<File> {
+        val result = audioRecorder.stop()
+        audioFocus.release()
+        return result
+    }
+
+    private fun cancelCapture() {
+        audioRecorder.cancel()
+        audioFocus.release()
+    }
+
+    private fun Result<*>.isNotRecordingFailure(): Boolean {
+        val kind = (exceptionOrNull() as? AudioRecorder.RecorderException)?.kind
+        return kind == AudioRecorder.ErrorKind.NOT_RECORDING
+    }
+
+    private fun Result<*>.isCancelledFailure(): Boolean {
+        val kind = (exceptionOrNull() as? AudioRecorder.RecorderException)?.kind
+        return kind == AudioRecorder.ErrorKind.CANCELLED
+    }
+
+    private fun recorderErrorMessage(kind: AudioRecorder.ErrorKind?): String {
+        return when (kind) {
+            AudioRecorder.ErrorKind.PERMISSION_DENIED -> getString(R.string.recording_error_permission)
+            AudioRecorder.ErrorKind.MIC_UNAVAILABLE -> getString(R.string.recording_error_mic_unavailable)
+            else -> getString(R.string.recording_error_failed)
+        }
+    }
+
+    private fun onAudioFocusLost() {
+        if (!keyboardState.value.isRecording) return
+        Toast.makeText(this, getString(R.string.recording_interrupted), Toast.LENGTH_SHORT).show()
+        dictationController.onHoldRelease()
+    }
+
+    private fun onRecorderCaptureError(kind: AudioRecorder.ErrorKind) {
+        if (kind != AudioRecorder.ErrorKind.CAPTURE_FAILED && kind != AudioRecorder.ErrorKind.WRITE_FAILED) return
+        if (isCommandModeActive.value && commandStage.value == CommandStage.LISTENING) {
+            cancelCommandMode(showError = true, message = recorderErrorMessage(kind))
+            return
+        }
+        val state = keyboardState.value
+        if (!state.isRecording && !state.isPaused) return
+        Toast.makeText(this, recorderErrorMessage(kind), Toast.LENGTH_SHORT).show()
+        recordTerminalDictationAnalyticsForCancellation()
+        dictationController.onCancelConfirmed()
+        stopTimer()
+        recordingTimeMs.value = 0L
     }
 
     private fun clearComposingText() {
@@ -1248,6 +1361,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
 
         when (keyboardState.value) {
             KeyboardState.Ready -> {
+                if (recordingStartJob?.isActive == true) return
                 CoroutineScope(Dispatchers.Main).launch {
                     val prefs = dataStore.data.first()
                     val providers = repository.providers.first()
@@ -1287,7 +1401,6 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                     if (shouldBlockExternalSend()) {
                         return@launch
                     }
-                    performFeedback(customSoundId = R.raw.rec_start)
 
                     closeRealtimeSession()
 
@@ -1317,19 +1430,19 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 }
             }
             KeyboardState.Recording -> {
-                performFeedback(customSoundId = R.raw.rec_pause)
+                performFeedback(cue = SoundCues.Cue.PAUSE)
                 dictationController.onHoldRelease()
             }
             KeyboardState.RecordingLocked -> {
-                performFeedback(customSoundId = R.raw.rec_pause)
+                performFeedback(cue = SoundCues.Cue.PAUSE)
                 dictationController.onHoldRelease()
             }
             KeyboardState.Paused -> {
-                performFeedback(customSoundId = R.raw.rec_start)
+                performFeedback(cue = SoundCues.Cue.START)
                 dictationController.onResume()
             }
             KeyboardState.PausedLocked -> {
-                performFeedback(customSoundId = R.raw.rec_start)
+                performFeedback(cue = SoundCues.Cue.START)
                 dictationController.onResume()
             }
             else -> Unit
@@ -1364,13 +1477,13 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun unlockRecording() {
-        performFeedback(customSoundId = R.raw.rec_pause)
+        performFeedback(cue = SoundCues.Cue.PAUSE)
         dictationController.onUnlock()
     }
 
     private fun onCancelAction() {
         clearUndoQuickAction()
-        performFeedback(customSoundId = R.raw.rec_pause)
+        performFeedback(cue = SoundCues.Cue.PAUSE)
         when (keyboardState.value) {
             KeyboardState.Recording,
             KeyboardState.RecordingLocked,
@@ -1398,23 +1511,35 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             return
         }
         showLongPressHint.value = false
-        setKeyboardState(KeyboardState.Recording)
         recordingTimeMs.value = 0L
-        dictationAnalyticsSession = DictationAnalyticsSession(token.sessionId)
-        startTimer()
+        val options = prepareRecorderOptions()
+        recordingStartJob = serviceScope.launch {
+            val result = startCapture(options)
+            if (result.isFailure) {
+                if (!result.isCancelledFailure()) {
+                    closeRealtimeSession()
+                    setKeyboardState(KeyboardState.Ready)
+                }
+                return@launch
+            }
+            setKeyboardState(KeyboardState.Recording)
+            dictationAnalyticsSession = DictationAnalyticsSession(token.sessionId)
+            startTimer()
+        }
+    }
 
-        if (!token.streamingPartialsEnabled) {
+    private fun prepareRecorderOptions(): AudioRecorder.StartOptions {
+        val token = realtimeToken
+        if (token == null || !token.streamingPartialsEnabled) {
             closeRealtimeSession()
-            recorderManager!!.start(recordedAudioFilename)
-            return
+            return AudioRecorder.StartOptions()
         }
 
         val provider = pendingRealtimeProvider
         val modelId = pendingRealtimeModelId
         if (provider == null || modelId.isNullOrBlank() || provider.apiKey.isBlank()) {
             closeRealtimeSession()
-            recorderManager!!.start(recordedAudioFilename)
-            return
+            return AudioRecorder.StartOptions()
         }
 
         val request = OpenAiRealtimeSttClient.buildRequest(
@@ -1424,8 +1549,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         )
         if (request == null) {
             closeRealtimeSession()
-            recorderManager!!.start(recordedAudioFilename)
-            return
+            return AudioRecorder.StartOptions()
         }
 
         closeRealtimeClient()
@@ -1463,13 +1587,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         realtimeSttClient = client
         client.connect()
 
-        recorderManager!!.start(
-            recordedAudioFilename,
-            RecorderManager.StartOptions(
-                onPcmChunk = { chunk ->
-                    realtimeSttClient?.sendPcm16le(chunk.data)
-                }
-            )
+        return AudioRecorder.StartOptions(
+            onPcmChunk = { chunk ->
+                realtimeSttClient?.sendPcm16le(chunk.data)
+            }
         )
     }
 
@@ -1477,23 +1598,24 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         stopTimer()
         if (recordingTimeMs.value < 500L) {
             showLongPressHint.value = true
-            recorderManager!!.stop()
+            cancelCapture()
             recordingTimeMs.value = 0L
             setKeyboardState(KeyboardState.Ready)
         } else {
-            recorderManager!!.pause()
+            serviceScope.launch { audioRecorder.pause() }
             setKeyboardState(targetState)
         }
     }
 
     private fun resumeRecording(targetState: KeyboardState) {
-        recorderManager!!.resume()
+        audioFocus.acquire()
+        serviceScope.launch { audioRecorder.resume() }
         startTimer()
         setKeyboardState(targetState)
     }
 
     private fun cancelRecording() {
-        recorderManager!!.stop()
+        cancelCapture()
         stopTimer()
         recordingTimeMs.value = 0L
         showLongPressHint.value = false
@@ -1501,7 +1623,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     }
 
     private fun discardRecording() {
-        playCustomSound(R.raw.rec_pause)
+        soundCues.play(SoundCues.Cue.PAUSE)
         clearUndoQuickAction()
         recordTerminalDictationAnalyticsForCancellation()
         dictationController.onCancelConfirmed()
@@ -1580,7 +1702,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private fun resetCommandRunState() {
         commandJob?.cancel()
         commandJob = null
-        recorderManager?.stop()
+        cancelCapture()
         whisperTranscriber.stop()
         smartFixer.cancel()
 
@@ -1770,8 +1892,11 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                 },
                 startRecording = {
                     commandSpokenInstruction = null
-                    setCommandStage(CommandStage.LISTENING, null)
-                    recorderManager?.start(recordedAudioFilename)
+                    if (startCapture().isSuccess) {
+                        setCommandStage(CommandStage.LISTENING, null)
+                    } else {
+                        cancelCommandMode(showError = false)
+                    }
                 },
             )
 
@@ -1794,8 +1919,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             val runtimeConfig = resolveCommandRuntimeConfig() ?: return@launch
             val result = CommandDisclosureGateCoordinator(::shouldBlockExternalSend).finishListening(
                 stopRecording = {
-                    recorderManager?.stop()
                     setCommandStage(CommandStage.PROCESSING, null)
+                    stopCapture()
                 },
                 transcribeInstruction = {
                     val providerWithApiKey = runtimeConfig.sttProvider.copy(
@@ -2183,34 +2308,16 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         }
     }
 
-    private fun playCustomSound(resId: Int) {
-        CoroutineScope(Dispatchers.IO).launch {
-            val soundEnabled = dataStore.data.map { it[SOUND_EFFECTS_ENABLED] ?: true }.first()
-            if (soundEnabled) {
-                withContext(Dispatchers.Main) {
-                    try {
-                        val mp = MediaPlayer.create(this@WhisperInputService, resId) ?: return@withContext
-                        synchronized(activeMediaPlayers) { activeMediaPlayers.add(mp) }
-                        mp.setOnCompletionListener { player ->
-                            synchronized(activeMediaPlayers) { activeMediaPlayers.remove(player) }
-                            player.release()
-                        }
-                        mp.start()
-                    } catch (e: Exception) { Log.e(TAG, "Sound error", e) }
-                }
-            }
-        }
-    }
-
-    private fun performFeedback(isDelete: Boolean = false, customSoundId: Int? = null) {
+    private fun performFeedback(isDelete: Boolean = false, cue: SoundCues.Cue? = null) {
+        // Cues play synchronously so the start cue precedes capture.
+        if (cue != null) soundCues.play(cue)
         CoroutineScope(Dispatchers.Main).launch {
             val prefs = dataStore.data.first()
             if (prefs[HAPTIC_FEEDBACK_ENABLED] ?: true) {
                 val effect = if (isDelete) HapticFeedbackConstants.KEYBOARD_RELEASE else HapticFeedbackConstants.KEYBOARD_TAP
                 window?.window?.decorView?.performHapticFeedback(effect)
             }
-            if (customSoundId != null) playCustomSound(customSoundId)
-            else if (prefs[SOUND_EFFECTS_ENABLED] ?: true) {
+            if (cue == null && (prefs[SOUND_EFFECTS_ENABLED] ?: true)) {
                 val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                 am.playSoundEffect(if (isDelete) AudioManager.FX_KEYPRESS_DELETE else AudioManager.FX_KEYPRESS_STANDARD)
             }
@@ -2319,31 +2426,20 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         onFirstUseDisclosureCancel()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
-        releaseAllMediaPlayers()
 
         if (isExternalSendingActive()) {
             dictationController.onWindowHidden(toastMessage = "Dictation paused")
+            // Capture is paused (not discarded) so the user can come back and send; let media resume.
+            audioFocus.release()
         } else {
             whisperTranscriber.stop()
             smartFixer.cancel()
             closeRealtimeSession()
-            recorderManager?.stop()
+            cancelCapture()
             resetCommandRunState()
             isCommandModeActive.value = false
             stopTimer()
             if (keyboardState.value != KeyboardState.Ready) setKeyboardState(KeyboardState.Ready)
-        }
-    }
-
-    private fun releaseAllMediaPlayers() {
-        synchronized(activeMediaPlayers) {
-            activeMediaPlayers.forEach { mp ->
-                try {
-                    if (mp.isPlaying) mp.stop()
-                    mp.release()
-                } catch (_: Exception) {}
-            }
-            activeMediaPlayers.clear()
         }
     }
 
@@ -2356,10 +2452,12 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         whisperTranscriber.stop()
         smartFixer.cancel()
         closeRealtimeSession()
-        recorderManager?.stop()
         resetCommandRunState()
         commandUndoJob?.cancel()
         commandUndoJob = null
-        releaseAllMediaPlayers()
+        audioRecorder.release()
+        audioFocus.release()
+        soundCues.release()
+        serviceScope.cancel()
     }
 }
