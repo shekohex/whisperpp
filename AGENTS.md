@@ -4,7 +4,7 @@
 
 - This repo is an Android/Kotlin app under `android/`.
 - Commands assume repo root unless stated.
-- Use Gradle wrapper in `android/gradlew`.
+- Use Gradle wrapper in `android/gradlew`. From repo root add `-p android` (or run from `android/`); there is no Gradle build at repo root.
 - Module: `:app`.
 
 ## Build
@@ -19,6 +19,7 @@
 
 - Android lint: `./android/gradlew lintDebug`
 - All variants: `./android/gradlew lint`
+- Pre-existing errors are tracked in `android/app/lint-baseline.xml`; do not add to it.
 - No ktlint/detekt/prettier configured.
 
 ## Unit Tests
@@ -69,8 +70,9 @@ When the user asks for a new release, follow this protocol:
 ## Code Style Summary
 
 - Kotlin style: official (`kotlin.code.style=official`).
-- Java/Kotlin target: 1.8.
-- Android SDK: `compileSdk 34`, `minSdk 24`, `targetSdk 34`.
+- Java/Kotlin target: 17 (JVM toolchain to run Gradle: JDK 17+).
+- Android SDK: `compileSdk 37`, `minSdk 24`, `targetSdk 36`.
+- Toolchain: Gradle 9.8.1, AGP 9.4.1 (built-in Kotlin), Kotlin 2.4.21 + Compose compiler Gradle plugin.
 - Follow existing patterns in `android/app/src/...`.
 
 ## Formatting
@@ -145,7 +147,7 @@ When the user asks for a new release, follow this protocol:
 
 ## Dependencies
 
-- Add new dependencies in `android/app/build.gradle.kts`.
+- Declare versions in `android/gradle/libs.versions.toml` and reference them via `libs.*` in `android/app/build.gradle.kts`.
 - Prefer stable versions; minimize dependency count.
 - Keep dependency scope minimal (`implementation` vs `testImplementation`).
 

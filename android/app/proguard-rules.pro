@@ -19,3 +19,21 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# --- Gson ---
+# Gson (de)serialises these model classes reflectively, so R8 must keep their
+# fields, constructors and names intact.
+-keepattributes Signature, InnerClasses, EnclosingMethod
+-keepattributes RuntimeVisibleAnnotations, RuntimeVisibleParameterAnnotations, AnnotationDefault
+
+-keep class com.github.shekohex.whisperpp.data.** { *; }
+-keep class com.github.shekohex.whisperpp.updater.** { *; }
+-keep class com.github.shekohex.whisperpp.analytics.** { *; }
+
+-keepclassmembers,allowobfuscation class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+
+# Keep generic signatures of TypeToken subclasses (object : TypeToken<List<T>>() {}).
+-keep,allowobfuscation,allowshrinking class com.google.gson.reflect.TypeToken
+-keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken

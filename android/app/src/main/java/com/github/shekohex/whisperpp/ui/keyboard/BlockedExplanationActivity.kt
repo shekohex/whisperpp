@@ -52,7 +52,7 @@ class BlockedExplanationActivity : ComponentActivity() {
                 ModalBottomSheet(
                     onDismissRequest = { finish() },
                     sheetState = sheetState,
-                    windowInsets = WindowInsets(0, 0, 0, 0),
+                    contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
                 ) {
                     BlockedExplanationContent(
                         copy = copy,

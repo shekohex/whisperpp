@@ -209,7 +209,7 @@ fun KeyboardScreen(
         ModalBottomSheet(
             onDismissRequest = { showBlockedExplanation = false },
             sheetState = blockedExplanationSheetState,
-            windowInsets = WindowInsets(0, 0, 0, 0),
+            contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             BlockedExplanationContent(
                 copy = copy,
@@ -300,7 +300,7 @@ fun KeyboardScreen(
     if (commandModeActive && commandStage == CommandStage.CLIPBOARD_CONFIRM) {
         ModalBottomSheet(
             onDismissRequest = onCommandCancel,
-            windowInsets = WindowInsets(0, 0, 0, 0),
+            contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             Column(
                 modifier = Modifier
@@ -416,7 +416,7 @@ fun KeyboardScreen(
     if (showCommandPresetPicker && commandModeActive) {
         ModalBottomSheet(
             onDismissRequest = { showCommandPresetPicker = false },
-            windowInsets = WindowInsets(0, 0, 0, 0),
+            contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         ) {
             Column(
                 modifier = Modifier
