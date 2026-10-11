@@ -148,8 +148,6 @@ import java.util.Locale
 private const val RECORDED_AUDIO_FILENAME_WAV = "recorded.wav"
 private const val AUDIO_MEDIA_TYPE_WAV = "audio/wav"
 private const val IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL = 28
-// Maps AmplitudeMeter's 0..1 level onto the legacy VoiceWaveform amplitude range (replaced in WP-1.4).
-private const val WAVEFORM_AMPLITUDE_SCALE = 25_000
 private const val TAG = "WhisperInputService"
 private const val MIGRATIONS_WAIT_MS = 2_000L
 private const val PRIVACY_SAFETY_DESTINATION = "privacy_safety"
@@ -263,7 +261,7 @@ class WhisperInputService : InputMethodService() {
     // Compose State
     private var keyboardState = mutableStateOf(KeyboardState.Ready)
     private var languageLabel = mutableStateOf("")
-    private var microphoneAmplitude = mutableStateOf(0)
+    private var micLevel = mutableStateOf(0f)
     private var shouldOfferImeSwitch = mutableStateOf(false)
     private var recordingTimeMs = mutableStateOf(0L)
     private var showLongPressHint = mutableStateOf(false)
@@ -837,7 +835,7 @@ class WhisperInputService : InputMethodService() {
                     KeyboardScreen(
                         state = keyboardState.value,
                         languageLabel = languageLabel.value,
-                        amplitude = microphoneAmplitude.value,
+                        level = micLevel.value,
                         recordingTimeMs = recordingTimeMs.value,
                         showLongPressHint = showLongPressHint.value,
                         undoAvailable = undoAvailable.value,
@@ -1133,7 +1131,7 @@ class WhisperInputService : InputMethodService() {
     private fun observeAudioCore() {
         serviceScope.launch {
             audioRecorder.level.collect { level ->
-                microphoneAmplitude.value = (level * WAVEFORM_AMPLITUDE_SCALE).toInt()
+                micLevel.value = level
             }
         }
         serviceScope.launch {

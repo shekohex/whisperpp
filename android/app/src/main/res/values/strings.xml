@@ -15,6 +15,8 @@
     <string name="input_recording">Recording</string>
     <string name="input_paused">Paused</string>
     <string name="input_transcribing">Transcribing</string>
+    <string name="status_transcribing">Transcribing…</string>
+    <string name="live_audio_level">Live audio level</string>
     <string name="input_smart_fixing">Smart Fixing</string>
     <string name="toast_transcription_empty">Transcription was empty</string>
     <string name="toast_setup_required_stt">Setup required: select STT provider + model in Settings</string>

@@ -76,7 +76,7 @@ data class EnhancementNoticeUiState(
 fun KeyboardScreen(
     state: KeyboardState,
     languageLabel: String,
-    amplitude: Int,
+    level: Float,
     recordingTimeMs: Long,
     showLongPressHint: Boolean,
     undoAvailable: Boolean = false,
@@ -747,7 +747,7 @@ fun KeyboardScreen(
                         } else if (micPermissionMissing && state == KeyboardState.Ready) {
                             MicPermissionBanner(onAllow = onAllowMicPermission)
                         } else {
-                            StatusContent(state, amplitude, recordingTimeMs)
+                            StatusContent(state, level, recordingTimeMs)
                         }
                     }
                 }
@@ -1063,13 +1063,13 @@ fun PausedControlsCenter(
             Icon(
                 Icons.Default.Pause,
                 contentDescription = null,
-                tint = Color(0xFFFFD600),
+                tint = MaterialTheme.colorScheme.tertiary,
                 modifier = Modifier.size(16.dp),
             )
             Spacer(Modifier.width(6.dp))
             Text(
                 text = formatTime(recordingTimeMs),
-                color = Color(0xFFFFD600),
+                color = MaterialTheme.colorScheme.tertiary,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
             )
@@ -1087,7 +1087,7 @@ fun PausedControlsCenter(
 }
 
 @Composable
-fun StatusContent(state: KeyboardState, amplitude: Int, recordingTimeMs: Long) {
+fun StatusContent(state: KeyboardState, level: Float, recordingTimeMs: Long) {
     AnimatedContent(
         targetState = state,
         transitionSpec = {
@@ -1104,7 +1104,7 @@ fun StatusContent(state: KeyboardState, amplitude: Int, recordingTimeMs: Long) {
                 )
             }
             KeyboardState.Recording -> {
-                VoiceWaveform(amplitude)
+                StatusWaveform(level)
             }
             KeyboardState.RecordingLocked -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1115,13 +1115,13 @@ fun StatusContent(state: KeyboardState, amplitude: Int, recordingTimeMs: Long) {
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-                    VoiceWaveform(amplitude)
+                    StatusWaveform(level)
                 }
             }
             KeyboardState.Paused -> {
                 Text(
                     text = formatTime(recordingTimeMs),
-                    color = Color(0xFFFFD600),
+                    color = MaterialTheme.colorScheme.tertiary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     modifier = Modifier.animateAlphaLoop()
@@ -1138,7 +1138,7 @@ fun StatusContent(state: KeyboardState, amplitude: Int, recordingTimeMs: Long) {
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = formatTime(recordingTimeMs),
-                        color = Color(0xFFFFD600),
+                        color = MaterialTheme.colorScheme.tertiary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
                         modifier = Modifier.animateAlphaLoop()
@@ -1184,41 +1184,19 @@ fun TranscribingStatus() {
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = "Transcribing...",
+            text = stringResource(R.string.status_transcribing),
             style = MaterialTheme.typography.bodyMedium.copy(brush = brush)
         )
     }
 }
 
 @Composable
-fun VoiceWaveform(amplitude: Int) {
-    val bars = 5
-    val multipliers = listOf(0.5f, 0.8f, 1.0f, 0.8f, 0.5f)
-    
-    val normalized = remember(amplitude) {
-        val amp = amplitude.coerceIn(10, 25000).toFloat()
-        (kotlin.math.log10(amp) - 1f) / (4.398f - 1f)
-    }
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        repeat(bars) { index ->
-            val height by animateDpAsState(
-                targetValue = (4 + (20 * normalized * multipliers[index])).dp,
-                animationSpec = spring(stiffness = Spring.StiffnessLow),
-                label = "WaveformBarHeight"
-            )
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .height(height)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-        }
-    }
+private fun StatusWaveform(level: Float) {
+    // 48 bars at 3 dp + 2 dp gap; a narrower parent just shows fewer (newest) bars.
+    LiveWaveform(
+        level = { level },
+        modifier = Modifier.width(238.dp).height(32.dp),
+    )
 }
 
 @Composable

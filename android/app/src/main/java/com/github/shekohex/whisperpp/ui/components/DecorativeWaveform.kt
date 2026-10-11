@@ -2,7 +2,6 @@ package com.github.shekohex.whisperpp.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -14,12 +13,11 @@ import kotlin.math.sin
 import kotlin.math.abs
 
 @Composable
-fun VoiceWaveform(
+fun DecorativeWaveform(
     modifier: Modifier = Modifier,
     phaseOverride: Float? = null
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "wave")
-    val isDark = isSystemInDarkTheme()
     
     val animatedPhase by infiniteTransition.animateFloat(
         initialValue = 0f,

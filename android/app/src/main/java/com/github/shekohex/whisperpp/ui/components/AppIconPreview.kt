@@ -33,7 +33,7 @@ fun AppIconCard(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            VoiceWaveform(
+            DecorativeWaveform(
                 modifier = Modifier.fillMaxSize(0.6f)
             )
         }

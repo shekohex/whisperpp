@@ -23,7 +23,7 @@ fun SplashScreen() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            VoiceWaveform(
+            DecorativeWaveform(
                 modifier = Modifier.size(200.dp)
             )
             Spacer(modifier = Modifier.height(32.dp))

@@ -44,7 +44,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.github.shekohex.whisperpp.app.appContainer
 import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
-import com.github.shekohex.whisperpp.ui.components.VoiceWaveform
 import com.github.shekohex.whisperpp.*
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.core.network.isLocalNetworkHost
