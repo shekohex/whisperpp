@@ -1,12 +1,12 @@
 package com.github.shekohex.whisperpp.ui.settings
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -59,16 +59,17 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -80,6 +81,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.github.shekohex.whisperpp.app.appContainer
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
+import com.github.shekohex.whisperpp.core.permissions.MicPermission
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_CLEANUP
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
 import com.github.shekohex.whisperpp.data.presetById
@@ -93,9 +95,11 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SWITCH_BACK
 import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.HAPTIC_FEEDBACK_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.MIC_PERMISSION_REQUESTED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PER_APP_SEND_POLICY_JSON
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 private data class SettingsSetupIssue(
@@ -134,22 +138,30 @@ fun SettingsHomeScreen(
     val backupRestoreRepairCount by homeEntry.savedStateHandle
         .getStateFlow(BACKUP_RESTORE_REPAIR_COUNT_KEY, 0)
         .collectAsState()
-    var hasMicPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED,
-        )
-    }
+    val activity = LocalActivity.current
+    val scope = rememberCoroutineScope()
+    var hasMicPermission by remember { mutableStateOf(MicPermission.isGranted(context)) }
+    var micShowRationale by remember { mutableStateOf(shouldShowMicRationale(activity)) }
+    val micStatus = MicPermission.resolveStatus(
+        granted = hasMicPermission,
+        requestedBefore = settingsState[MIC_PERMISSION_REQUESTED] ?: false,
+        shouldShowRationale = micShowRationale,
+    )
     var isImeEnabled by remember { mutableStateOf(isImeEnabled(context)) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-        onResult = { granted -> hasMicPermission = granted },
+        onResult = { granted ->
+            hasMicPermission = granted
+            micShowRationale = shouldShowMicRationale(activity)
+        },
     )
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                hasMicPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                hasMicPermission = MicPermission.isGranted(context)
+                micShowRationale = shouldShowMicRationale(activity)
                 isImeEnabled = isImeEnabled(context)
             }
         }
@@ -310,16 +322,18 @@ fun SettingsHomeScreen(
                     ) {
                         SettingsSystemReadinessCard(
                             hasMicPermission = hasMicPermission,
+                            micPermanentlyDenied = micStatus == MicPermission.Status.PERMANENTLY_DENIED,
                             isImeEnabled = isImeEnabled,
                             onGrantMic = {
-                                if (hasMicPermission) {
-                                    context.startActivity(
-                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                            data = Uri.fromParts("package", context.packageName, null)
-                                        },
-                                    )
-                                } else {
-                                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                when (micStatus) {
+                                    MicPermission.Status.GRANTED,
+                                    MicPermission.Status.PERMANENTLY_DENIED -> {
+                                        context.startActivity(MicPermission.appSettingsIntent(context))
+                                    }
+                                    MicPermission.Status.REQUESTABLE -> {
+                                        scope.launch { dataStore.edit { it[MIC_PERMISSION_REQUESTED] = true } }
+                                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
                                 }
                             },
                             onOpenIme = {
@@ -558,6 +572,7 @@ private fun SettingsSetupBanner(
 @Composable
 private fun SettingsSystemReadinessCard(
     hasMicPermission: Boolean,
+    micPermanentlyDenied: Boolean,
     isImeEnabled: Boolean,
     onGrantMic: () -> Unit,
     onOpenIme: () -> Unit,
@@ -567,8 +582,10 @@ private fun SettingsSystemReadinessCard(
             icon = Icons.Default.Mic,
             title = "Device access",
             status = "Microphone ${if (hasMicPermission) "ready" else "needs permission"} • Keyboard ${if (isImeEnabled) "enabled" else "not enabled"}",
-            guidance = if (!hasMicPermission) {
-                "Grant microphone access so Whisper++ can start recording."
+            guidance = if (micPermanentlyDenied) {
+                stringResource(R.string.settings_mic_permission_denied)
+            } else if (!hasMicPermission) {
+                stringResource(R.string.settings_mic_permission_rationale)
             } else if (!isImeEnabled) {
                 "Enable Whisper++ in Android input settings before trying it in other apps."
             } else {
@@ -585,7 +602,11 @@ private fun SettingsSystemReadinessCard(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.Mic,
                 title = "Microphone",
-                status = if (hasMicPermission) "Granted" else "Tap to grant",
+                status = when {
+                    hasMicPermission -> "Granted"
+                    micPermanentlyDenied -> stringResource(R.string.mic_permission_open_settings)
+                    else -> "Tap to grant"
+                },
                 onClick = onGrantMic,
                 highlighted = !hasMicPermission,
             )
@@ -745,3 +766,6 @@ private fun isImeEnabled(context: Context): Boolean {
     val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     return imm.enabledInputMethodList.any { it.packageName == context.packageName }
 }
+
+private fun shouldShowMicRationale(activity: Activity?): Boolean =
+    activity?.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) ?: false

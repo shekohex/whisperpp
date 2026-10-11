@@ -75,6 +75,15 @@
             android:exported="false"
             android:excludeFromRecents="true" />
 
+        <activity
+            android:name=".ime.PermissionRequestActivity"
+            android:theme="@style/Theme.WhisperToInput.Translucent"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

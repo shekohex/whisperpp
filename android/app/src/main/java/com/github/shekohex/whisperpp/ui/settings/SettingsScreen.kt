@@ -22,7 +22,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -30,10 +29,8 @@ import androidx.datastore.preferences.core.Preferences as PreferencesCore
 import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.provider.Settings
-import android.view.inputmethod.InputMethodManager
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -4008,115 +4005,6 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
 }
 
 @Composable
-fun SuggestedCard() {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    // Permission State
-    var hasMicPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        )
-    }
-
-    // Permission Launcher
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted -> hasMicPermission = isGranted }
-    )
-
-    // IME State
-    fun checkImeEnabled(): Boolean {
-        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        val enabledImes = imm.enabledInputMethodList
-        return enabledImes.any { it.packageName == context.packageName }
-    }
-
-    var isImeEnabled by remember { mutableStateOf(checkImeEnabled()) }
-
-    // Re-check on resume
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                hasMicPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                isImeEnabled = checkImeEnabled()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Card(
-            modifier = Modifier.weight(1f).clickable {
-                if (!hasMicPermission) {
-                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                } else {
-                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.fromParts("package", context.packageName, null)
-                    }
-                    context.startActivity(intent)
-                }
-            },
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (hasMicPermission) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.errorContainer
-            )
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Icon(
-                    Icons.Default.Mic,
-                    null,
-                    tint = if (hasMicPermission) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Microphone",
-                    fontWeight = FontWeight.Bold,
-                    color = if (hasMicPermission) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
-                )
-                Text(
-                    if (hasMicPermission) "Permission Granted" else "Tap to Grant",
-                    fontSize = 12.sp,
-                    color = if (hasMicPermission) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
-                )
-            }
-        }
-        Card(
-            modifier = Modifier.weight(1f).clickable {
-                context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
-            },
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isImeEnabled) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                Icon(
-                    Icons.Default.Keyboard,
-                    null,
-                    tint = if (isImeEnabled) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Keyboard",
-                    fontWeight = FontWeight.Bold,
-                    color = if (isImeEnabled) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    if (isImeEnabled) "Active" else "Tap to Enable",
-                    fontSize = 12.sp,
-                    color = if (isImeEnabled) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column {
         Text(
@@ -4221,6 +4109,10 @@ fun UpdateSettingsSection(dataStore: DataStore<Preferences>, showUpdate: Boolean
     }
     var channelExpanded by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = {},
+    )
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -4316,6 +4208,11 @@ fun UpdateSettingsSection(dataStore: DataStore<Preferences>, showUpdate: Boolean
         ) {
             Button(
                 onClick = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        UpdateCheckWorker.needsNotificationPermission(context)
+                    ) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
                     val channel = UpdateChannel.fromString(currentChannel)
                     updateManager.checkForUpdate(scope, channel)
                 },

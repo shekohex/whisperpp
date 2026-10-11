@@ -1,8 +1,6 @@
 package com.github.shekohex.whisperpp
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,8 +9,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
@@ -29,15 +25,11 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "se
 
 const val EXTRA_SETTINGS_DESTINATION = "settings_destination"
 
-private const val MICROPHONE_PERMISSION_REQUEST_CODE = 200
-private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 201
-
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        checkPermissions()
         UpdateCheckWorker.schedule(this)
         
         setContent {
@@ -68,17 +60,5 @@ class MainActivity : ComponentActivity() {
 
     private fun resolveSettingsStartRoute(destination: String?): String {
         return SettingsScreen.resolveStartRoute(destination)
-    }
-
-    private fun checkPermissions() {
-        val permissions = arrayOf(
-            Manifest.permission.RECORD_AUDIO to MICROPHONE_PERMISSION_REQUEST_CODE,
-            Manifest.permission.POST_NOTIFICATIONS to NOTIFICATION_PERMISSION_REQUEST_CODE
-        )
-        for ((permission, code) in permissions) {
-            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(permission), code)
-            }
-        }
     }
 }

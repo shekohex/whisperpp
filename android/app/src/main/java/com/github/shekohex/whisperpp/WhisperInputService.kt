@@ -51,6 +51,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -62,7 +63,11 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.DictationAnalyticsSession
 import com.github.shekohex.whisperpp.app.appContainer
+import com.github.shekohex.whisperpp.core.permissions.MicPermission
 import com.github.shekohex.whisperpp.data.EffectiveRuntimeConfig
+import com.github.shekohex.whisperpp.ime.MicPermissionBus
+import com.github.shekohex.whisperpp.ime.MicPermissionGate
+import com.github.shekohex.whisperpp.ime.PermissionRequestActivity
 import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.RuntimeChannel
@@ -270,6 +275,11 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
     private var externalSendBlockedPackageName = mutableStateOf<String?>(null)
     private var secureFieldExplanationDontShowAgain = mutableStateOf(false)
     private var firstUseDisclosure = mutableStateOf<FirstUseDisclosureUiState?>(null)
+    private val micPermissionMissing = mutableStateOf(false)
+    private val micPermissionGate = MicPermissionGate(
+        isGranted = { MicPermission.isGranted(this) },
+        onMissingChanged = { micPermissionMissing.value = it },
+    )
     private var pendingFirstUseDisclosureMode: FirstUseDisclosureMode? = null
     private var pendingFirstUseDisclosureContinuation: CancellableContinuation<FirstUseDisclosureDecision>? = null
     private var networkLoggingPreferenceJob: Job? = null
@@ -348,6 +358,11 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         )
         refreshUndoState()
 
+        lifecycleScope.launch {
+            // The retry runs from onStartInputView once the host app regains focus.
+            MicPermissionBus.results.collect { micPermissionGate.onResult(it.granted, it.retryAction) }
+        }
+
         networkLoggingPreferenceJob = CoroutineScope(Dispatchers.Main).launch {
             dataStore.data.map { it[VERBOSE_NETWORK_LOGS_ENABLED] ?: false }.collect { enabled ->
                 appContainer.httpLoggingInterceptor.setEnabled(enabled)
@@ -383,6 +398,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         if (isExternalSendBlocked() && isExternalSendingActive()) {
             dictationController.onWindowHidden(toastMessage = blockedNotice())
         }
+        micPermissionGate.onInputViewStarted()
     }
 
     private fun transcriptionCallback(token: DictationController.SendToken, text: String?, contextPrompt: String?) {
@@ -816,6 +832,8 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
                         onFirstUseDisclosureContinue = { onFirstUseDisclosureContinue() },
                         onFirstUseDisclosureCancel = { onFirstUseDisclosureCancel() },
                         onFirstUseDisclosureOpenPrivacySafety = { onFirstUseDisclosureOpenPrivacySafety() },
+                        micPermissionMissing = micPermissionMissing.value,
+                        onAllowMicPermission = { launchMicPermissionRequest() },
 
                         commandModeActive = isCommandModeActive.value,
                         commandStage = commandStage.value,
@@ -1375,8 +1393,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             return
         }
 
-        if (!recorderManager!!.allPermissionsGranted(this)) {
-            launchMainActivity()
+        if (!micPermissionGate.check(MicPermissionGate.ACTION_DICTATION) { onMicAction() }) {
             setKeyboardState(KeyboardState.Ready)
             return
         }
@@ -1724,8 +1741,7 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
         if (!isCommandModeActive.value) return
         commandJob?.cancel()
         commandJob = CoroutineScope(Dispatchers.Main).launch {
-            if (recorderManager?.allPermissionsGranted(this@WhisperInputService) != true) {
-                launchMainActivity()
+            if (!micPermissionGate.check(MicPermissionGate.ACTION_COMMAND, retry = null)) {
                 cancelCommandMode(showError = true, message = getString(R.string.command_error_permissions))
                 return@launch
             }
@@ -2245,6 +2261,10 @@ class WhisperInputService : InputMethodService(), LifecycleOwner, SavedStateRegi
             }
             menu.show()
         }
+    }
+
+    private fun launchMicPermissionRequest() {
+        startActivity(PermissionRequestActivity.intent(this, micPermissionGate.pendingAction))
     }
 
     private fun launchMainActivity(destination: String? = null) {

@@ -107,6 +107,8 @@ fun KeyboardScreen(
     onFirstUseDisclosureContinue: () -> Unit = {},
     onFirstUseDisclosureCancel: () -> Unit = {},
     onFirstUseDisclosureOpenPrivacySafety: () -> Unit = {},
+    micPermissionMissing: Boolean = false,
+    onAllowMicPermission: () -> Unit = {},
 
     commandModeActive: Boolean = false,
     commandStage: CommandStage = CommandStage.WAITING,
@@ -731,6 +733,8 @@ fun KeyboardScreen(
                                 recordingTimeMs = recordingTimeMs,
                                 onResume = if (externalSendingBlocked) showBlockedExplanationAction else onMicAction,
                             )
+                        } else if (micPermissionMissing && state == KeyboardState.Ready) {
+                            MicPermissionBanner(onAllow = onAllowMicPermission)
                         } else {
                             StatusContent(state, amplitude, recordingTimeMs)
                         }

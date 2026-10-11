@@ -55,6 +55,7 @@ object PreferenceKeys {
     val DISCLOSURE_SHOWN_ENHANCEMENT_TEXT = booleanPreferencesKey("disclosure-shown-enhancement-text")
     val DISCLOSURE_SHOWN_COMMAND_TEXT = booleanPreferencesKey("disclosure-shown-command-text")
     val PER_APP_SEND_POLICY_JSON = stringPreferencesKey("per-app-send-policy-json")
+    val MIC_PERMISSION_REQUESTED = booleanPreferencesKey("mic-permission-requested")
 
     val UPDATE_CHANNEL = stringPreferencesKey("update-channel")
 
@@ -106,6 +107,7 @@ object PreferenceKeys {
         DISCLOSURE_SHOWN_ENHANCEMENT_TEXT,
         DISCLOSURE_SHOWN_COMMAND_TEXT,
         PER_APP_SEND_POLICY_JSON,
+        MIC_PERMISSION_REQUESTED,
         UPDATE_CHANNEL,
         PROVIDERS_JSON,
         PROFILES_JSON,

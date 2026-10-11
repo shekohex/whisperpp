@@ -58,6 +58,8 @@ class UpdateCheckWorker(
     private fun showUpdateNotification(newVersion: String) {
         createNotificationChannel()
 
+        // Notifications are optional (D-03): the permission is only requested from the update
+        // settings screen, so skip posting when it is missing.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val permission = ContextCompat.checkSelfPermission(
                 applicationContext,
@@ -130,6 +132,13 @@ class UpdateCheckWorker(
                 request
             )
         }
+
+        fun needsNotificationPermission(context: Context): Boolean =
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
 
         fun cancel(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
