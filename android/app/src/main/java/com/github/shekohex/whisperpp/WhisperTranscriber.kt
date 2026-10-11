@@ -72,7 +72,7 @@ class WhisperTranscriber(private val httpClient: OkHttpClient) {
         timeout: Int,
         staticPrompt: String,
         temperature: Float,
-        callback: (String?) -> Unit,
+        callback: (String) -> Unit,
         exceptionCallback: (String) -> Unit
     ) {
         suspend fun makeWhisperRequest(): String {
@@ -168,16 +168,16 @@ class WhisperTranscriber(private val httpClient: OkHttpClient) {
             }
         }
 
-        // Create a cancellable job in the main thread (for UI updating)
+        // Exactly one of the callbacks runs, on the main thread; none after cancellation (G-02, G-06).
+        // TODO(F-03): unowned scope; WP-2.1 replaces this API with a suspend transcribe().
         val job = CoroutineScope(Dispatchers.Main).launch {
             Log.d(TAG, "Transcription job start")
             val (transcribedText, exceptionMessage) = withContext(Dispatchers.IO) {
                 try {
                     val response = makeWhisperRequest()
-                    File(filename).delete()
                     return@withContext Pair(response, null)
                 } catch (e: CancellationException) {
-                    return@withContext Pair(null, null)
+                    throw e
                 } catch (e: java.net.SocketTimeoutException) {
                     return@withContext Pair(null, "Request timed out")
                 } catch (e: IOException) {
@@ -189,12 +189,11 @@ class WhisperTranscriber(private val httpClient: OkHttpClient) {
 
             if (transcribedText != null) {
                 Log.d(TAG, "Transcription completed length=${transcribedText.length}")
-            }
-            callback.invoke(transcribedText)
-
-            if (!exceptionMessage.isNullOrEmpty()) {
-                Log.e(TAG, exceptionMessage)
-                exceptionCallback(exceptionMessage)
+                callback(transcribedText)
+            } else {
+                val message = exceptionMessage?.takeIf { it.isNotEmpty() } ?: "Unknown error"
+                Log.e(TAG, message)
+                exceptionCallback(message)
             }
         }
 

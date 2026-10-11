@@ -19,131 +19,117 @@
 
 package com.github.shekohex.whisperpp
 
-import android.content.Intent
-import android.content.res.Configuration
-import android.os.Bundle
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.inputmethodservice.InputMethodService
-import android.os.Build
-import android.os.IBinder
-import android.os.LocaleList
-import android.view.HapticFeedbackConstants
-import android.media.AudioManager
 import android.content.Context
+import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.Color
+import android.inputmethodservice.InputMethodService
+import android.media.AudioManager
+import android.os.Build
+import android.os.Bundle
+import android.os.SystemClock
 import android.text.TextUtils
 import android.util.Log
-import android.view.ContextThemeWrapper
+import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.view.Window
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
-import androidx.appcompat.widget.PopupMenu
-import androidx.core.view.WindowCompat
-import android.graphics.Color
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.core.view.WindowCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.DictationAnalyticsSession
 import com.github.shekohex.whisperpp.app.appContainer
+import com.github.shekohex.whisperpp.command.CommandController
+import com.github.shekohex.whisperpp.command.CommandDisclosureDecision
+import com.github.shekohex.whisperpp.command.CommandDisclosureGateCoordinator
+import com.github.shekohex.whisperpp.command.CommandListeningStartResult
+import com.github.shekohex.whisperpp.command.CommandPostRecordingResult
+import com.github.shekohex.whisperpp.command.CommandRuntimeConfig
+import com.github.shekohex.whisperpp.command.CommandStage
+import com.github.shekohex.whisperpp.command.ResolvedSelection
+import com.github.shekohex.whisperpp.command.SelectionResolver
+import com.github.shekohex.whisperpp.command.SelectionSnapshot
+import com.github.shekohex.whisperpp.command.TransformPromptBuilder
+import com.github.shekohex.whisperpp.command.replaceAndSelect
 import com.github.shekohex.whisperpp.core.audio.AmplitudeMeter
 import com.github.shekohex.whisperpp.core.audio.AudioFocusController
 import com.github.shekohex.whisperpp.core.audio.AudioRecorder
 import com.github.shekohex.whisperpp.core.audio.SoundCues
 import com.github.shekohex.whisperpp.core.audio.SystemAudioFocusGateway
 import com.github.shekohex.whisperpp.core.permissions.MicPermission
-import com.github.shekohex.whisperpp.data.EffectiveRuntimeConfig
-import com.github.shekohex.whisperpp.ime.ImeViewLifecycle
-import com.github.shekohex.whisperpp.ime.MicPermissionBus
-import com.github.shekohex.whisperpp.ime.MicPermissionGate
-import com.github.shekohex.whisperpp.ime.PermissionRequestActivity
-import com.github.shekohex.whisperpp.data.ProviderAuthMode
-import com.github.shekohex.whisperpp.data.ProviderType
-import com.github.shekohex.whisperpp.data.RuntimeChannel
-import com.github.shekohex.whisperpp.data.RuntimeSelectionResolver
-import com.github.shekohex.whisperpp.data.RuntimeWarning
-import com.github.shekohex.whisperpp.data.SettingsRepository
-import com.github.shekohex.whisperpp.data.ServiceProvider
-import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
-import com.github.shekohex.whisperpp.data.presetById
-import com.github.shekohex.whisperpp.dictation.DictationController
-import com.github.shekohex.whisperpp.dictation.EnhancementOutcome
-import com.github.shekohex.whisperpp.dictation.EnhancementRunner
-import com.github.shekohex.whisperpp.dictation.FailureReason
-import com.github.shekohex.whisperpp.dictation.FocusIdentity
-import com.github.shekohex.whisperpp.dictation.FocusKey
-import com.github.shekohex.whisperpp.dictation.OpenAiRealtimeSttClient
-import com.github.shekohex.whisperpp.dictation.SkipReason
-import com.github.shekohex.whisperpp.command.CommandController
-import com.github.shekohex.whisperpp.command.CommandStage
-import com.github.shekohex.whisperpp.command.ResolvedSelection
-import com.github.shekohex.whisperpp.command.SelectionResolver
-import com.github.shekohex.whisperpp.command.SelectionSnapshot
-import com.github.shekohex.whisperpp.command.TransformPromptBuilder
-import com.github.shekohex.whisperpp.keyboard.KeyboardState
-import com.github.shekohex.whisperpp.keyboard.isPaused
-import com.github.shekohex.whisperpp.keyboard.isRecording
-import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
-import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
-import com.github.shekohex.whisperpp.privacy.SecretsStore
-import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
-import com.github.shekohex.whisperpp.ui.keyboard.FirstUseDisclosureUiState
-import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeStyle
-import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeUiState
-import com.github.shekohex.whisperpp.ui.keyboard.KeyboardScreen
-import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
-import com.github.shekohex.whisperpp.data.PreferenceKey
-import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
-import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
-import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.data.PreferenceKeys.ADD_TRAILING_SPACE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SWITCH_BACK
 import com.github.shekohex.whisperpp.data.PreferenceKeys.CANCEL_CONFIRMATION
-import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_COMMAND_TEXT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_DICTATION_AUDIO
-import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.HAPTIC_FEEDBACK_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.LANGUAGE_CODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.POSTPROCESSING
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PROMPT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_TEMPERATURE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED
-import kotlinx.coroutines.CancellableContinuation
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
+import com.github.shekohex.whisperpp.data.ProviderAuthMode
+import com.github.shekohex.whisperpp.data.RuntimeConfigLoader
+import com.github.shekohex.whisperpp.data.SettingsRepository
+import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
+import com.github.shekohex.whisperpp.data.presetById
+import com.github.shekohex.whisperpp.dictation.EnhancementRunner
+import com.github.shekohex.whisperpp.dictation.FocusIdentity
+import com.github.shekohex.whisperpp.dictation.FocusKey
+import com.github.shekohex.whisperpp.domain.dictation.AudioRecorderSource
+import com.github.shekohex.whisperpp.domain.dictation.DictationSession
+import com.github.shekohex.whisperpp.domain.dictation.SessionEvent
+import com.github.shekohex.whisperpp.domain.dictation.SessionState
+import com.github.shekohex.whisperpp.domain.dictation.TextCommitter
+import com.github.shekohex.whisperpp.domain.dictation.TranscriptionRequest
+import com.github.shekohex.whisperpp.domain.dictation.toKeyboardState
+import com.github.shekohex.whisperpp.ime.DictationEnhancementStep
+import com.github.shekohex.whisperpp.ime.DictationStartPlanner
+import com.github.shekohex.whisperpp.ime.FirstUseDisclosureGate
+import com.github.shekohex.whisperpp.ime.ImeViewLifecycle
+import com.github.shekohex.whisperpp.ime.MicPermissionBus
+import com.github.shekohex.whisperpp.ime.MicPermissionGate
+import com.github.shekohex.whisperpp.ime.PermissionRequestActivity
+import com.github.shekohex.whisperpp.ime.showCancelConfirmationDialog
+import com.github.shekohex.whisperpp.ime.showLanguagePopup
+import com.github.shekohex.whisperpp.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.keyboard.isRecording
+import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
+import com.github.shekohex.whisperpp.privacy.SecretsStore
+import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
+import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
+import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeStyle
+import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeUiState
+import com.github.shekohex.whisperpp.ui.keyboard.KeyboardScreen
+import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
+import java.io.File
+import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.plus
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.resume
-import java.io.File
-import java.time.LocalDate
-import java.util.Locale
 
 private const val RECORDED_AUDIO_FILENAME_WAV = "recorded.wav"
 private const val AUDIO_MEDIA_TYPE_WAV = "audio/wav"
@@ -151,99 +137,23 @@ private const val IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL = 28
 private const val TAG = "WhisperInputService"
 private const val MIGRATIONS_WAIT_MS = 2_000L
 private const val PRIVACY_SAFETY_DESTINATION = "privacy_safety"
-
-private enum class FirstUseDisclosureMode {
-    DICTATION_AUDIO,
-    ENHANCEMENT_TEXT,
-    COMMAND_TEXT,
-}
-
-private enum class FirstUseDisclosureDecision {
-    CONTINUE,
-    CANCEL,
-    OPEN_SETTINGS,
-}
-
-internal enum class CommandDisclosureDecision {
-    CONTINUE,
-    CANCEL,
-    OPEN_SETTINGS,
-}
-
-internal enum class CommandListeningStartResult {
-    STARTED,
-    CANCELLED,
-    OPEN_SETTINGS,
-    BLOCKED,
-}
-
-internal enum class CommandPostRecordingResult {
-    TRANSFORMED,
-    RETRY_LISTENING,
-    BLOCKED,
-}
-
-internal class CommandDisclosureGateCoordinator(
-    private val shouldBlockExternalSend: () -> Boolean,
-) {
-    suspend fun startListening(
-        awaitDisclosure: suspend () -> CommandDisclosureDecision,
-        startRecording: suspend () -> Unit,
-    ): CommandListeningStartResult {
-        return when (awaitDisclosure()) {
-            CommandDisclosureDecision.CANCEL -> CommandListeningStartResult.CANCELLED
-            CommandDisclosureDecision.OPEN_SETTINGS -> CommandListeningStartResult.OPEN_SETTINGS
-            CommandDisclosureDecision.CONTINUE -> {
-                if (shouldBlockExternalSend()) {
-                    CommandListeningStartResult.BLOCKED
-                } else {
-                    startRecording()
-                    CommandListeningStartResult.STARTED
-                }
-            }
-        }
-    }
-
-    suspend fun finishListening(
-        stopRecording: suspend () -> Unit,
-        transcribeInstruction: suspend () -> String,
-        restartListening: () -> Unit,
-        transform: suspend (String) -> Unit,
-    ): CommandPostRecordingResult {
-        stopRecording()
-        if (shouldBlockExternalSend()) {
-            return CommandPostRecordingResult.BLOCKED
-        }
-
-        val instruction = transcribeInstruction().trim()
-        if (instruction.isBlank()) {
-            restartListening()
-            return CommandPostRecordingResult.RETRY_LISTENING
-        }
-
-        if (shouldBlockExternalSend()) {
-            return CommandPostRecordingResult.BLOCKED
-        }
-
-        transform(instruction)
-        return CommandPostRecordingResult.TRANSFORMED
-    }
-}
+private const val RECORDING_TICK_MS = 100L
+private const val AUTO_SWITCH_BACK_DELAY_MS = 150L
 
 class WhisperInputService : InputMethodService() {
     private val dataStore: DataStore<Preferences>
         get() = appContainer.settingsDataStore
     private val whisperTranscriber: WhisperTranscriber by lazy { WhisperTranscriber(appContainer.okHttpClient) }
     private lateinit var smartFixer: SmartFixer
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val serviceScope = MainScope() + Dispatchers.Main.immediate
     private lateinit var audioRecorder: AudioRecorder
     private lateinit var audioFocus: AudioFocusController
     private lateinit var soundCues: SoundCues
-    private var recordingStartJob: Job? = null
-    private var pendingRecorderStop: Deferred<Result<File>>? = null
-    private var recordedAudioFilename: String = ""
-    private var audioMediaType: String = AUDIO_MEDIA_TYPE_WAV
-    private var isFirstTime: Boolean = true
+    private lateinit var session: DictationSession
+    private val textCommitter = TextCommitter { currentInputConnection }
+    // First-use dictation disclosure shown before a start; null until DataStore delivered.
+    private lateinit var dictationDisclosureShown: StateFlow<Boolean?>
+    private var dictationDisclosureJob: Job? = null
     
     private lateinit var repository: SettingsRepository
     private lateinit var analyticsRepository: AnalyticsRepository
@@ -274,16 +184,15 @@ class WhisperInputService : InputMethodService() {
     private var externalSendBlockedByAppPolicy = mutableStateOf(false)
     private var externalSendBlockedPackageName = mutableStateOf<String?>(null)
     private var secureFieldExplanationDontShowAgain = mutableStateOf(false)
-    private var firstUseDisclosure = mutableStateOf<FirstUseDisclosureUiState?>(null)
     private val micPermissionMissing = mutableStateOf(false)
     private val micPermissionGate = MicPermissionGate(
         isGranted = { MicPermission.isGranted(this) },
         onMissingChanged = { micPermissionMissing.value = it },
     )
-    private var pendingFirstUseDisclosureMode: FirstUseDisclosureMode? = null
-    private var pendingFirstUseDisclosureContinuation: CancellableContinuation<FirstUseDisclosureDecision>? = null
-    private var networkLoggingPreferenceJob: Job? = null
-    private var timerJob: Job? = null
+    private lateinit var disclosureGate: FirstUseDisclosureGate
+    private lateinit var configLoader: RuntimeConfigLoader
+    private lateinit var startPlanner: DictationStartPlanner
+    private val pendingCommitText = mutableStateOf<String?>(null)
 
     private val commandController = CommandController()
     private val selectionResolver = SelectionResolver()
@@ -310,19 +219,6 @@ class WhisperInputService : InputMethodService() {
 
     private val focusIdentity = FocusIdentity()
     private var lastFocusKey: FocusKey? = null
-    private lateinit var dictationController: DictationController
-    private val enhancementRunner = EnhancementRunner()
-
-    private var activeDictationSttProviderId: String? = null
-    private var activeDictationSttModelId: String? = null
-
-    private var realtimeSttClient: OpenAiRealtimeSttClient? = null
-    private var realtimeToken: DictationController.SendToken? = null
-    private var realtimeFinalTranscript: String? = null
-    private var realtimeBestEffortTranscript: String? = null
-    private var pendingRealtimeProvider: ServiceProvider? = null
-    private var pendingRealtimeModelId: String? = null
-    private var dictationAnalyticsSession: DictationAnalyticsSession? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -340,38 +236,45 @@ class WhisperInputService : InputMethodService() {
             repository.pauseMediaWhileRecording.stateIn(serviceScope, SharingStarted.Eagerly, true),
         )
         soundCues = SoundCues(this, serviceScope, repository.soundEffectsEnabled)
-        observeAudioCore()
         smartFixer = SmartFixer(this, container.okHttpClient)
-
-        dictationController = DictationController(
-            DictationController.Deps(
-                getKeyboardState = { keyboardState.value },
-                setKeyboardState = { setKeyboardState(it) },
-                toast = { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() },
-                copyToClipboard = { copyToClipboard(it) },
-                clearComposing = { clearComposingText() },
-                getInputConnection = { currentInputConnection },
-                isInsertAllowed = { externalSendBlockReason.value == null },
-                startRecording = { startRecording(it) },
-                pauseRecording = { pauseRecording(targetState = it) },
-                resumeRecording = { resumeRecording(targetState = it) },
-                stopRecording = { stopRecordingForSend() },
-                cancelTranscription = { cancelTranscriptionWork() },
+        configLoader = RuntimeConfigLoader(dataStore, repository)
+        disclosureGate = FirstUseDisclosureGate(dataStore, serviceScope)
+        startPlanner = createStartPlanner()
+        dictationDisclosureShown = dataStore.data
+            .map { it[DISCLOSURE_SHOWN_DICTATION_AUDIO] ?: false }
+            .stateIn(serviceScope, SharingStarted.Eagerly, null)
+        session = DictationSession(
+            DictationSession.Deps(
+                recorder = AudioRecorderSource(audioRecorder),
+                focus = audioFocus,
+                cues = soundCues::play,
+                transcriber = { file, request -> whisperTranscriber.transcribe(this, file, request) },
+                enhancer = createEnhancementStep(),
+                committer = textCommitter,
+                planner = startPlanner::plan,
+                sendAllowed = { !shouldBlockExternalSend() },
+                commandModeActive = { isCommandModeActive.value },
+                clock = SystemClock::elapsedRealtime,
+                scope = serviceScope,
             )
         )
+        observeAudioCore()
+        observeSession()
         refreshUndoState()
 
         serviceScope.launch {
             // The retry runs from onStartInputView once the host app regains focus.
-            MicPermissionBus.results.collect { micPermissionGate.onResult(it.granted, it.retryAction) }
+            MicPermissionBus.results.collect {
+                micPermissionGate.onResult(it.granted, it.retryAction)
+                if (!it.granted) session.onPermissionResult(false)
+            }
         }
         serviceScope.launch {
             sendPolicyRules.collect { rules ->
                 if (rules != null) onExternalSendBlockMayHaveChanged(currentInputEditorInfo)
             }
         }
-
-        networkLoggingPreferenceJob = CoroutineScope(Dispatchers.Main).launch {
+        serviceScope.launch {
             dataStore.data.map { it[VERBOSE_NETWORK_LOGS_ENABLED] ?: false }.collect { enabled ->
                 appContainer.httpLoggingInterceptor.setEnabled(enabled)
             }
@@ -385,7 +288,7 @@ class WhisperInputService : InputMethodService() {
         val focusKey = FocusKey.from(attribute, focusIdentity.onStartInput(restarting))
         if (focusKey != lastFocusKey) {
             lastFocusKey = focusKey
-            dictationController.onFocusChanged(focusKey)
+            session.onFocusChanged(focusKey)
             if (isCommandModeActive.value) {
                 cancelCommandMode(showError = true, message = getString(R.string.command_error_focus_changed))
             }
@@ -410,7 +313,7 @@ class WhisperInputService : InputMethodService() {
         viewLifecycle?.onHidden()
         logLifecycle("onFinishInputView finishingInput=$finishingInput")
         // Transient overlays belong to the view that is going away.
-        onFirstUseDisclosureCancel()
+        disclosureGate.cancel()
         showLongPressHint.value = false
     }
 
@@ -446,362 +349,137 @@ class WhisperInputService : InputMethodService() {
     /** Extract (fullscreen) mode in landscape would replace the bar with an empty extract view. */
     override fun onEvaluateFullscreenMode(): Boolean = false
 
-    private fun transcriptionCallback(token: DictationController.SendToken, text: String?, contextPrompt: String?) {
-        val effectiveText = if (!text.isNullOrEmpty()) {
-            text
-        } else {
-            val fallback = realtimeFinalTranscript
-            if (token.streamingPartialsEnabled && !fallback.isNullOrBlank()) fallback else text
+    private fun createStartPlanner() = DictationStartPlanner(
+        DictationStartPlanner.Deps(
+            config = configLoader,
+            secretsStore = secretsStore,
+            okHttpClient = appContainer.okHttpClient,
+            awaitMigrations = { appContainer.awaitMigrations(MIGRATIONS_WAIT_MS) },
+            awaitSendPolicy = { sendPolicyRules.first { it != null } },
+            isSendBlocked = ::shouldBlockExternalSend,
+            checkMicPermission = {
+                micPermissionGate.check(MicPermissionGate.ACTION_DICTATION) { session.onPermissionResult(true) }
+            },
+            recordingFile = ::recordingFile,
+            defaultPostprocessing = { getString(R.string.settings_option_no_conversion) },
+            audioMediaType = AUDIO_MEDIA_TYPE_WAV,
+            onBlocked = ::handleBlockedExternalSendAction,
+            onSetupRequired = ::showSetupRequiredToast,
+            onNotice = { showEnhancementNotice(it, EnhancementNoticeStyle.INFO) },
+            onStreamingUnsupported = { showToast(getString(R.string.dictation_streaming_unsupported)) },
+        )
+    )
+
+    private fun createEnhancementStep() = DictationEnhancementStep(
+        DictationEnhancementStep.Deps(
+            config = configLoader,
+            enhancementPresetId = repository.enhancementPresetId,
+            secretsStore = secretsStore,
+            smartFixer = smartFixer,
+            runner = EnhancementRunner(),
+            disclosures = disclosureGate,
+            blockedNotice = { if (shouldBlockExternalSend()) blockedNotice() else null },
+            onWarning = { showEnhancementNotice(it, EnhancementNoticeStyle.INFO) },
+            onRequestSent = { performFeedback() },
+            defaultPrompt = ::readSmartFixDefaultPromptOrEmpty,
+        )
+    )
+
+    private fun recordingFile(): File = File(externalCacheDir ?: cacheDir, RECORDED_AUDIO_FILENAME_WAV)
+
+    private fun observeSession() {
+        serviceScope.launch {
+            session.state.collectLatest { state ->
+                keyboardState.value = state.toKeyboardState()
+                when (state) {
+                    is SessionState.Recording -> {
+                        showLongPressHint.value = false
+                        // Re-collected on every transition, so pausing stops the tick (B-07).
+                        while (true) {
+                            recordingTimeMs.value = state.elapsedMs(SystemClock.elapsedRealtime())
+                            if (state.paused) break
+                            delay(RECORDING_TICK_MS)
+                        }
+                    }
+                    is SessionState.Transcribing, is SessionState.Committing, is SessionState.Enhancing -> Unit
+                    else -> recordingTimeMs.value = 0L
+                }
+            }
         }
+        serviceScope.launch { session.events.collect(::onSessionEvent) }
+        serviceScope.launch { session.pendingCommit.collect { pendingCommitText.value = it } }
+    }
 
-        val rawText = effectiveText?.takeIf { it.isNotBlank() }
-        if (rawText == null) {
-            if (text != null) {
-                dictationController.onTranscriptionError(token, getString(R.string.toast_transcription_empty))
+    private fun onSessionEvent(event: SessionEvent) {
+        when (event) {
+            is SessionEvent.Notice -> showToast(getString(event.resId))
+            is SessionEvent.NoticeText -> showToast(event.text)
+            SessionEvent.ShortPressHint -> showLongPressHint.value = true
+            is SessionEvent.RecordingFailed -> {
+                if (event.kind != AudioRecorder.ErrorKind.CANCELLED) showToast(recorderErrorMessage(event.kind))
+            }
+            is SessionEvent.TranscriptionFailed -> {
+                Log.e(TAG, "Transcription failed")
+                showToast(getString(R.string.dictation_transcription_failed, event.message))
                 performFeedback()
             }
-            closeRealtimeSession()
-            clearActiveDictationSelection()
-            return
-        }
-
-        Log.d(TAG, "Transcription received length=${rawText.length}")
-        soundCues.play(SoundCues.Cue.DONE)
-
-        CoroutineScope(Dispatchers.Main).launch {
-            val prefs = dataStore.data.first()
-            val providers = repository.providers.first()
-            val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
-            val autoSwitchBack = prefs[AUTO_SWITCH_BACK] ?: false
-
-            val captured = dictationController.insertRawAndCaptureSegment(token, rawText)
-            showUndoQuickActionIfAvailable()
-
-            if (captured == null && isExternalSendBlocked()) {
-                showEnhancementNotice(blockedNotice(), EnhancementNoticeStyle.INFO)
+            SessionEvent.TranscriptionEmpty -> {
+                showToast(getString(R.string.toast_transcription_empty))
+                performFeedback()
             }
-
-            closeRealtimeSession()
-            clearActiveDictationSelection()
-
-            if (captured == null) {
-                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
-                    delay(150)
-                    onSwitchIme()
+            SessionEvent.SendBlocked -> showToast(blockedNotice())
+            is SessionEvent.Committed -> {
+                showUndoQuickActionIfAvailable()
+                performFeedback()
+            }
+            is SessionEvent.CommitBlockedByFocus -> performFeedback()
+            is SessionEvent.CommitFailed -> {
+                copyToClipboard(event.text)
+                val message = when (event.reason) {
+                    SessionEvent.CommitFailed.Reason.NO_FIELD -> R.string.dictation_copied_no_field
+                    SessionEvent.CommitFailed.Reason.BLOCKED -> R.string.dictation_copied_blocked
                 }
-                performFeedback()
-                return@launch
+                showToast(getString(message))
             }
-
-            activeDictationAnalyticsSession(token)?.recordRawTranscript(rawText)
-
-            val smartFixEnabled = prefs[SMART_FIX_ENABLED] ?: false
-            if (!smartFixEnabled || isBlankOrPunctuationOnly(rawText)) {
-                completeDictationAnalyticsSession(token = token, rawText = rawText)
-                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
-                    delay(150)
-                    onSwitchIme()
-                }
-                performFeedback()
-                return@launch
-            }
-
-            if (keyboardState.value == KeyboardState.Ready) {
-                setKeyboardState(KeyboardState.SmartFixing)
-            }
-
-            val effective = resolveEffectiveRuntimeConfig(
-                packageName = captured.focusKey.packageName,
-                languageCode = languageCode,
-                prefs = prefs,
-                providers = providers,
+            is SessionEvent.EnhancementNotice -> showEnhancementNotice(
+                event.text,
+                if (event.isError) EnhancementNoticeStyle.ERROR else EnhancementNoticeStyle.INFO,
             )
-
-            val textProviderId = effective.textProviderId
-            val textModelId = effective.textModelId
-            val provider = providers.find { it.id == textProviderId }
-            val providerLabel = provider?.name?.trim().orEmpty().ifBlank { textProviderId.ifBlank { "Unknown provider" } }
-            val modelLabel = textModelId.ifBlank { "Unknown model" }
-
-            if (shouldBlockExternalSend()) {
-                completeDictationAnalyticsSession(token = token, rawText = rawText)
-                showEnhancementNotice(
-                    "Enhancement skipped for $providerLabel ($modelLabel): ${blockedNotice()}",
-                    EnhancementNoticeStyle.INFO,
-                )
-                if (keyboardState.value == KeyboardState.SmartFixing) {
-                    setKeyboardState(KeyboardState.Ready)
-                }
-                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
-                    delay(150)
-                    onSwitchIme()
-                }
-                performFeedback()
-                return@launch
-            }
-
-            val textWarnings = effective.warnings.filter { it.channel == RuntimeChannel.TEXT }
-            if (textWarnings.isNotEmpty()) {
-                showEnhancementNotice(formatRuntimeWarnings(textWarnings), EnhancementNoticeStyle.INFO)
-            }
-
-            if (provider == null || textModelId.isBlank() || provider.models.none { it.id == textModelId }) {
-                completeDictationAnalyticsSession(token = token, rawText = rawText)
-                showEnhancementNotice(
-                    "Enhancement unavailable for ${textProviderId.ifBlank { "Unknown provider" }} (${textModelId.ifBlank { "Unknown model" }})",
-                    EnhancementNoticeStyle.ERROR,
-                )
-                if (keyboardState.value == KeyboardState.SmartFixing) {
-                    setKeyboardState(KeyboardState.Ready)
-                }
-                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
-                    delay(150)
-                    onSwitchIme()
-                }
-                performFeedback()
-                return@launch
-            }
-
-            val useContext = prefs[USE_CONTEXT] ?: false
-            val disclosure = PrivacyDisclosureFormatter.disclosureForEnhancement(
-                provider = provider,
-                selectedModelId = textModelId,
-                useContext = useContext,
+            SessionEvent.EnhancementApplied -> refreshEnhancementUndoState()
+            is SessionEvent.EnhancementKeptRaw -> showEnhancementNotice(
+                "Enhancement ready for ${event.label}, but focus changed; kept raw",
+                EnhancementNoticeStyle.INFO,
             )
-            val disclosureDecision = awaitFirstUseDisclosure(
-                mode = FirstUseDisclosureMode.ENHANCEMENT_TEXT,
-                disclosure = disclosure,
-            )
-            if (disclosureDecision != FirstUseDisclosureDecision.CONTINUE) {
-                completeDictationAnalyticsSession(token = token, rawText = rawText)
-                if (keyboardState.value == KeyboardState.SmartFixing) {
-                    setKeyboardState(KeyboardState.Ready)
+            is SessionEvent.Completed -> {
+                val analytics = DictationAnalyticsSession(sessionId = 0L).apply {
+                    recordRawTranscript(event.rawText)
+                    recordFinalInsertedText(event.finalText)
                 }
-                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
-                    delay(150)
-                    onSwitchIme()
-                }
-                return@launch
+                analytics.finalize(event.durationMs)?.let(::persistDictationAnalyticsOutcome)
+                switchBackIfEnabled()
             }
-
-            if (provider.endpoint.isBlank()) {
-                completeDictationAnalyticsSession(token = token, rawText = rawText)
-                showEnhancementNotice(
-                    "Enhancement unavailable for ${provider.name} ($textModelId): missing endpoint",
-                    EnhancementNoticeStyle.ERROR,
-                )
-                if (keyboardState.value == KeyboardState.SmartFixing) {
-                    setKeyboardState(KeyboardState.Ready)
-                }
-                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
-                    delay(150)
-                    onSwitchIme()
-                }
-                performFeedback()
-                return@launch
+            is SessionEvent.Discarded -> {
+                DictationAnalyticsSession(sessionId = 0L).cancel(event.durationMs)?.let(::persistDictationAnalyticsOutcome)
             }
-
-            val providerWithApiKey = provider.copy(
-                apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
-            )
-            if (providerWithApiKey.authMode == ProviderAuthMode.API_KEY && providerWithApiKey.apiKey.isBlank()) {
-                completeDictationAnalyticsSession(token = token, rawText = rawText)
-                showEnhancementNotice(
-                    "Enhancement unavailable for ${provider.name} ($textModelId): missing API key",
-                    EnhancementNoticeStyle.ERROR,
-                )
-                if (keyboardState.value == KeyboardState.SmartFixing) {
-                    setKeyboardState(KeyboardState.Ready)
-                }
-                if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
-                    delay(150)
-                    onSwitchIme()
-                }
-                performFeedback()
-                return@launch
-            }
-
-            val temperature = if (provider.temperature > 0) provider.temperature else prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
-
-            val enhancementPresetId = repository.enhancementPresetId.first().orEmpty()
-            val enhancementPresetInstruction = presetById(enhancementPresetId)?.promptInstruction
-            val promptTemplate = buildEnhancementPromptTemplate(
-                basePrompt = effective.prompt,
-                presetInstruction = enhancementPresetInstruction,
-            )
-
-            performFeedback()
-
-            val outcome = enhancementRunner.run(
-                rawText = rawText,
-                enhance = {
-                    withContext(Dispatchers.IO) {
-                        smartFixer.fix(
-                            text = rawText,
-                            contextInformation = contextPrompt,
-                            provider = providerWithApiKey,
-                            modelId = textModelId,
-                            temperature = temperature,
-                            promptTemplate = promptTemplate,
-                        )
-                    }
-                },
-            )
-
-            if (keyboardState.value == KeyboardState.SmartFixing) {
-                setKeyboardState(KeyboardState.Ready)
-            }
-
-            when (outcome) {
-                is EnhancementOutcome.Succeeded -> {
-                    val replaced = dictationController.replaceCapturedSegment(captured, outcome.enhancedText)
-                    if (replaced) {
-                        completeDictationAnalyticsSession(
-                            token = token,
-                            rawText = rawText,
-                            finalInsertedText = outcome.enhancedText,
-                        )
-                        refreshEnhancementUndoState()
-                    } else {
-                        completeDictationAnalyticsSession(token = token, rawText = rawText)
-                        showEnhancementNotice(
-                            "Enhancement ready for ${provider.name} ($textModelId), but focus changed; kept raw",
-                            EnhancementNoticeStyle.INFO,
-                        )
-                    }
-                }
-
-                is EnhancementOutcome.Skipped -> {
-                    completeDictationAnalyticsSession(token = token, rawText = rawText)
-                    when (outcome.reason) {
-                        SkipReason.Empty,
-                        SkipReason.PunctuationOnly,
-                        -> Unit
-                    }
-                }
-
-                is EnhancementOutcome.Failed -> {
-                    completeDictationAnalyticsSession(token = token, rawText = rawText)
-                    when (val reason = outcome.reason) {
-                        FailureReason.Cancelled -> Unit
-                        FailureReason.Timeout -> {
-                            showEnhancementNotice(
-                                "Enhancement timed out for ${provider.name} ($textModelId)",
-                                EnhancementNoticeStyle.ERROR,
-                            )
-                        }
-
-                        is FailureReason.Transient -> {
-                            showEnhancementNotice(
-                                "Enhancement failed for ${provider.name} ($textModelId): ${reason.message}",
-                                EnhancementNoticeStyle.ERROR,
-                            )
-                        }
-
-                        is FailureReason.NonTransient -> {
-                            showEnhancementNotice(
-                                "Enhancement failed for ${provider.name} ($textModelId): ${reason.message}",
-                                EnhancementNoticeStyle.ERROR,
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (autoSwitchBack && keyboardState.value == KeyboardState.Ready) {
-                delay(150)
-                onSwitchIme()
-            }
-            performFeedback()
         }
     }
 
-    private fun transcriptionExceptionCallback(token: DictationController.SendToken, message: String) {
-        Log.e(TAG, "Transcription error: $message")
-        val bestEffort = if (token.streamingPartialsEnabled) {
-            realtimeFinalTranscript ?: realtimeBestEffortTranscript
-        } else {
-            null
+    private fun switchBackIfEnabled() {
+        serviceScope.launch {
+            if (dataStore.data.first()[AUTO_SWITCH_BACK] != true) return@launch
+            delay(AUTO_SWITCH_BACK_DELAY_MS)
+            if (!session.isBusy) onSwitchIme()
         }
-
-        if (!bestEffort.isNullOrBlank()) {
-            val captured = dictationController.insertRawAndCaptureSegment(token, bestEffort)
-            if (captured != null) {
-                completeDictationAnalyticsSession(token = token, rawText = bestEffort)
-            }
-            showUndoQuickActionIfAvailable()
-            performFeedback()
-        } else {
-            dictationController.onTranscriptionError(token, message)
-            performFeedback()
-        }
-
-        closeRealtimeSession()
-        clearActiveDictationSelection()
     }
 
-    private fun startTranscription(token: DictationController.SendToken, attachToEnd: String) {
-        if (shouldBlockExternalSend()) {
-            dictationController.onTranscriptionError(token, blockedNotice())
-            return
-        }
-
-        CoroutineScope(Dispatchers.Main).launch {
-            val stopResult = pendingRecorderStop?.await()
-            if (stopResult != null && stopResult.isFailure && !stopResult.isNotRecordingFailure()) {
-                dictationController.onTranscriptionError(token, getString(R.string.recording_error_failed))
-                closeRealtimeSession()
-                clearActiveDictationSelection()
-                return@launch
-            }
-            performFeedback(cue = SoundCues.Cue.STOP)
-
-            val prefs = dataStore.data.first()
-            val useContext = prefs[USE_CONTEXT] ?: false
-            val contextPrompt = if (useContext) currentInputConnection?.getTextBeforeCursor(500, 0)?.toString() else null
-            val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
-            
-            val providers = repository.providers.first()
-
-            val providerId = activeDictationSttProviderId.orEmpty()
-            val modelId = activeDictationSttModelId.orEmpty()
-            val provider = providers.find { it.id == providerId }
-            if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
-                dictationController.onTranscriptionError(token, getString(R.string.toast_setup_required_stt))
-                clearActiveDictationSelection()
-                return@launch
-            }
-
-            val providerWithApiKey = provider.copy(
-                apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
-            )
-            
-            val staticPrompt = if (provider.prompt.isNotEmpty()) provider.prompt else prefs[PROMPT] ?: ""
-            val temperature = provider.temperature
-            val postprocessing = prefs[POSTPROCESSING] ?: getString(R.string.settings_option_no_conversion)
-            val addTrailingSpace = prefs[ADD_TRAILING_SPACE] ?: false
-            val timeout = provider.timeout
-
-            if (shouldBlockExternalSend()) {
-                dictationController.onTranscriptionError(token, blockedNotice())
-                return@launch
-            }
-
-            whisperTranscriber.startAsync(
-                this@WhisperInputService, recordedAudioFilename, audioMediaType,
-                attachToEnd, contextPrompt, languageCode, providerWithApiKey, modelId, postprocessing,
-                addTrailingSpace, timeout, staticPrompt, temperature,
-                { transcriptionCallback(token, it, contextPrompt) },
-                { transcriptionExceptionCallback(token, it) }
-            )
-        }
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     override fun onCreateInputView(): View {
         val viewOwners = replaceViewLifecycle()
         inputViewGeneration += 1
         logLifecycle("onCreateInputView generation=$inputViewGeneration")
-        serviceScope.launch { updateAudioFormat() }
 
         shouldOfferImeSwitch.value = if (Build.VERSION.SDK_INT >= IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL) {
             shouldOfferSwitchingToNextInputMethod()
@@ -842,7 +520,9 @@ class WhisperInputService : InputMethodService() {
                         undoQuickActionVisible = undoQuickActionVisible.value,
                         enhancementNotice = enhancementNotice.value,
                         enhancementUndoAvailable = enhancementUndoAvailable.value,
-                        onMicAction = { onMicAction() },
+                        onPressStart = { onPressStart() },
+                        onPressRelease = { session.onPressRelease() },
+                        onResumeAction = { session.onResume() },
                         onCancelAction = { onCancelAction() },
                         onDiscardAction = { discardRecording() },
                         onSendAction = { onSendAction() },
@@ -850,7 +530,7 @@ class WhisperInputService : InputMethodService() {
                         onUndoAction = { onUndoAction() },
                         onEnhancementUndoAction = {
                             performFeedback(isDelete = true)
-                            val applied = dictationController.applyEnhancementUndo()
+                            val applied = textCommitter.applyEnhancementUndo(lastFocusKey)
                             refreshEnhancementUndoState()
                             if (!applied) {
                                 showEnhancementNotice("Can't undo enhancement here", EnhancementNoticeStyle.INFO)
@@ -861,20 +541,24 @@ class WhisperInputService : InputMethodService() {
                         onOpenSettingsDestination = { launchMainActivity(it) },
                         onLanguageClick = { showLanguageMenu(this) },
                         onDismissHint = { showLongPressHint.value = false },
-                        onLockAction = { lockRecording() },
-                        onUnlockAction = { unlockRecording() },
+                        onLockAction = { session.onLock() },
+                        onUnlockAction = { session.onPause() },
                         externalSendBlockedReason = externalSendBlockReason.value,
                         externalSendBlockedByAppPolicy = externalSendBlockedByAppPolicy.value,
                         blockedPackageName = externalSendBlockedPackageName.value,
                         showSecureFieldExplanation = !secureFieldExplanationDontShowAgain.value,
-                        firstUseDisclosure = firstUseDisclosure.value,
+                        firstUseDisclosure = disclosureGate.uiState.value,
                         onBlockedAction = { handleBlockedExternalSendAction() },
                         onDontShowSecureFieldExplanationAgain = { saveSecureFieldDontShowAgain() },
-                        onFirstUseDisclosureContinue = { onFirstUseDisclosureContinue() },
-                        onFirstUseDisclosureCancel = { onFirstUseDisclosureCancel() },
+                        onFirstUseDisclosureContinue = { disclosureGate.onContinue() },
+                        onFirstUseDisclosureCancel = { disclosureGate.cancel() },
                         onFirstUseDisclosureOpenPrivacySafety = { onFirstUseDisclosureOpenPrivacySafety() },
                         micPermissionMissing = micPermissionMissing.value,
                         onAllowMicPermission = { launchMicPermissionRequest() },
+                        pendingCommitText = pendingCommitText.value,
+                        onPendingCommitInsert = { session.onPendingCommitInsert() },
+                        onPendingCommitCopy = { copyPendingCommit() },
+                        onPendingCommitDiscard = { session.onPendingCommitDiscard() },
 
                         commandModeActive = isCommandModeActive.value,
                         commandStage = commandStage.value,
@@ -917,24 +601,15 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    private suspend fun updateAudioFormat() {
-        recordedAudioFilename = "${externalCacheDir?.absolutePath}/${RECORDED_AUDIO_FILENAME_WAV}"
-        audioMediaType = AUDIO_MEDIA_TYPE_WAV
-    }
-
     private fun updateLanguageLabel() {
-        CoroutineScope(Dispatchers.Main).launch {
+        serviceScope.launch {
             val languageCode = dataStore.data.map { it[LANGUAGE_CODE] ?: "auto" }.first()
             languageLabel.value = if (languageCode == "auto") getString(R.string.language_auto_label) else languageCode.uppercase()
         }
     }
 
-    private fun setKeyboardState(state: KeyboardState) {
-        keyboardState.value = state
-    }
-
     private fun refreshUndoState() {
-        val available = dictationController.isUndoAvailable()
+        val available = textCommitter.isUndoAvailable(lastFocusKey)
         undoAvailable.value = available
         if (!available) {
             undoQuickActionVisible.value = false
@@ -953,7 +628,7 @@ class WhisperInputService : InputMethodService() {
     }
 
     private fun refreshEnhancementUndoState() {
-        enhancementUndoAvailable.value = dictationController.isEnhancementUndoAvailable()
+        enhancementUndoAvailable.value = textCommitter.isEnhancementUndoAvailable(lastFocusKey)
     }
 
     private fun clearEnhancementUndoState() {
@@ -971,93 +646,17 @@ class WhisperInputService : InputMethodService() {
         if (trimmed.isBlank()) return
         enhancementNoticeJob?.cancel()
         enhancementNotice.value = EnhancementNoticeUiState(message = trimmed, style = style)
-        enhancementNoticeJob = CoroutineScope(Dispatchers.Main).launch {
+        enhancementNoticeJob = serviceScope.launch {
             delay(2600)
             enhancementNotice.value = null
             enhancementNoticeJob = null
         }
     }
 
-    private fun clearActiveDictationSelection() {
-        activeDictationSttProviderId = null
-        activeDictationSttModelId = null
-    }
-
-    private fun formatRuntimeWarnings(warnings: List<RuntimeWarning>): String {
-        return warnings
-            .map { it.message.trim() }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .joinToString(separator = " ")
-    }
-
     private fun readSmartFixDefaultPromptOrEmpty(): String {
         return runCatching {
             resources.openRawResource(R.raw.smart_fix_prompt).bufferedReader().use { it.readText() }
         }.getOrDefault("")
-    }
-
-    private fun buildEnhancementPromptTemplate(
-        basePrompt: String,
-        presetInstruction: String?,
-    ): String {
-        val base = basePrompt.trim().ifBlank { readSmartFixDefaultPromptOrEmpty().trim() }
-        val preset = presetInstruction?.trim().orEmpty()
-        if (preset.isBlank()) {
-            return base
-        }
-
-        return buildString {
-            if (base.isNotEmpty()) {
-                append(base)
-                append("\n\n")
-            }
-            append("Preset instruction:\n")
-            append(preset)
-        }.trimEnd()
-    }
-
-    private suspend fun resolveEffectiveRuntimeConfig(
-        packageName: String?,
-        languageCode: String?,
-        prefs: Preferences,
-        providers: List<ServiceProvider>,
-    ): EffectiveRuntimeConfig {
-        val languageDefaults = repository.profiles.first()
-        val appMappings = repository.appPromptMappings.first()
-        val basePrompt = repository.globalBasePrompt.first()
-        val promptProfiles = repository.promptProfiles.first()
-
-        return RuntimeSelectionResolver.resolve(
-            packageName = packageName,
-            languageCode = languageCode,
-            providers = providers,
-            languageDefaults = languageDefaults,
-            appMappings = appMappings,
-            globalSttProviderId = prefs[ACTIVE_STT_PROVIDER_ID].orEmpty(),
-            globalSttModelId = prefs[ACTIVE_STT_MODEL_ID].orEmpty(),
-            globalTextProviderId = prefs[ACTIVE_TEXT_PROVIDER_ID].orEmpty(),
-            globalTextModelId = prefs[ACTIVE_TEXT_MODEL_ID].orEmpty(),
-            basePrompt = basePrompt,
-            profiles = promptProfiles,
-        )
-    }
-
-    private fun isBlankOrPunctuationOnly(text: String): Boolean {
-        if (text.isBlank()) return true
-        return text.all { ch ->
-            ch.isWhitespace() || when (Character.getType(ch.code)) {
-                Character.CONNECTOR_PUNCTUATION.toInt(),
-                Character.DASH_PUNCTUATION.toInt(),
-                Character.START_PUNCTUATION.toInt(),
-                Character.END_PUNCTUATION.toInt(),
-                Character.INITIAL_QUOTE_PUNCTUATION.toInt(),
-                Character.FINAL_QUOTE_PUNCTUATION.toInt(),
-                Character.OTHER_PUNCTUATION.toInt(),
-                -> true
-                else -> false
-            }
-        }
     }
 
     private fun currentExternalSendBlock(editorInfo: EditorInfo? = currentInputEditorInfo): SecureFieldDetector.Result? {
@@ -1075,38 +674,13 @@ class WhisperInputService : InputMethodService() {
 
     private fun onExternalSendBlockMayHaveChanged(editorInfo: EditorInfo?) {
         refreshExternalSendBlock(editorInfo)
-        if (isExternalSendBlocked() && isExternalSendingActive()) {
-            dictationController.onWindowHidden(toastMessage = blockedNotice())
+        if (isExternalSendBlocked() && session.isBusy) {
+            session.onExternalSendBlocked()
         }
     }
 
     private fun isExternalSendBlocked(): Boolean {
         return externalSendBlockReason.value != null || externalSendBlockedByAppPolicy.value
-    }
-
-    private fun isExternalSendingActive(): Boolean {
-        return when (keyboardState.value) {
-            KeyboardState.Recording,
-            KeyboardState.RecordingLocked,
-            KeyboardState.Paused,
-            KeyboardState.PausedLocked,
-            KeyboardState.Transcribing,
-            KeyboardState.SmartFixing
-            -> true
-            KeyboardState.Ready -> false
-        }
-    }
-
-    private fun stopExternalSendingForBlockedPolicy() {
-        cancelCapture()
-        stopTimer()
-        recordingTimeMs.value = 0L
-        showLongPressHint.value = false
-        whisperTranscriber.stop()
-        smartFixer.cancel()
-        closeRealtimeSession()
-        setKeyboardState(KeyboardState.Ready)
-        Toast.makeText(this, blockedNotice(), Toast.LENGTH_SHORT).show()
     }
 
     private fun blockedNotice(): String {
@@ -1117,25 +691,11 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    private fun stopRecordingForSend() {
-        stopTimer()
-        showLongPressHint.value = false
-        val client = realtimeSttClient
-        pendingRecorderStop = serviceScope.async {
-            val result = stopCapture()
-            client?.commitAudio()
-            result
-        }
-    }
-
     private fun observeAudioCore() {
         serviceScope.launch {
             audioRecorder.level.collect { level ->
                 micLevel.value = level
             }
-        }
-        serviceScope.launch {
-            audioFocus.focusLoss.collect { onAudioFocusLost() }
         }
         serviceScope.launch {
             audioRecorder.events.collect { event ->
@@ -1144,12 +704,11 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    /** Focus order on start: acquire focus → start cue → capture. Releases focus on failure. */
-    private suspend fun startCapture(options: AudioRecorder.StartOptions = AudioRecorder.StartOptions()): Result<Unit> {
-        pendingRecorderStop?.join()
+    /** Command-mode capture. Focus order on start: acquire focus → start cue → capture. Releases focus on failure. */
+    private suspend fun startCapture(): Result<Unit> {
         audioFocus.acquire()
         performFeedback(cue = SoundCues.Cue.START)
-        val result = audioRecorder.start(File(recordedAudioFilename), options)
+        val result = audioRecorder.start(recordingFile())
         result.onFailure { error ->
             audioFocus.release()
             val kind = (error as? AudioRecorder.RecorderException)?.kind
@@ -1171,16 +730,6 @@ class WhisperInputService : InputMethodService() {
         audioFocus.release()
     }
 
-    private fun Result<*>.isNotRecordingFailure(): Boolean {
-        val kind = (exceptionOrNull() as? AudioRecorder.RecorderException)?.kind
-        return kind == AudioRecorder.ErrorKind.NOT_RECORDING
-    }
-
-    private fun Result<*>.isCancelledFailure(): Boolean {
-        val kind = (exceptionOrNull() as? AudioRecorder.RecorderException)?.kind
-        return kind == AudioRecorder.ErrorKind.CANCELLED
-    }
-
     private fun recorderErrorMessage(kind: AudioRecorder.ErrorKind?): String {
         return when (kind) {
             AudioRecorder.ErrorKind.PERMISSION_DENIED -> getString(R.string.recording_error_permission)
@@ -1189,35 +738,11 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    private fun onAudioFocusLost() {
-        if (!keyboardState.value.isRecording) return
-        Toast.makeText(this, getString(R.string.recording_interrupted), Toast.LENGTH_SHORT).show()
-        dictationController.onHoldRelease()
-    }
-
+    /** Dictation capture errors are handled by [DictationSession]; this covers command listening. */
     private fun onRecorderCaptureError(kind: AudioRecorder.ErrorKind) {
         if (kind != AudioRecorder.ErrorKind.CAPTURE_FAILED && kind != AudioRecorder.ErrorKind.WRITE_FAILED) return
         if (isCommandModeActive.value && commandStage.value == CommandStage.LISTENING) {
             cancelCommandMode(showError = true, message = recorderErrorMessage(kind))
-            return
-        }
-        val state = keyboardState.value
-        if (!state.isRecording && !state.isPaused) return
-        Toast.makeText(this, recorderErrorMessage(kind), Toast.LENGTH_SHORT).show()
-        recordTerminalDictationAnalyticsForCancellation()
-        dictationController.onCancelConfirmed()
-        stopTimer()
-        recordingTimeMs.value = 0L
-    }
-
-    private fun clearComposingText() {
-        val ic = currentInputConnection ?: return
-        ic.beginBatchEdit()
-        try {
-            ic.setComposingText("", 1)
-            ic.finishComposingText()
-        } finally {
-            ic.endBatchEdit()
         }
     }
 
@@ -1226,12 +751,19 @@ class WhisperInputService : InputMethodService() {
         clipboard.setPrimaryClip(ClipData.newPlainText("Whisper++", text))
     }
 
+    private fun copyPendingCommit() {
+        val text = session.pendingCommit.value ?: return
+        copyToClipboard(text)
+        session.onPendingCommitDiscard()
+        showToast(getString(R.string.dictation_pending_copied))
+    }
+
     private fun handleBlockedExternalSendAction() {
         performFeedback()
     }
 
     private fun saveSecureFieldDontShowAgain() {
-        CoroutineScope(Dispatchers.Main).launch {
+        serviceScope.launch {
             dataStore.edit { prefs ->
                 prefs[SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN] = true
             }
@@ -1244,253 +776,63 @@ class WhisperInputService : InputMethodService() {
         return isExternalSendBlocked()
     }
 
-    private fun disclosurePreferenceKey(mode: FirstUseDisclosureMode): PreferenceKey<Boolean> {
-        return when (mode) {
-            FirstUseDisclosureMode.DICTATION_AUDIO -> DISCLOSURE_SHOWN_DICTATION_AUDIO
-            FirstUseDisclosureMode.ENHANCEMENT_TEXT -> DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
-            FirstUseDisclosureMode.COMMAND_TEXT -> DISCLOSURE_SHOWN_COMMAND_TEXT
-        }
-    }
-
-    private fun mapDisclosureToUiState(
-        disclosure: PrivacyDisclosureFormatter.ModeDisclosure,
-    ): FirstUseDisclosureUiState {
-        return FirstUseDisclosureUiState(
-            title = disclosure.title,
-            dataSent = disclosure.dataSent,
-            endpointLines = disclosure.endpoints.map { endpoint ->
-                endpoint.label?.let { "$it: ${endpoint.baseUrl}${endpoint.path}" }
-                    ?: "Endpoint: ${endpoint.baseUrl}${endpoint.path}"
-            },
-            contextLine = disclosure.contextLine,
-        )
-    }
-
-    private suspend fun awaitFirstUseDisclosure(
-        mode: FirstUseDisclosureMode,
-        disclosure: PrivacyDisclosureFormatter.ModeDisclosure,
-    ): FirstUseDisclosureDecision {
-        val alreadyShown = dataStore.data.map { prefs ->
-            prefs[disclosurePreferenceKey(mode)] ?: false
-        }.first()
-        if (alreadyShown) {
-            return FirstUseDisclosureDecision.CONTINUE
-        }
-
-        return suspendCancellableCoroutine { continuation ->
-            pendingFirstUseDisclosureContinuation?.let { pending ->
-                if (pending.isActive) {
-                    pending.resume(FirstUseDisclosureDecision.CANCEL)
-                }
-            }
-            pendingFirstUseDisclosureMode = mode
-            pendingFirstUseDisclosureContinuation = continuation
-            firstUseDisclosure.value = mapDisclosureToUiState(disclosure)
-
-            continuation.invokeOnCancellation {
-                if (pendingFirstUseDisclosureContinuation === continuation) {
-                    pendingFirstUseDisclosureContinuation = null
-                    pendingFirstUseDisclosureMode = null
-                    firstUseDisclosure.value = null
-                }
-            }
-        }
-    }
-
-    private fun resolveFirstUseDisclosure(decision: FirstUseDisclosureDecision) {
-        val continuation = pendingFirstUseDisclosureContinuation
-        pendingFirstUseDisclosureContinuation = null
-        pendingFirstUseDisclosureMode = null
-        firstUseDisclosure.value = null
-        if (continuation != null && continuation.isActive) {
-            continuation.resume(decision)
-        }
-    }
-
-    private fun onFirstUseDisclosureContinue() {
-        val mode = pendingFirstUseDisclosureMode ?: return
-        CoroutineScope(Dispatchers.Main).launch {
-            dataStore.edit { prefs ->
-                prefs[disclosurePreferenceKey(mode)] = true
-            }
-            resolveFirstUseDisclosure(FirstUseDisclosureDecision.CONTINUE)
-        }
-    }
-
-    private fun onFirstUseDisclosureCancel() {
-        resolveFirstUseDisclosure(FirstUseDisclosureDecision.CANCEL)
-    }
-
     private fun onFirstUseDisclosureOpenPrivacySafety() {
         launchMainActivity(PRIVACY_SAFETY_DESTINATION)
-        resolveFirstUseDisclosure(FirstUseDisclosureDecision.OPEN_SETTINGS)
+        disclosureGate.onOpenSettings()
     }
 
-    private data class CommandRuntimeConfig(
-        val prefs: Preferences,
-        val effective: EffectiveRuntimeConfig,
-        val languageCode: String,
-        val useContext: Boolean,
-        val sttProvider: ServiceProvider,
-        val sttModelId: String,
-        val textProvider: ServiceProvider,
-        val textModelId: String,
-    )
-
     private suspend fun resolveCommandRuntimeConfig(): CommandRuntimeConfig? {
-        val prefs = dataStore.data.first()
-        val providers = repository.providers.first()
-        val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
-        val effective = resolveEffectiveRuntimeConfig(
-            packageName = currentInputEditorInfo?.packageName,
-            languageCode = languageCode,
-            prefs = prefs,
-            providers = providers,
-        )
-
-        val sttProviderId = effective.sttProviderId
-        val sttModelId = effective.sttModelId
-        val sttProvider = providers.find { it.id == sttProviderId }
-        if (sttProvider == null || sttModelId.isBlank() || sttProvider.models.none { it.id == sttModelId }) {
-            cancelCommandMode(showError = true, message = getString(R.string.command_error_setup_stt))
-            return null
+        val message = when (val resolution = CommandRuntimeConfig.resolve(configLoader.load(currentInputEditorInfo?.packageName))) {
+            is CommandRuntimeConfig.Resolution.Ready -> return resolution.config
+            CommandRuntimeConfig.Resolution.MissingStt -> R.string.command_error_setup_stt
+            CommandRuntimeConfig.Resolution.MissingText -> R.string.command_error_setup_text
         }
-
-        val overrideProviderId = prefs[COMMAND_TEXT_PROVIDER_ID]?.trim().orEmpty()
-        val overrideModelId = prefs[COMMAND_TEXT_MODEL_ID]?.trim().orEmpty()
-        val overridePresent = overrideProviderId.isNotBlank() || overrideModelId.isNotBlank()
-        val textProviderId = if (overridePresent) overrideProviderId else effective.textProviderId
-        val textModelId = if (overridePresent) overrideModelId else effective.textModelId
-        val textProvider = providers.find { it.id == textProviderId }
-        if (textProvider == null || textModelId.isBlank() || textProvider.models.none { it.id == textModelId }) {
-            cancelCommandMode(showError = true, message = getString(R.string.command_error_setup_text))
-            return null
-        }
-
-        return CommandRuntimeConfig(
-            prefs = prefs,
-            effective = effective,
-            languageCode = languageCode,
-            useContext = prefs[USE_CONTEXT] ?: false,
-            sttProvider = sttProvider,
-            sttModelId = sttModelId,
-            textProvider = textProvider,
-            textModelId = textModelId,
-        )
+        cancelCommandMode(showError = true, message = getString(message))
+        return null
     }
 
     private fun showSetupRequiredToast() {
         Toast.makeText(this, getString(R.string.toast_setup_required_stt), Toast.LENGTH_SHORT).show()
     }
 
-    private fun onMicAction() {
+    // region Dictation intents (thin forwarders to DictationSession)
+
+    private fun onPressStart(locked: Boolean = false) {
+        if (isCommandModeActive.value) return
         if (shouldBlockExternalSend()) {
             handleBlockedExternalSendAction()
             return
         }
-
         clearUndoQuickAction()
         clearEnhancementUndoState()
-
-        when (keyboardState.value) {
-            KeyboardState.Ready -> {
-                if (recordingStartJob?.isActive == true) return
-                CoroutineScope(Dispatchers.Main).launch {
-                    // Providers must be read post-migration; the app starts migrations in WhisperApp.onCreate.
-                    if (!appContainer.awaitMigrations(MIGRATIONS_WAIT_MS)) {
-                        showSetupRequiredToast()
-                        return@launch
-                    }
-                    // Fail closed: never start before the per-app send policy is known.
-                    sendPolicyRules.first { it != null }
-                    if (shouldBlockExternalSend()) {
-                        handleBlockedExternalSendAction()
-                        return@launch
-                    }
-                    val prefs = dataStore.data.first()
-                    val providers = repository.providers.first()
-
-                    val languageCode = prefs[LANGUAGE_CODE] ?: "auto"
-                    val effective = resolveEffectiveRuntimeConfig(
-                        packageName = currentInputEditorInfo?.packageName,
-                        languageCode = languageCode,
-                        prefs = prefs,
-                        providers = providers,
-                    )
-                    val sttWarnings = effective.warnings.filter { it.channel == RuntimeChannel.STT }
-                    if (sttWarnings.isNotEmpty()) {
-                        showEnhancementNotice(formatRuntimeWarnings(sttWarnings), EnhancementNoticeStyle.INFO)
-                    }
-
-                    val providerId = effective.sttProviderId
-                    val modelId = effective.sttModelId
-                    val provider = providers.find { it.id == providerId }
-                    if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) {
-                        showSetupRequiredToast()
-                        return@launch
-                    }
-                    val useContext = prefs[USE_CONTEXT] ?: false
-                    val disclosure = PrivacyDisclosureFormatter.disclosureForDictation(
-                        provider = provider,
-                        selectedModelId = modelId,
-                        useContext = useContext,
-                    )
-                    val disclosureDecision = awaitFirstUseDisclosure(
-                        mode = FirstUseDisclosureMode.DICTATION_AUDIO,
-                        disclosure = disclosure,
-                    )
-                    if (disclosureDecision != FirstUseDisclosureDecision.CONTINUE) {
-                        return@launch
-                    }
-                    if (shouldBlockExternalSend()) {
-                        return@launch
-                    }
-
-                    closeRealtimeSession()
-
-                    activeDictationSttProviderId = providerId
-                    activeDictationSttModelId = modelId
-
-                    val model = provider.models.find { it.id == modelId }
-                    val wantsStreaming = model?.streamingPartialsSupported == true
-
-                    val providerWithApiKey = provider.copy(
-                        apiKey = secretsStore.getProviderApiKey(provider.id).orEmpty()
-                    )
-                    val supportsStreaming = wantsStreaming && supportsOpenAiRealtime(providerWithApiKey)
-
-                    if (wantsStreaming && !supportsStreaming) {
-                        Toast.makeText(
-                            this@WhisperInputService,
-                            "Streaming partials not supported for this provider",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-
-                    pendingRealtimeProvider = if (supportsStreaming) providerWithApiKey else null
-                    pendingRealtimeModelId = if (supportsStreaming) modelId else null
-
-                    realtimeToken = dictationController.onHoldStart(streamingPartialsEnabled = supportsStreaming)
-                }
-            }
-            KeyboardState.Recording -> {
-                performFeedback(cue = SoundCues.Cue.PAUSE)
-                dictationController.onHoldRelease()
-            }
-            KeyboardState.RecordingLocked -> {
-                performFeedback(cue = SoundCues.Cue.PAUSE)
-                dictationController.onHoldRelease()
-            }
-            KeyboardState.Paused -> {
-                performFeedback(cue = SoundCues.Cue.START)
-                dictationController.onResume()
-            }
-            KeyboardState.PausedLocked -> {
-                performFeedback(cue = SoundCues.Cue.START)
-                dictationController.onResume()
-            }
-            else -> Unit
+        if (dictationDisclosureShown.value == true) {
+            session.onPressStart(locked)
+            return
         }
+        if (dictationDisclosureJob?.isActive == true) return
+        dictationDisclosureJob = serviceScope.launch {
+            // The finger leaves the button to answer the disclosure, so a confirmed start is hands-free.
+            if (confirmDictationDisclosure()) session.onPressStart(locked = true)
+        }
+    }
+
+    private suspend fun confirmDictationDisclosure(): Boolean {
+        if (!appContainer.awaitMigrations(MIGRATIONS_WAIT_MS)) {
+            showSetupRequiredToast()
+            return false
+        }
+        val selection = startPlanner.resolveStt(currentInputEditorInfo?.packageName)
+        if (selection == null) {
+            showSetupRequiredToast()
+            return false
+        }
+        val disclosure = PrivacyDisclosureFormatter.disclosureForDictation(
+            provider = selection.provider,
+            selectedModelId = selection.modelId,
+            useContext = selection.prefs[USE_CONTEXT] ?: false,
+        )
+        return disclosureGate.await(FirstUseDisclosureGate.Mode.DICTATION_AUDIO, disclosure) ==
+            FirstUseDisclosureGate.Decision.CONTINUE
     }
 
     private fun onSendAction() {
@@ -1498,209 +840,31 @@ class WhisperInputService : InputMethodService() {
             handleBlockedExternalSendAction()
             return
         }
-
         clearUndoQuickAction()
-
-        val token = dictationController.onSendRequested() ?: run {
-            val cachedTranscript = realtimeFinalTranscript?.takeIf { it.isNotBlank() }
-                ?: realtimeBestEffortTranscript?.takeIf { it.isNotBlank() }
-            if (cachedTranscript != null) {
-                completeDictationAnalyticsSession(rawText = cachedTranscript)
-                closeRealtimeSession()
-                clearActiveDictationSelection()
-            }
-            showUndoQuickActionIfAvailable()
-            performFeedback()
-            return
-        }
-        startTranscription(token, "")
-    }
-
-    private fun lockRecording() {
-        dictationController.onLock()
-    }
-
-    private fun unlockRecording() {
-        performFeedback(cue = SoundCues.Cue.PAUSE)
-        dictationController.onUnlock()
+        session.onStop()
     }
 
     private fun onCancelAction() {
         clearUndoQuickAction()
         performFeedback(cue = SoundCues.Cue.PAUSE)
-        when (keyboardState.value) {
-            KeyboardState.Recording,
-            KeyboardState.RecordingLocked,
-            KeyboardState.Paused,
-            KeyboardState.PausedLocked,
-            KeyboardState.Transcribing,
-            KeyboardState.SmartFixing -> confirmCancelAction {
-                recordTerminalDictationAnalyticsForCancellation()
-                dictationController.onCancelConfirmed()
-            }
-            else -> Unit
-        }
-    }
-
-    private fun startRecording(token: DictationController.SendToken) {
-        realtimeToken = token
-
-        if (shouldBlockExternalSend()) {
-            setKeyboardState(KeyboardState.Ready)
-            return
-        }
-
-        if (!micPermissionGate.check(MicPermissionGate.ACTION_DICTATION) { onMicAction() }) {
-            setKeyboardState(KeyboardState.Ready)
-            return
-        }
-        showLongPressHint.value = false
-        recordingTimeMs.value = 0L
-        val options = prepareRecorderOptions()
-        recordingStartJob = serviceScope.launch {
-            val result = startCapture(options)
-            if (result.isFailure) {
-                if (!result.isCancelledFailure()) {
-                    closeRealtimeSession()
-                    setKeyboardState(KeyboardState.Ready)
-                }
-                return@launch
-            }
-            setKeyboardState(KeyboardState.Recording)
-            dictationAnalyticsSession = DictationAnalyticsSession(token.sessionId)
-            startTimer()
-        }
-    }
-
-    private fun prepareRecorderOptions(): AudioRecorder.StartOptions {
-        val token = realtimeToken
-        if (token == null || !token.streamingPartialsEnabled) {
-            closeRealtimeSession()
-            return AudioRecorder.StartOptions()
-        }
-
-        val provider = pendingRealtimeProvider
-        val modelId = pendingRealtimeModelId
-        if (provider == null || modelId.isNullOrBlank() || provider.apiKey.isBlank()) {
-            closeRealtimeSession()
-            return AudioRecorder.StartOptions()
-        }
-
-        val request = OpenAiRealtimeSttClient.buildRequest(
-            providerEndpoint = provider.endpoint,
-            modelId = modelId,
-            apiKey = provider.apiKey,
-        )
-        if (request == null) {
-            closeRealtimeSession()
-            return AudioRecorder.StartOptions()
-        }
-
-        closeRealtimeClient()
-        realtimeFinalTranscript = null
-
-        val client = OpenAiRealtimeSttClient(
-            okHttpClient = appContainer.okHttpClient,
-            request = request,
-            listener = object : OpenAiRealtimeSttClient.Listener {
-                override fun onConnected() = Unit
-
-                override fun onPartialTranscript(text: String) {
-                    realtimeBestEffortTranscript = text
-                    val currentToken = realtimeToken ?: return
-                    CoroutineScope(Dispatchers.Main).launch {
-                        dictationController.onPartialTranscript(currentToken, text)
-                    }
-                }
-
-                override fun onFinalTranscript(text: String) {
-                    realtimeBestEffortTranscript = text
-                    realtimeFinalTranscript = text
-                }
-
-                override fun onError(message: String) {
-                    Log.e(TAG, "Realtime STT error: $message")
-                }
-
-                override fun onClosed() {
-                    realtimeSttClient = null
-                }
-            },
-        )
-
-        realtimeSttClient = client
-        client.connect()
-
-        return AudioRecorder.StartOptions(
-            onPcmChunk = { chunk ->
-                realtimeSttClient?.sendPcm16le(chunk.data)
-            }
-        )
-    }
-
-    private fun pauseRecording(targetState: KeyboardState) {
-        stopTimer()
-        if (recordingTimeMs.value < 500L) {
-            showLongPressHint.value = true
-            cancelCapture()
-            recordingTimeMs.value = 0L
-            setKeyboardState(KeyboardState.Ready)
-        } else {
-            serviceScope.launch { audioRecorder.pause() }
-            setKeyboardState(targetState)
-        }
-    }
-
-    private fun resumeRecording(targetState: KeyboardState) {
-        audioFocus.acquire()
-        serviceScope.launch { audioRecorder.resume() }
-        startTimer()
-        setKeyboardState(targetState)
-    }
-
-    private fun cancelRecording() {
-        cancelCapture()
-        stopTimer()
-        recordingTimeMs.value = 0L
-        showLongPressHint.value = false
-        setKeyboardState(KeyboardState.Ready)
+        if (session.isBusy) confirmCancelAction { session.onCancel() }
     }
 
     private fun discardRecording() {
         soundCues.play(SoundCues.Cue.PAUSE)
         clearUndoQuickAction()
-        recordTerminalDictationAnalyticsForCancellation()
-        dictationController.onCancelConfirmed()
+        session.onCancel()
     }
 
     private fun onUndoAction() {
         performFeedback(isDelete = true)
-        dictationController.undoLastInsertion()
+        if (!textCommitter.undoLastInsertion(lastFocusKey)) {
+            showToast(getString(R.string.dictation_undo_unavailable))
+        }
         refreshUndoState()
     }
 
-    private fun startTimer() {
-        timerJob?.cancel()
-        val startTime = System.currentTimeMillis() - recordingTimeMs.value
-        timerJob = CoroutineScope(Dispatchers.Main).launch {
-            while (true) {
-                recordingTimeMs.value = System.currentTimeMillis() - startTime
-                delay(33)
-            }
-        }
-    }
-
-    private fun stopTimer() {
-        timerJob?.cancel()
-        timerJob = null
-    }
-
-    private fun cancelTranscriptionWork() {
-        whisperTranscriber.stop()
-        smartFixer.cancel()
-        closeRealtimeSession()
-        clearActiveDictationSelection()
-    }
+    // endregion
 
     private fun currentFocusKey(): FocusKey? {
         return FocusKey.from(currentInputEditorInfo, focusIdentity.currentId)
@@ -1720,7 +884,7 @@ class WhisperInputService : InputMethodService() {
         commandUndoRemainingMs.value = (entry.expiresAtMs - now).coerceAtLeast(0L)
 
         if (commandUndoJob == null) {
-            commandUndoJob = CoroutineScope(Dispatchers.Main).launch {
+            commandUndoJob = serviceScope.launch {
                 while (true) {
                     delay(250)
                     val nowTick = System.currentTimeMillis()
@@ -1746,9 +910,12 @@ class WhisperInputService : InputMethodService() {
     private fun resetCommandRunState() {
         commandJob?.cancel()
         commandJob = null
-        cancelCapture()
-        whisperTranscriber.stop()
-        smartFixer.cancel()
+        // The recorder and clients are shared with dictation; never tear down a dictation run (F-08).
+        if (!session.isBusy) {
+            cancelCapture()
+            whisperTranscriber.stop()
+            smartFixer.cancel()
+        }
 
         commandRunFocusKey = null
         commandSelectionSnapshot = null
@@ -1769,7 +936,7 @@ class WhisperInputService : InputMethodService() {
         isCommandModeActive.value = false
         if (showError) {
             setCommandStage(CommandStage.ERROR, message)
-            CoroutineScope(Dispatchers.Main).launch {
+            serviceScope.launch {
                 delay(1600)
                 if (!isCommandModeActive.value) {
                     setCommandStage(CommandStage.WAITING, null)
@@ -1819,7 +986,7 @@ class WhisperInputService : InputMethodService() {
     }
 
     private fun onCommandEnter() {
-        if (keyboardState.value != KeyboardState.Ready) {
+        if (session.isBusy || dictationDisclosureJob?.isActive == true) {
             return
         }
         if (shouldBlockExternalSend()) {
@@ -1835,7 +1002,7 @@ class WhisperInputService : InputMethodService() {
         commandController.startRun(commandRunFocusKey)
         refreshCommandUndoState()
 
-        CoroutineScope(Dispatchers.Main).launch {
+        serviceScope.launch {
             commandSelectedPresetId.value = repository.commandPresetId.first().orEmpty().ifBlank { TRANSFORM_PRESET_ID_TONE_REWRITE }
         }
 
@@ -1870,7 +1037,7 @@ class WhisperInputService : InputMethodService() {
         val normalized = id.trim()
         if (normalized.isBlank()) return
         commandSelectedPresetId.value = normalized
-        CoroutineScope(Dispatchers.Main).launch {
+        serviceScope.launch {
             repository.setCommandPresetId(normalized)
         }
     }
@@ -1906,7 +1073,7 @@ class WhisperInputService : InputMethodService() {
     private fun startCommandListening() {
         if (!isCommandModeActive.value) return
         commandJob?.cancel()
-        commandJob = CoroutineScope(Dispatchers.Main).launch {
+        commandJob = serviceScope.launch {
             if (!micPermissionGate.check(MicPermissionGate.ACTION_COMMAND, retry = null)) {
                 cancelCommandMode(showError = true, message = getString(R.string.command_error_permissions))
                 return@launch
@@ -1924,14 +1091,14 @@ class WhisperInputService : InputMethodService() {
             val startResult = CommandDisclosureGateCoordinator(::shouldBlockExternalSend).startListening(
                 awaitDisclosure = {
                     when (
-                        awaitFirstUseDisclosure(
-                            mode = FirstUseDisclosureMode.COMMAND_TEXT,
+                        disclosureGate.await(
+                            mode = FirstUseDisclosureGate.Mode.COMMAND_TEXT,
                             disclosure = disclosure,
                         )
                     ) {
-                        FirstUseDisclosureDecision.CONTINUE -> CommandDisclosureDecision.CONTINUE
-                        FirstUseDisclosureDecision.CANCEL -> CommandDisclosureDecision.CANCEL
-                        FirstUseDisclosureDecision.OPEN_SETTINGS -> CommandDisclosureDecision.OPEN_SETTINGS
+                        FirstUseDisclosureGate.Decision.CONTINUE -> CommandDisclosureDecision.CONTINUE
+                        FirstUseDisclosureGate.Decision.CANCEL -> CommandDisclosureDecision.CANCEL
+                        FirstUseDisclosureGate.Decision.OPEN_SETTINGS -> CommandDisclosureDecision.OPEN_SETTINGS
                     }
                 },
                 startRecording = {
@@ -1959,44 +1126,29 @@ class WhisperInputService : InputMethodService() {
         if (commandStage.value != CommandStage.LISTENING) return
 
         commandJob?.cancel()
-        commandJob = CoroutineScope(Dispatchers.Main).launch {
+        commandJob = serviceScope.launch {
             val runtimeConfig = resolveCommandRuntimeConfig() ?: return@launch
-            val result = CommandDisclosureGateCoordinator(::shouldBlockExternalSend).finishListening(
-                stopRecording = {
-                    setCommandStage(CommandStage.PROCESSING, null)
-                    stopCapture()
-                },
-                transcribeInstruction = {
-                    val providerWithApiKey = runtimeConfig.sttProvider.copy(
-                        apiKey = secretsStore.getProviderApiKey(runtimeConfig.sttProvider.id).orEmpty(),
-                    )
-                    val staticPrompt = if (providerWithApiKey.prompt.isNotEmpty()) {
-                        providerWithApiKey.prompt
-                    } else {
-                        runtimeConfig.prefs[PROMPT] ?: ""
-                    }
-                    val postprocessing = runtimeConfig.prefs[POSTPROCESSING] ?: getString(R.string.settings_option_no_conversion)
-                    runCatching {
-                        transcribeInstruction(
-                            languageCode = runtimeConfig.languageCode,
-                            provider = providerWithApiKey,
-                            modelId = runtimeConfig.sttModelId,
-                            postprocessing = postprocessing,
-                            timeout = providerWithApiKey.timeout,
-                            staticPrompt = staticPrompt,
-                            temperature = providerWithApiKey.temperature,
+            val result = try {
+                CommandDisclosureGateCoordinator(::shouldBlockExternalSend).finishListening(
+                    stopRecording = {
+                        setCommandStage(CommandStage.PROCESSING, null)
+                        stopCapture()
+                    },
+                    transcribeInstruction = { transcribeCommandInstruction(runtimeConfig) },
+                    restartListening = {},
+                    transform = { instruction ->
+                        commandSpokenInstruction = instruction
+                        runCommandTransformOrError(
+                            spokenInstruction = instruction,
+                            runtimeConfig = runtimeConfig,
                         )
-                    }.getOrNull().orEmpty()
-                },
-                restartListening = {},
-                transform = { instruction ->
-                    commandSpokenInstruction = instruction
-                    runCommandTransformOrError(
-                        spokenInstruction = instruction,
-                        runtimeConfig = runtimeConfig,
-                    )
-                },
-            )
+                    },
+                )
+            } catch (e: CommandTranscriptionException) {
+                // F-07: a failed transcription is an error, not silence.
+                cancelCommandMode(showError = true, message = getString(R.string.command_error_transcription_failed, e.message.orEmpty()))
+                return@launch
+            }
 
             when (result) {
                 CommandPostRecordingResult.TRANSFORMED -> Unit
@@ -2013,52 +1165,31 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    private suspend fun transcribeInstruction(
-        languageCode: String,
-        provider: ServiceProvider,
-        modelId: String,
-        postprocessing: String,
-        timeout: Int,
-        staticPrompt: String,
-        temperature: Float,
-    ): String? {
-        return suspendCancellableCoroutine { continuation ->
-            var resumed = false
+    private class CommandTranscriptionException(message: String) : Exception(message)
 
-            whisperTranscriber.startAsync(
-                context = this@WhisperInputService,
-                filename = recordedAudioFilename,
-                mediaType = audioMediaType,
-                attachToEnd = "",
-                contextPrompt = null,
-                languageCode = languageCode,
-                provider = provider,
-                modelId = modelId,
-                postprocessing = postprocessing,
-                addTrailingSpace = false,
-                timeout = timeout,
-                staticPrompt = staticPrompt,
-                temperature = temperature,
-                callback = { result ->
-                    if (resumed) return@startAsync
-                    resumed = true
-                    if (continuation.isActive) {
-                        continuation.resume(result)
-                    }
-                },
-                exceptionCallback = { message ->
-                    if (resumed) return@startAsync
-                    resumed = true
-                    if (continuation.isActive) {
-                        continuation.resumeWith(Result.failure(IllegalStateException(message)))
-                    }
-                }
-            )
-
-            continuation.invokeOnCancellation {
-                whisperTranscriber.stop()
-            }
+    private suspend fun transcribeCommandInstruction(runtimeConfig: CommandRuntimeConfig): String {
+        val provider = runtimeConfig.sttProvider.copy(
+            apiKey = secretsStore.getProviderApiKey(runtimeConfig.sttProvider.id).orEmpty(),
+        )
+        val request = TranscriptionRequest(
+            provider = provider,
+            modelId = runtimeConfig.sttModelId,
+            languageCode = runtimeConfig.languageCode,
+            mediaType = AUDIO_MEDIA_TYPE_WAV,
+            postprocessing = runtimeConfig.prefs[POSTPROCESSING] ?: getString(R.string.settings_option_no_conversion),
+            addTrailingSpace = false,
+            timeoutMs = provider.timeout,
+            staticPrompt = provider.prompt.ifEmpty { runtimeConfig.prefs[PROMPT] ?: "" },
+            temperature = provider.temperature,
+            useContext = false,
+        )
+        val file = recordingFile()
+        val result = try {
+            whisperTranscriber.transcribe(this, file, request)
+        } finally {
+            file.delete()
         }
+        return result.getOrElse { throw CommandTranscriptionException(it.message ?: it::class.java.simpleName) }
     }
 
     private suspend fun runCommandTransformOrError(
@@ -2157,17 +1288,7 @@ class WhisperInputService : InputMethodService() {
 
         val start = snapshot.start
         val end = snapshot.end
-        val replaced = runCatching {
-            ic.beginBatchEdit()
-            try {
-                if (!ic.setSelection(start, end)) return@runCatching false
-                if (!ic.commitText(trimmed, 1)) return@runCatching false
-                ic.setSelection(start, start + trimmed.length)
-                true
-            } finally {
-                ic.endBatchEdit()
-            }
-        }.getOrDefault(false)
+        val replaced = ic.replaceAndSelect(start, end, trimmed)
 
         if (!replaced) {
             setCommandStage(CommandStage.ERROR, getString(R.string.command_error_apply_failed))
@@ -2185,7 +1306,7 @@ class WhisperInputService : InputMethodService() {
         refreshCommandUndoState()
         setCommandStage(CommandStage.DONE, null)
 
-        CoroutineScope(Dispatchers.Main).launch {
+        serviceScope.launch {
             delay(1200)
             if (commandStage.value == CommandStage.DONE) {
                 isCommandModeActive.value = false
@@ -2199,7 +1320,7 @@ class WhisperInputService : InputMethodService() {
         if (commandStage.value != CommandStage.ERROR) return
         val instruction = commandSpokenInstruction ?: return
         commandJob?.cancel()
-        commandJob = CoroutineScope(Dispatchers.Main).launch {
+        commandJob = serviceScope.launch {
             val runtimeConfig = resolveCommandRuntimeConfig() ?: return@launch
             runCommandTransformOrError(
                 spokenInstruction = instruction,
@@ -2227,17 +1348,7 @@ class WhisperInputService : InputMethodService() {
         val appliedEnd = start + entry.appliedText.length
         val original = entry.originalText
 
-        val restored = runCatching {
-            ic.beginBatchEdit()
-            try {
-                if (!ic.setSelection(start, appliedEnd)) return@runCatching false
-                if (!ic.commitText(original, 1)) return@runCatching false
-                ic.setSelection(start, start + original.length)
-                true
-            } finally {
-                ic.endBatchEdit()
-            }
-        }.getOrDefault(false)
+        val restored = ic.replaceAndSelect(start, appliedEnd, original)
 
         refreshCommandUndoState()
         if (!restored) {
@@ -2245,117 +1356,24 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    private fun supportsOpenAiRealtime(provider: ServiceProvider): Boolean {
-        if (provider.type != ProviderType.OPENAI) return false
-        if (provider.endpoint.isBlank()) return false
-        if (provider.apiKey.isBlank()) return false
-        return OpenAiRealtimeSttClient.buildRequest(provider.endpoint, "test", provider.apiKey) != null
-    }
-
-    private fun closeRealtimeClient() {
-        realtimeSttClient?.close()
-        realtimeSttClient = null
-    }
-
-    private fun closeRealtimeSession() {
-        closeRealtimeClient()
-        realtimeToken = null
-        realtimeSttClient = null
-        realtimeFinalTranscript = null
-        realtimeBestEffortTranscript = null
-        pendingRealtimeProvider = null
-        pendingRealtimeModelId = null
-    }
-
-    private fun activeDictationAnalyticsSession(
-        token: DictationController.SendToken? = null,
-    ): DictationAnalyticsSession? {
-        val session = dictationAnalyticsSession ?: return null
-        if (token != null && session.sessionId != token.sessionId) {
-            return null
-        }
-        return session
-    }
-
-    private fun completeDictationAnalyticsSession(
-        token: DictationController.SendToken? = null,
-        rawText: String? = null,
-        finalInsertedText: String? = null,
-    ) {
-        val session = activeDictationAnalyticsSession(token) ?: return
-        rawText?.let(session::recordRawTranscript)
-        finalInsertedText?.let(session::recordFinalInsertedText)
-        val outcome = session.finalize(durationMs = recordingTimeMs.value) as? DictationAnalyticsSession.Outcome.Completed ?: return
-        dictationAnalyticsSession = null
-        persistDictationAnalyticsOutcome(outcome)
-    }
-
-    private fun recordTerminalDictationAnalyticsForCancellation() {
-        val session = dictationAnalyticsSession ?: return
-        val outcome = when (keyboardState.value) {
-            KeyboardState.SmartFixing -> session.finalize(durationMs = recordingTimeMs.value)
-            KeyboardState.Recording,
-            KeyboardState.RecordingLocked,
-            KeyboardState.Paused,
-            KeyboardState.PausedLocked,
-            KeyboardState.Transcribing
-            -> session.cancel(durationMs = recordingTimeMs.value)
-            KeyboardState.Ready -> null
-        } ?: return
-        dictationAnalyticsSession = null
-        persistDictationAnalyticsOutcome(outcome)
-    }
-
     private fun persistDictationAnalyticsOutcome(outcome: DictationAnalyticsSession.Outcome) {
-        CoroutineScope(Dispatchers.IO).launch {
-            when (outcome) {
-                is DictationAnalyticsSession.Outcome.Completed -> {
-                    analyticsRepository.recordCompletedSession(
-                        durationMs = outcome.durationMs,
-                        rawText = outcome.rawText,
-                        finalInsertedText = outcome.finalInsertedText,
-                        recordedOn = LocalDate.now(),
-                    )
-                }
-
-                is DictationAnalyticsSession.Outcome.Cancelled -> {
-                    analyticsRepository.recordCancelledSession(
-                        durationMs = outcome.durationMs,
-                        recordedOn = LocalDate.now(),
-                    )
-                }
-            }
-        }
+        serviceScope.launch(Dispatchers.IO) { analyticsRepository.recordOutcome(outcome, LocalDate.now()) }
     }
 
     private fun confirmCancelAction(onConfirm: () -> Unit) {
-        CoroutineScope(Dispatchers.Main).launch {
-            val shouldConfirm = dataStore.data.map { it[CANCEL_CONFIRMATION] ?: true }.first()
-            if (!shouldConfirm) {
+        serviceScope.launch {
+            if (dataStore.data.first()[CANCEL_CONFIRMATION] == false) {
                 onConfirm()
-                return@launch
+            } else {
+                showCancelConfirmationDialog(this@WhisperInputService, window?.window?.attributes?.token, onConfirm)
             }
-            val themedContext = ContextThemeWrapper(this@WhisperInputService, R.style.Theme_WhisperToInput)
-            val dialog = androidx.appcompat.app.AlertDialog.Builder(themedContext)
-                .setTitle(getString(R.string.cancel_confirmation_title))
-                .setMessage(getString(R.string.cancel_confirmation_message))
-                .setPositiveButton(getString(R.string.cancel_confirmation_confirm)) { _, _ -> onConfirm() }
-                .setNegativeButton(getString(R.string.cancel_confirmation_dismiss), null)
-                .create()
-            dialog.window?.let { window ->
-                val lp = window.attributes
-                lp.token = this@WhisperInputService.window?.window?.attributes?.token
-                lp.type = android.view.WindowManager.LayoutParams.TYPE_INPUT_METHOD
-                window.attributes = lp
-            }
-            dialog.show()
         }
     }
 
     private fun performFeedback(isDelete: Boolean = false, cue: SoundCues.Cue? = null) {
         // Cues play synchronously so the start cue precedes capture.
         if (cue != null) soundCues.play(cue)
-        CoroutineScope(Dispatchers.Main).launch {
+        serviceScope.launch {
             val prefs = dataStore.data.first()
             if (prefs[HAPTIC_FEEDBACK_ENABLED] ?: true) {
                 val effect = if (isDelete) HapticFeedbackConstants.KEYBOARD_RELEASE else HapticFeedbackConstants.KEYBOARD_TAP
@@ -2389,28 +1407,14 @@ class WhisperInputService : InputMethodService() {
     }
 
     private fun showLanguageMenu(anchor: View) {
-        CoroutineScope(Dispatchers.Main).launch {
-            val current = dataStore.data.map { it[LANGUAGE_CODE] ?: "auto" }.first()
-            val systemLocales = LocaleList.getDefault()
-            val languages = mutableListOf("auto" to getString(R.string.language_auto_label), "en" to "English", "ar" to "Arabic")
-            for (i in 0 until systemLocales.size()) {
-                val locale = systemLocales.get(i)
-                if (languages.none { it.first == locale.language }) languages.add(locale.language to locale.displayLanguage.replaceFirstChar { it.uppercase() })
-            }
-            val menu = PopupMenu(ContextThemeWrapper(this@WhisperInputService, R.style.Theme_WhisperToInput), anchor)
-            languages.forEachIndexed { i, (code, name) ->
-                menu.menu.add(1, i, i, name).apply { isCheckable = true; isChecked = code == current }
-            }
-            menu.menu.setGroupCheckable(1, true, true)
-            menu.setOnMenuItemClickListener { item ->
-                val selected = languages[item.itemId].first
-                CoroutineScope(Dispatchers.Main).launch {
+        serviceScope.launch {
+            val current = dataStore.data.first()[LANGUAGE_CODE] ?: "auto"
+            showLanguagePopup(this@WhisperInputService, anchor, current) { selected ->
+                serviceScope.launch {
                     dataStore.edit { it[LANGUAGE_CODE] = selected }
                     updateLanguageLabel()
                 }
-                true
             }
-            menu.show()
         }
     }
 
@@ -2453,8 +1457,8 @@ class WhisperInputService : InputMethodService() {
     override fun onWindowShown() {
         super.onWindowShown()
         logLifecycle("onWindowShown")
+        session.onWindowShown()
         serviceScope.launch {
-            updateAudioFormat()
             updateLanguageLabel()
             secureFieldExplanationDontShowAgain.value = dataStore.data
                 .map { it[SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN] ?: false }
@@ -2466,36 +1470,26 @@ class WhisperInputService : InputMethodService() {
     override fun onWindowHidden() {
         super.onWindowHidden()
         logLifecycle("onWindowHidden")
-        onFirstUseDisclosureCancel()
-
-        if (isExternalSendingActive()) {
-            dictationController.onWindowHidden(toastMessage = "Dictation paused")
-            // Capture is paused (not discarded) so the user can come back and send; let media resume.
-            audioFocus.release()
-        } else {
-            whisperTranscriber.stop()
-            smartFixer.cancel()
-            closeRealtimeSession()
-            cancelCapture()
+        disclosureGate.cancel()
+        dictationDisclosureJob?.cancel()
+        session.onWindowHidden()
+        if (isCommandModeActive.value) {
             resetCommandRunState()
             isCommandModeActive.value = false
-            stopTimer()
-            if (keyboardState.value != KeyboardState.Ready) setKeyboardState(KeyboardState.Ready)
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         logLifecycle("onDestroy")
-        networkLoggingPreferenceJob?.cancel()
-        onFirstUseDisclosureCancel()
+        disclosureGate.cancel()
         viewLifecycle?.destroy()
         viewLifecycle = null
         savedViewState = null
+        session.release()
+        resetCommandRunState()
         whisperTranscriber.stop()
         smartFixer.cancel()
-        closeRealtimeSession()
-        resetCommandRunState()
         commandUndoJob?.cancel()
         commandUndoJob = null
         audioRecorder.release()

@@ -104,6 +104,18 @@ class AnalyticsRepository(
         }
     }
 
+    suspend fun recordOutcome(outcome: DictationAnalyticsSession.Outcome, recordedOn: LocalDate) {
+        when (outcome) {
+            is DictationAnalyticsSession.Outcome.Completed -> recordCompletedSession(
+                durationMs = outcome.durationMs,
+                rawText = outcome.rawText,
+                finalInsertedText = outcome.finalInsertedText,
+                recordedOn = recordedOn,
+            )
+            is DictationAnalyticsSession.Outcome.Cancelled -> recordCancelledSession(outcome.durationMs, recordedOn)
+        }
+    }
+
     suspend fun resetAnalytics() {
         dataStore.edit { preferences ->
             preferences.clear()

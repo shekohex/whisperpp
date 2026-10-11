@@ -152,7 +152,10 @@ class AudioRecorder(
         _events.tryEmit(Event.Started(newSession.sampleRate))
     }
 
-    suspend fun stop(): Result<File> {
+    suspend fun stop(): Result<File> = stopDetailed().map { it.file }
+
+    /** Like [stop], but also reports duration and dropped realtime chunks (F-05). */
+    suspend fun stopDetailed(): Result<Event.Stopped> {
         generation.incrementAndGet()
         val current = session.getAndSet(null)
             ?: return Result.failure(RecorderException(ErrorKind.NOT_RECORDING, "No active recording"))
@@ -175,8 +178,9 @@ class AudioRecorder(
 
         val dropped = current.sink?.droppedChunks ?: 0
         if (dropped > 0) Log.w(TAG, "Realtime PCM stream dropped $dropped chunks")
-        _events.tryEmit(Event.Stopped(current.file, durationMs, dropped))
-        return Result.success(current.file)
+        val stopped = Event.Stopped(current.file, durationMs, dropped)
+        _events.tryEmit(stopped)
+        return Result.success(stopped)
     }
 
     suspend fun pause() {

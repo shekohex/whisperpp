@@ -83,7 +83,9 @@ fun KeyboardScreen(
     undoQuickActionVisible: Boolean = false,
     enhancementNotice: EnhancementNoticeUiState? = null,
     enhancementUndoAvailable: Boolean = false,
-    onMicAction: () -> Unit,
+    onPressStart: () -> Unit,
+    onPressRelease: () -> Unit,
+    onResumeAction: () -> Unit,
     onCancelAction: () -> Unit,
     onDiscardAction: () -> Unit,
     onSendAction: () -> Unit,
@@ -109,6 +111,10 @@ fun KeyboardScreen(
     onFirstUseDisclosureOpenPrivacySafety: () -> Unit = {},
     micPermissionMissing: Boolean = false,
     onAllowMicPermission: () -> Unit = {},
+    pendingCommitText: String? = null,
+    onPendingCommitInsert: () -> Unit = {},
+    onPendingCommitCopy: () -> Unit = {},
+    onPendingCommitDiscard: () -> Unit = {},
 
     commandModeActive: Boolean = false,
     commandStage: CommandStage = CommandStage.WAITING,
@@ -545,6 +551,21 @@ fun KeyboardScreen(
         }
 
         AnimatedVisibility(
+            visible = pendingCommitText != null,
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
+        ) {
+            pendingCommitText?.let { text ->
+                PendingCommitBar(
+                    text = text,
+                    onInsert = onPendingCommitInsert,
+                    onCopy = onPendingCommitCopy,
+                    onDiscard = onPendingCommitDiscard,
+                )
+            }
+        }
+
+        AnimatedVisibility(
             visible = showCommandOverlay,
             enter = fadeIn() + slideInVertically { it / 2 },
             exit = fadeOut() + slideOutVertically { it / 2 },
@@ -742,7 +763,7 @@ fun KeyboardScreen(
                             PausedControlsCenter(
                                 state = state,
                                 recordingTimeMs = recordingTimeMs,
-                                onResume = if (externalSendingBlocked) showBlockedExplanationAction else onMicAction,
+                                onResume = if (externalSendingBlocked) showBlockedExplanationAction else onResumeAction,
                             )
                         } else if (micPermissionMissing && state == KeyboardState.Ready) {
                             MicPermissionBanner(onAllow = onAllowMicPermission)
@@ -827,7 +848,9 @@ fun KeyboardScreen(
                             showLongPressHint = showLongPressHint,
                             onSwipeProgress = { swipeProgress = it },
                             onSwipeUpProgress = { swipeUpProgress = it },
-                            onMicAction = onMicAction,
+                            onPressStart = onPressStart,
+                            onPressRelease = onPressRelease,
+                            onResumeAction = onResumeAction,
                             onDiscardAction = onDiscardAction,
                             onSendAction = onSendAction,
                             onDismissHint = onDismissHint,
@@ -1244,7 +1267,9 @@ fun MainActionButton(
     showLongPressHint: Boolean,
     onSwipeProgress: (Float) -> Unit,
     onSwipeUpProgress: (Float) -> Unit,
-    onMicAction: () -> Unit,
+    onPressStart: () -> Unit,
+    onPressRelease: () -> Unit,
+    onResumeAction: () -> Unit,
     onDiscardAction: () -> Unit,
     onSendAction: () -> Unit,
     onDismissHint: () -> Unit,
@@ -1313,7 +1338,7 @@ fun MainActionButton(
 
                 if (stateAtDown == KeyboardState.Ready) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onMicAction()
+                    onPressStart()
 
                     var currentDragX = 0f
                     var currentDragY = 0f
@@ -1369,7 +1394,7 @@ fun MainActionButton(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onLockAction()
                             } else {
-                                onMicAction()
+                                onPressRelease()
                             }
                             onSwipeProgress(0f)
                             onSwipeUpProgress(0f)
@@ -1431,7 +1456,7 @@ fun MainActionButton(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onLockAction()
                             } else {
-                                onMicAction()
+                                onPressRelease()
                             }
                             onSwipeProgress(0f)
                             onSwipeUpProgress(0f)
@@ -1487,7 +1512,7 @@ fun MainActionButton(
                         onSendAction()
                     } else {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onMicAction()
+                        onResumeAction()
 
                         var currentDragX = 0f
                         var currentDragY = 0f
@@ -1543,7 +1568,7 @@ fun MainActionButton(
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onLockAction()
                                 } else {
-                                    onMicAction()
+                                    onPressRelease()
                                 }
                                 onSwipeProgress(0f)
                                 onSwipeUpProgress(0f)

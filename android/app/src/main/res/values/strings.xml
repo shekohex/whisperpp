@@ -296,4 +296,19 @@
     <string name="recording_interrupted">Recording paused: audio interrupted</string>
     <string name="settings_pause_media_while_recording">Pause media while recording</string>
 
+    <!-- Dictation session (WP-1.2) -->
+    <string name="dictation_paused">Dictation paused</string>
+    <string name="dictation_no_field">No text field focused</string>
+    <string name="dictation_transcription_failed">Transcription failed: %1$s</string>
+    <string name="dictation_copied_no_field">No field focused; copied to clipboard</string>
+    <string name="dictation_copied_blocked">Sending blocked here; transcript copied</string>
+    <string name="dictation_undo_unavailable">Can\'t undo here</string>
+    <string name="dictation_streaming_unsupported">Streaming partials not supported for this provider</string>
+    <string name="dictation_pending_commit_title">Transcript for another field</string>
+    <string name="dictation_pending_commit_insert">Insert here</string>
+    <string name="dictation_pending_commit_copy">Copy</string>
+    <string name="dictation_pending_commit_discard">Discard</string>
+    <string name="dictation_pending_copied">Transcript copied</string>
+    <string name="command_error_transcription_failed">Couldn\'t transcribe the instruction: %1$s</string>
+
 </resources>
