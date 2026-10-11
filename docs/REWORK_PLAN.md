@@ -191,6 +191,8 @@ Current state machine (verified):
 | J-03 | M | `data/SettingsBackupCrypto.kt:73-120` | KDF params (iterations, key length) trusted from the imported file. | Clamp iterations to [100k, 2M], key length to 256. |
 | J-04 | L | `WhisperInputService.kt` | Toasts show provider host on errors — fine — but ensure no transcript text in logs after refactor. | Keep `NetworkLoggingPrivacyTest`; add log-redaction lint rule or test for `Log.*` in dictation package. |
 
+| H-17 | M | `analytics/AnalyticsRepository.kt:21-43, 161-169`, `AnalyticsFormatter.kt:20-26` | "Time saved so far" is a 7-day rolling total presented as lifetime. | Lifetime counters in `AnalyticsStore` (WP-3.9). |
+
 ### K. Updater
 
 | ID | Sev | Where | Problem | Fix |
@@ -417,19 +419,62 @@ com.github.shekohex.whisperpp
 
 ```
 Onboarding (first run)  →  Home
-Home
-├── SetupChecklist (collapses when all green)
-├── Dictation            language, tap-to-record, hold threshold, sounds, haptics, pause media, auto-send (Enter after insert)
-├── Providers & Models   list → edit (key, endpoint, test, models) ; defaults: STT model, enhancement model
-├── Enhancement          on/off, prompt library (Default/Chat/Email/Rewrite/Custom), vocabulary & replacements, context toggles
-├── Per-app rules        app mappings (existing), per-language defaults
-├── History              searchable list of transcripts (raw/enhanced), copy, retry from audio (if kept), delete
-├── Privacy & Safety     (existing) + disclosures
-├── Backup & Restore     (existing)
-└── About                version, update channel + check/download, analytics dashboard, Advanced (verbose logs, timeouts, thinking, diagnostics), licenses
+Home (Dashboard, §4.9)   greeting · hero time-saved card · setup checklist · recent transcripts
+├── Insights             stat tiles, activity calendar, peak hours, model usage/performance (§4.9)
+├── Modes                mode cards with chips + toggles; add/edit mode; per-app assignment (§4.10)
+├── History              search, list (raw/enhanced), copy, select-all/delete/export, retry from audio (if kept)
+├── Dictionary           Word Replacements | Vocabulary; settings sheet with Auto-Learn, export/import (§4.11)
+├── AI Models            providers list → edit (key, endpoint, Test connection, Refresh models, model capabilities)
+├── Audio                microphone source, start/stop sounds (pick + preview), pause media while recording, resume delay, haptics
+└── Settings
+    ├── Dictation        language, tap-to-record vs hold, hold threshold, auto-send, keyboard height/theme
+    ├── Privacy & Safety (existing) + disclosures + Auto-Learn data note
+    ├── Backup & Restore (existing)
+    └── About            version, update channel + check/download, Advanced (verbose logs, timeouts, thinking, diagnostics), licenses
+
+Bottom navigation (phone): Home · Modes · History · Dictionary · More (AI Models, Audio, Settings). Navigation rail on expanded widths.
 ```
 
 ---
+
+### 4.9 Home dashboard (VoiceInk Dashboard, Android-native)
+
+Reference: VoiceInk `Features/Dashboard/*` (screenshots reviewed 2026-10-12). Home becomes a dashboard, not a settings list.
+
+Layout (single `LazyColumn`, M3 cards, `WindowSizeClass`-aware two-column on expanded):
+1. **Greeting** — "👋 Hi" + one-line momentum copy ("You're on a roll this week." / "Welcome back." / "Dictate something to unlock insights.") computed from the last 7 days.
+2. **Hero card** (`DashboardHeroCard`): large "You have saved **41h 30m** with Whisper++", sub-line "Dictated 165.8K words, equivalent to Homer's Odyssey.", button "View insights →". Background: a soft gradient/illustration in `primaryContainer` tones (no photo), dynamic-color aware. Empty state: "Continue using Whisper++ to unlock stats and insights."
+   - Time saved = `max(words / 40 wpm × 60 − recordingDurationSec, 0)`, summed **lifetime** (fixes the 7-day "so far" bug in `AnalyticsRepository`). Store lifetime `words`, `sessions`, `recordingSeconds`, `timeSavedSeconds` in `AnalyticsStore` alongside the rolling buckets.
+   - Milestones (verbatim from `DashboardStatsModels.swift`): The Metamorphosis 21 180 · Animal Farm 29 966 · The Great Gatsby 47 094 · Homer's Iliad 114 715 · Homer's Odyssey 121 365 · Iliad and Odyssey 236 080 · repeat benchmark War and Peace 700 000 (×N). Below the first milestone: "12.3K words to go until The Metamorphosis".
+3. **Setup checklist** card — only while something is missing (§4.6); disappears when all green.
+4. **Recent transcripts** — last 5 from History (§4.11), relative time ("14 minutes ago"), two-line preview, tap → History detail, long-press → copy. Mixed-direction text must render correctly (`textDirection = TextDirection.Content`).
+5. **Insights screen** (the existing Analytics screen, redesigned): period selector (7d / 30d / 90d / all), stat tiles (words, sessions, recording time, time saved), **Activity calendar** heatmap ("Consistency, at a glance", Less→More legend, 12–16 weeks), **Peak dictation hours** histogram (24 bins), **Model usage** (share per provider/model) and **Model performance** (avg latency per model). All charts drawn with `Canvas`, with semantics summaries for TalkBack. Data: extend `AnalyticsStore` with per-hour counts and per-model latency buckets (still no raw text).
+
+### 4.10 Modes (unifies presets, per-app rules, language defaults)
+
+Reference: VoiceInk `Features/Modes/*` and the Modes screenshot. A **Mode** bundles everything a dictation session needs:
+`name, icon, sttProvider/model, language, enhancementEnabled, enhancementProvider/model, promptId, formatting (filler removal, paragraphs), contextSources (selectedText, clipboard), outputMode (insert | replaceSelection | clipboard), autoSend, appPackages[] (Android package names), isDefault`.
+
+- Screen: list of mode cards; each card has title + icon, an enable toggle (except default), sub-line "3 apps", and a chip row: `🎙 model` · `🌐 language` · `✨ enhancement model` · `📄 prompt` · `⌨ apps`. Red "Unavailable" chip when a referenced provider/model/credential is missing (resolved by `RuntimeSelectionResolver`).
+- Resolution at session start: explicit mode selected in the keyboard (mode chip in the keyboard toolbar) → mode mapped to `EditorInfo.packageName` → default mode. This replaces the current trio `AppMappings + LanguageProfiles + Presets` in the UI; the data layer keeps those stores and migrates them into `Mode` rows once (one-way, with a backup export prompt first). Seed modes: Dictation (default), Chat, Email, Rewrite, Assistant (prompts from §5).
+- Keyboard: a small mode chip next to the language label; tap → bottom-sheet picker.
+
+### 4.11 Dictionary: word replacements, vocabulary, Auto-Learn
+
+Reference: VoiceInk `Features/Dictionary/*` (incl. `AutoLearn/*`, 3 453 lines) and the Dictionary screenshots.
+
+**Dictionary screen** — segmented control `Word Replacements | Vocabulary`.
+- Replacements: inline add row "Original text (use commas for multiple) → Replacement text", list with swipe-to-delete, case-insensitive, longest-first, word-boundary aware except CJK/Thai (`core/text/WordReplacements.kt`). Applied in the pipeline **before** enhancement.
+- Vocabulary: chips of terms; sent to providers that accept a prompt/vocabulary (`capabilities.vocabulary`), and injected into the enhancement system prompt as "Vocabulary: …".
+- Settings sheet (gear icon): Auto-Learn toggle, provider + model picker (text model), "Review corrections: Immediately | Daily | Manually", "Corrections to review: N" + "Review now", Export / Import dictionary (JSON via SAF).
+
+**Auto-Learn (Android design)** — learns from what the user fixes by hand after a dictation.
+1. **Capture.** When `DictationSession` commits text into a field, `AutoLearnObserver` records `baseline = (fieldTextSnapshot, committedRange, committedText)` using `InputConnection.getExtractedText` (fallback: `getTextBeforeCursor/AfterCursor` with a 2 000-char window). While the same `FocusKey` stays active, `onUpdateSelection`/`onUpdateExtractedText` keep a cheap "dirty" flag. On `onFinishInput`, focus change, window hidden, or a 90 s deadline, take `final = fieldText` and persist an `AutoLearnRevision(original, corrected)` if the committed region changed. Auto-send (Enter) cancels the capture (text left the field). Never capture in secure fields (`SecureFieldDetector`) or blocked apps (`SendPolicyRepository`).
+2. **Diff.** `CorrectionDiffEngine` (port of the Swift one): tokenise into word/boundary segments, LCS hunks, merge adjacent hunks, expand each hunk by up to 3 unchanged words on each side → `DetectedCorrectionCandidate(originalText, correctedText)`. Limits: max 400 segments per revision, max 20 candidates, skip pure whitespace/punctuation/case-only hunks.
+3. **Queue.** `AutoLearnPendingQueue` (DataStore-proto or Room): candidates persisted with `claimed` flag; batches of ≤ 25; retried when a provider becomes available.
+4. **AI review.** `AutoLearnAiReviewer` sends the batch to the configured text model with the VoiceInk review prompt (copy verbatim from `AutoLearnAIReviewer.swift:431-474`; it encodes the "phonetic evidence" and "no semantic rewrite" gates, personal-name rules, and the exact JSON output contract: `[{candidateID, learningAction, incorrectTextToReplace, correctedVocabularyTerm}]` with actions `addReplacementAndVocabulary | addReplacementOnly | addVocabularyOnly | rejectCorrection`). Validate every decision: `incorrectTextToReplace` must be a contiguous substring of the candidate's original, `correctedVocabularyTerm` must come from a corrected text; conflicting accept+reject for one ID → unresolved; unknown IDs ignored. Strip reasoning blocks before JSON parse.
+5. **Proposals + apply.** Accepted decisions become `AutoLearnReviewProposal`s. "Immediately" → a notification/in-app banner "Learned 2 corrections" with Undo; "Daily"/"Manually" → badge on Dictionary + "Review now" sheet listing `original → corrected` with per-row action chips (Replacement / Vocabulary / Both / Dismiss). Applying writes to `WordReplacements`/`Vocabulary`; an `AutoLearnMutationSummary` supports undo for 30 s.
+6. **Privacy.** Only the diff snippets (edit ± 3 words) leave the device, and only to the user-chosen provider; show this in the Auto-Learn info dialog and in Privacy & Safety. Off by default.
 
 ## 5. What to take from VoiceInk (and what not)
 
@@ -460,6 +505,9 @@ Home
 12. Onboarding sequencing and copy style (explain → act → verify), not the macOS screens.
 13. Streaming as a protocol: `TranscriptionSession` with prepare/append/finalize/cancel and automatic batch fallback (`TranscriptionSession.swift`, `TranscriptionServiceRegistry.swift`); per-provider realtime implementations (OpenAI, Deepgram, ElevenLabs, Mistral).
 14. Model discovery / "Import models" as a provider capability with classification, feeding the model picker and the connection test (`ProviderCloudManagementView.swift`, `CustomModelConnectionTester.swift`).
+15. Dashboard: hero "time saved" card with the 40-wpm formula and literary milestones, recent transcripts, activity calendar, peak hours, model usage/performance (`Features/Dashboard/*`). See §4.9.
+16. Modes as the single user-facing concept bundling STT/enhancement/prompt/apps (`Features/Modes/*`). See §4.10.
+17. Dictionary with Word Replacements + Vocabulary and **Auto-Learn** (`Features/Dictionary/AutoLearn/*`: `CorrectionDiffEngine`, `AutoLearnAIReviewer` prompt, pending queue, review proposals). See §4.11.
 
 **Do not port:** notch/mini-window UI, Accessibility-API paste, foreground app/URL detection beyond `EditorInfo.packageName`, system-wide mute, Ollama/local models, licensing.
 
@@ -565,6 +613,10 @@ Order within a phase is flexible unless a dependency is noted. Commit per WP wit
 **WP-3.7 Strings, RTL, accessibility, adaptive** — H-06, H-08, H-09, H-14
 - All strings to resources; `values-ar`; `AutoMirrored` icons; `WindowSizeClass` width constraint; TalkBack pass; keyboard overlays replace `AlertDialog`.
 **WP-3.8 History screen** — §5 item 6 (new feature; Room or proto DataStore; opt-in "keep audio").
+**WP-3.9 Dashboard home + Insights** — §4.9; fixes the analytics "so far" bug (lifetime totals), adds per-hour and per-model buckets to `AnalyticsStore` (migration), hero card with milestones, activity calendar, peak hours, model usage/performance charts with semantics.
+**WP-3.10 Modes** — §4.10; `Mode` model + repository + one-way migration from AppMappings/LanguageProfiles/Presets (after prompting a backup export), Modes screen with cards/chips/toggles, mode chip in the keyboard, resolver update. Largest Phase 3 WP; run with the `orchestrator` profile.
+**WP-3.11 Dictionary UI** — §4.11 (replacements + vocabulary tabs, settings sheet, export/import). Depends on WP-2.4 for `WordReplacements`.
+**WP-3.12 Auto-Learn** — §4.11 steps 1–6: `AutoLearnObserver` (IME capture), `CorrectionDiffEngine` port with tests ported from VoiceInk's cases, pending queue, AI reviewer with the verbatim prompt + validation tests, proposals review sheet, undo, privacy note. Off by default. Depends on WP-3.11 and WP-1.2.
 
 ### Phase 4 — Polish & hardening
 
