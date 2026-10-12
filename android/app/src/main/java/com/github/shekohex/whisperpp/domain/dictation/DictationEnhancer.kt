@@ -7,7 +7,13 @@ interface DictationEnhancer {
     data class Request(val focus: FocusKey, val rawText: String, val contextPrompt: String?)
 
     sealed interface Result {
-        data class Enhanced(val text: String, val label: String) : Result
+        /** [providerId]/[modelId] identify the text model for analytics and history. */
+        data class Enhanced(
+            val text: String,
+            val label: String,
+            val providerId: String? = null,
+            val modelId: String? = null,
+        ) : Result
 
         /** Raw text kept; [notice] explains why when the user should know. */
         data class Kept(val notice: String? = null, val isError: Boolean = false) : Result

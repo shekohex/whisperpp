@@ -53,6 +53,8 @@ class DictationSession(private val deps: Deps) {
         val partialThrottleMs: Long = PARTIAL_THROTTLE_MS,
         /** Transcript clean-up (filter, word replacements) applied once, before commit and enhancement. */
         val postProcess: (String) -> String = { it },
+        /** Transcript history (§4.8); null disables it. */
+        val history: HistoryRecorder? = null,
     )
 
     private class Run(val id: Long, val focus: FocusKey) {
@@ -72,6 +74,14 @@ class DictationSession(private val deps: Deps) {
         var contextPrompt: String? = null
         var durationMs = 0L
         var rawText: String? = null
+        var stoppedAt = 0L
+        var transcriptionLatencyMs = 0L
+        var enhancementProviderId: String? = null
+        var enhancementModelId: String? = null
+        var enhancementLatencyMs: Long? = null
+
+        /** Kept recording owned by this run until it is handed to history (or discarded in [finish]). */
+        var audioPath: String? = null
     }
 
     private sealed interface Outcome {
@@ -191,6 +201,7 @@ class DictationSession(private val deps: Deps) {
             return
         }
         r.durationMs = s.elapsedMs(deps.clock())
+        r.stoppedAt = deps.clock()
         // Read now, before stopping the recorder suspends: later the editor may be another field's.
         r.contextPrompt = if (plan.request.useContext && currentFocus == r.focus) {
             deps.committer.textBeforeCursor(CONTEXT_CHARS)
@@ -391,11 +402,14 @@ class DictationSession(private val deps: Deps) {
         // A healthy stream is primary; the WAV is kept so batch can always take over (§4.5.1).
         val outcome = try {
             val streamed = streaming?.let { commitStream(r, it) }?.getOrNull()?.text?.takeIf { it.isNotBlank() }
-            if (streamed != null) {
+            val result = if (streamed != null) {
                 Outcome.Text(streamed)
             } else {
                 batchOutcome(transcribe(recording.file, plan.request.copy(contextPrompt = r.contextPrompt)))
             }
+            r.transcriptionLatencyMs = (deps.clock() - r.stoppedAt).coerceAtLeast(0L)
+            if (result is Outcome.Text) retainAudio(r, recording.file)
+            result
         } finally {
             recording.file.delete()
         }
@@ -411,6 +425,18 @@ class DictationSession(private val deps: Deps) {
             }
             is Outcome.Text -> commit(r, outcome.text)
         }
+    }
+
+    private suspend fun retainAudio(r: Run, file: File) {
+        val history = deps.history ?: return
+        val path = try {
+            history.retainAudio(file)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+        if (run === r) r.audioPath = path else path?.let(history::discardAudio)
     }
 
     private suspend fun transcribe(file: File, request: TranscriptionRequest): Result<String> {
@@ -492,8 +518,33 @@ class DictationSession(private val deps: Deps) {
 
         val finalText = if (segment != null) enhance(r, raw, segment) else raw
         if (run !== r) return
-        emit(SessionEvent.Completed(raw, finalText, r.durationMs, r.focus, r.id))
+        complete(r, raw, finalText)
         finish(r, SessionState.Idle)
+    }
+
+    /** Text reached the field: analytics event plus the history entry, which takes over the kept audio. */
+    private fun complete(r: Run, raw: String, finalText: String) {
+        val stats = CompletionStats(
+            providerId = r.plan?.request?.provider?.id.orEmpty(),
+            sttModelId = r.plan?.request?.modelId.orEmpty(),
+            languageCode = r.plan?.request?.languageCode?.takeIf { it.isNotBlank() && it != AUTO_LANGUAGE },
+            transcriptionLatencyMs = r.transcriptionLatencyMs,
+            enhancementProviderId = r.enhancementProviderId,
+            enhancementModelId = r.enhancementModelId,
+            enhancementLatencyMs = r.enhancementLatencyMs,
+        )
+        emit(SessionEvent.Completed(raw, finalText, r.durationMs, r.focus, r.id, stats))
+        deps.history?.record(
+            HistoryRecorder.Entry(
+                rawText = raw,
+                enhancedText = finalText.takeIf { it != raw },
+                stats = stats,
+                appPackage = r.focus.packageName,
+                durationMs = r.durationMs,
+                audioPath = r.audioPath,
+            )
+        )
+        r.audioPath = null
     }
 
     private suspend fun enhance(r: Run, raw: String, segment: TextCommitter.CapturedSegment): String {
@@ -502,6 +553,7 @@ class DictationSession(private val deps: Deps) {
         if (!enhancer.isEnabled(request)) return raw
         if (run !== r) return raw
         _state.value = SessionState.Enhancing(r.focus, raw)
+        val startedAt = deps.clock()
         val result = try {
             enhancer.enhance(request)
         } catch (e: CancellationException) {
@@ -510,6 +562,11 @@ class DictationSession(private val deps: Deps) {
             DictationEnhancer.Result.Kept(e.message, isError = true)
         }
         if (run !== r) return raw
+        if (result is DictationEnhancer.Result.Enhanced) {
+            r.enhancementLatencyMs = (deps.clock() - startedAt).coerceAtLeast(0L)
+            r.enhancementProviderId = result.providerId
+            r.enhancementModelId = result.modelId
+        }
         return when (result) {
             is DictationEnhancer.Result.Kept -> {
                 result.notice?.let { emit(SessionEvent.EnhancementNotice(it, result.isError)) }
@@ -553,7 +610,7 @@ class DictationSession(private val deps: Deps) {
         val r = run ?: return
         when (val s = _state.value) {
             // The raw text is already in the field; only the enhancement is abandoned.
-            is SessionState.Enhancing -> emit(SessionEvent.Completed(s.raw, s.raw, r.durationMs, r.focus, r.id))
+            is SessionState.Enhancing -> complete(r, s.raw, s.raw)
             is SessionState.Recording -> if (recordDiscard) emit(SessionEvent.Discarded(s.elapsedMs(deps.clock())))
             is SessionState.Transcribing,
             is SessionState.Committing,
@@ -583,6 +640,8 @@ class DictationSession(private val deps: Deps) {
         // Every terminal path, Idle included; only the field that owns the partial is edited.
         if (r.composing) deps.committer.clearComposing(currentFocus)
         r.plan?.audioFile?.delete()
+        r.audioPath?.let { path -> deps.history?.discardAudio(path) }
+        r.audioPath = null
         _state.value = next
         if (next == SessionState.Cancelled) _state.value = SessionState.Idle
     }
@@ -613,5 +672,6 @@ class DictationSession(private val deps: Deps) {
         const val MIN_RECORDING_MS = 500L
         const val PARTIAL_THROTTLE_MS = 150L
         private const val CONTEXT_CHARS = 500
+        private const val AUTO_LANGUAGE = "auto"
     }
 }

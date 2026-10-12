@@ -108,7 +108,7 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
         }
         return when (outcome) {
             is EnhancementOutcome.Succeeded -> PromptComposer.cleanEnhancementOutput(outcome.enhancedText)
-                ?.let { DictationEnhancer.Result.Enhanced(it, label) }
+                ?.let { DictationEnhancer.Result.Enhanced(it, label, provider.id, textModelId) }
                 ?: kept(context.getString(R.string.enhancement_empty_output, label))
             is EnhancementOutcome.Skipped -> DictationEnhancer.Result.Kept()
             is EnhancementOutcome.Failed -> when (val reason = outcome.reason) {

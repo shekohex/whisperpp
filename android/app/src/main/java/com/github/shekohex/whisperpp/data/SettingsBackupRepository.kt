@@ -9,6 +9,9 @@ import com.github.shekohex.whisperpp.data.dictionary.mergeDictionary
 import com.github.shekohex.whisperpp.data.dictionary.readDictionary
 import com.github.shekohex.whisperpp.data.dictionary.sanitizeDictionary
 import com.github.shekohex.whisperpp.data.dictionary.writeDictionary
+import com.github.shekohex.whisperpp.data.history.HistoryBackup
+import com.github.shekohex.whisperpp.data.history.HistoryBackupSource
+import com.github.shekohex.whisperpp.data.history.sanitizeHistoryBackup
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.google.gson.Gson
 import com.google.gson.JsonElement
@@ -80,8 +83,11 @@ class SettingsBackupRepository(
     private val gson: Gson = Gson(),
     private val timestampProvider: () -> String = { Instant.now().truncatedTo(ChronoUnit.SECONDS).toString() },
     private val currentAppVersionNameProvider: () -> String = { "" },
+    /** Transcript history; null leaves the `history` category out entirely. */
+    private val historySource: HistoryBackupSource? = null,
 ) {
-    suspend fun buildExportPayload(): SettingsBackupPayload {
+    /** [includeHistory]: add the opt-in `history` category (transcript text, never audio). */
+    suspend fun buildExportPayload(includeHistory: Boolean = false): SettingsBackupPayload {
         val prefs = dataStore.data.first()
         val providers = parseProviders(prefs[PreferenceKeys.PROVIDERS_JSON])
 
@@ -151,6 +157,7 @@ class SettingsBackupRepository(
                 updateChannel = prefs.stringValue(PreferenceKeys.UPDATE_CHANNEL).ifBlank { "stable" },
             ),
             dictionary = readDictionary(prefs, gson),
+            history = if (includeHistory) historySource?.exportBackup() else null,
         )
     }
 
@@ -158,8 +165,9 @@ class SettingsBackupRepository(
         password: String,
         appVersionName: String,
         exportedAtUtc: String = timestampProvider(),
+        includeHistory: Boolean = false,
     ): SettingsBackupEnvelope {
-        val payloadJson = gson.toJson(buildExportPayload())
+        val payloadJson = gson.toJson(buildExportPayload(includeHistory))
         return SettingsBackupCrypto.encryptUtf8(
             plaintext = payloadJson,
             password = password,
@@ -174,7 +182,7 @@ class SettingsBackupRepository(
         restoreMode: RestoreMode,
     ): ImportAnalysis {
         val payloadJson = SettingsBackupCrypto.decryptUtf8(envelope, password)
-        val currentPayload = buildExportPayload()
+        val currentPayload = buildExportPayload(includeHistory = true)
         val parsed = parseImportPayload(payloadJson)
         val resolvedPayload = buildResolvedPayload(
             current = currentPayload,
@@ -221,7 +229,26 @@ class SettingsBackupRepository(
             privacySafety = resolvePrivacySafety(current, imported, availableCategoryIds, restoreMode),
             advancedPreferences = resolveAdvancedPreferences(current, imported, availableCategoryIds),
             dictionary = resolveDictionary(current, imported, availableCategoryIds, restoreMode),
+            history = resolveHistory(current, imported, availableCategoryIds, restoreMode),
         )
+    }
+
+    private fun resolveHistory(
+        current: SettingsBackupPayload,
+        imported: SettingsBackupPayload,
+        availableCategoryIds: Set<String>,
+        restoreMode: RestoreMode,
+    ): HistoryBackup? {
+        val incoming = imported.history
+        if (SETTINGS_BACKUP_CATEGORY_HISTORY !in availableCategoryIds || incoming == null) {
+            return current.history
+        }
+        if (restoreMode == RestoreMode.OVERWRITE) {
+            return incoming
+        }
+        val existing = current.history?.entries.orEmpty()
+        val merged = (existing + incoming.entries).distinctBy { it.createdAt to it.rawText }.sortedByDescending { it.createdAt }
+        return incoming.copy(entries = merged)
     }
 
     private fun resolveProvidersModels(
@@ -413,7 +440,7 @@ class SettingsBackupRepository(
                 containsSensitiveContent = manifest.containsSensitiveContent,
                 isAvailable = manifest.id in availableCategoryIds,
                 selectable = restoreMode == RestoreMode.MERGE && manifest.id in availableCategoryIds,
-                includedByDefault = manifest.id in availableCategoryIds,
+                includedByDefault = manifest.id in availableCategoryIds && manifest.includedByDefault,
                 importedItemCount = importedKeys.size,
                 existingItemCount = currentKeys.size,
                 resultingItemCount = categoryKeys(resolved, manifest.id).size,
@@ -510,6 +537,11 @@ class SettingsBackupRepository(
             if (SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS in categoriesToApply) {
                 applyProviderCredentials(resolvedPayload.providerCredentials)
             }
+            if (SETTINGS_BACKUP_CATEGORY_HISTORY in categoriesToApply) {
+                resolvedPayload.history?.let { history ->
+                    historySource?.importBackup(history, replace = analysis.restoreMode == RestoreMode.OVERWRITE)
+                }
+            }
         }
 
         val clearedSelections = mutableListOf<ClearedSelection>()
@@ -599,7 +631,9 @@ class SettingsBackupRepository(
     ): Set<String> {
         val available = analysis.categoryPreviews.filter { it.isAvailable }.map { it.categoryId }.toSet()
         if (analysis.restoreMode == RestoreMode.OVERWRITE) {
-            return available
+            // Opt-in categories (history) are only replaced when explicitly selected.
+            val defaults = analysis.categoryPreviews.filter { it.isAvailable && it.includedByDefault }.map { it.categoryId }
+            return defaults.toSet() + includedCategoryIds.intersect(available)
         }
 
         val requested = if (includedCategoryIds.isEmpty()) {
@@ -821,6 +855,7 @@ class SettingsBackupRepository(
                 privacySafety = parsePrivacySafetyCategory(root, availableCategoryIds, skippedItems),
                 advancedPreferences = parseAdvancedPreferencesCategory(root, availableCategoryIds, skippedItems),
                 dictionary = parseDictionaryCategory(root, availableCategoryIds, skippedItems),
+                history = parseHistoryCategory(root, availableCategoryIds, skippedItems),
             ),
             availableCategoryIds = availableCategoryIds,
             skippedItems = skippedItems,
@@ -1260,6 +1295,29 @@ class SettingsBackupRepository(
         return sanitizeDictionary(decoded)
     }
 
+    private fun parseHistoryCategory(
+        root: JsonObject,
+        availableCategoryIds: MutableSet<String>,
+        skippedItems: MutableList<SkippedImportItem>,
+    ): HistoryBackup? {
+        val category = root.readCategoryObject("history", SETTINGS_BACKUP_CATEGORY_HISTORY, availableCategoryIds, skippedItems)
+            ?: return null
+        val decoded = try {
+            gson.fromJson(category, HistoryBackup::class.java)
+        } catch (_: Exception) {
+            null
+        }
+        if (decoded == null) {
+            availableCategoryIds -= SETTINGS_BACKUP_CATEGORY_HISTORY
+            skippedItems += SkippedImportItem(
+                categoryId = SETTINGS_BACKUP_CATEGORY_HISTORY,
+                reason = "Transcript history is invalid.",
+            )
+            return null
+        }
+        return sanitizeHistoryBackup(decoded)
+    }
+
     private fun parseProviders(json: String?): List<ServiceProvider> {
         return parseList(json, object : TypeToken<List<ServiceProvider>>() {}.type)
     }
@@ -1381,6 +1439,7 @@ class SettingsBackupRepository(
                 addAll(payload.dictionary.replacements.flatMap { rule -> rule.originals.map { "replacement:${it.lowercase()}" } })
                 addAll(payload.dictionary.vocabulary.map { "vocabulary:${it.lowercase()}" })
             }
+            SETTINGS_BACKUP_CATEGORY_HISTORY -> payload.history?.entries.orEmpty().map { "entry:${it.createdAt}:${it.rawText.hashCode()}" }
             else -> emptyList()
         }.sorted()
     }

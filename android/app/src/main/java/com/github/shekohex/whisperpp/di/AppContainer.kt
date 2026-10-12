@@ -18,9 +18,14 @@ import com.github.shekohex.whisperpp.data.autolearn.AutoLearnPendingQueue
 import com.github.shekohex.whisperpp.data.autolearn.AutoLearnProposalStore
 import com.github.shekohex.whisperpp.data.autolearn.autoLearnDataStore
 import com.github.shekohex.whisperpp.data.dictionary.DictionaryRepository
+import com.github.shekohex.whisperpp.data.history.DictationHistoryRecorder
+import com.github.shekohex.whisperpp.data.history.HistoryAudioStore
+import com.github.shekohex.whisperpp.data.history.TranscriptHistoryDatabase
+import com.github.shekohex.whisperpp.data.history.TranscriptHistoryRepository
 import com.github.shekohex.whisperpp.data.dictionary.readDictionary
 import com.github.shekohex.whisperpp.data.dictionary.writeDictionary
 import com.github.shekohex.whisperpp.dataStore
+import com.github.shekohex.whisperpp.domain.dictation.HistoryRecorder
 import com.github.shekohex.whisperpp.domain.autolearn.AutoLearnAiReviewer
 import com.github.shekohex.whisperpp.domain.autolearn.AutoLearnCoordinator
 import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
@@ -39,6 +44,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
+import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "AppContainer"
@@ -59,6 +65,18 @@ class AppContainer(context: Context) {
     val sendPolicyRepository: SendPolicyRepository by lazy { SendPolicyRepository(settingsDataStore) }
     val dictionaryRepository: DictionaryRepository by lazy { DictionaryRepository(settingsDataStore) }
     val backupStatusStore: BackupStatusStore = BackupStatusStore()
+
+    // Transcript history (§4.8).
+    private val historyDatabase: TranscriptHistoryDatabase by lazy { TranscriptHistoryDatabase.create(appContext) }
+    private val historyAudioStore: HistoryAudioStore by lazy {
+        HistoryAudioStore(File(appContext.filesDir, HistoryAudioStore.DIR_NAME))
+    }
+    val transcriptHistoryRepository: TranscriptHistoryRepository by lazy {
+        TranscriptHistoryRepository(historyDatabase.dao(), historyAudioStore)
+    }
+    val historyRecorder: HistoryRecorder by lazy {
+        DictationHistoryRecorder(transcriptHistoryRepository, historyAudioStore, settingsRepository.historySettings, appScope)
+    }
 
     val httpLoggingInterceptor: RedactingLoggingInterceptor = RedactingLoggingInterceptor()
     val okHttpClient: OkHttpClient by lazy { HttpClientFactory.createOkHttpClient(httpLoggingInterceptor) }
@@ -97,6 +115,20 @@ class AppContainer(context: Context) {
                 migrationsFailedState.value = true
             } finally {
                 migrationsDoneState.value = true
+            }
+        }
+    }
+
+    /** App start: analytics schema step and history retention pruning, off the main thread. */
+    fun startDataMaintenance() {
+        appScope.launch {
+            try {
+                analyticsRepository.migrateIfNeeded()
+                transcriptHistoryRepository.pruneExpired(settingsRepository.historySettings.first().retentionDays)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Data maintenance failed: ${e.javaClass.simpleName}")
             }
         }
     }

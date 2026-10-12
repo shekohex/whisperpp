@@ -17,7 +17,7 @@ class DictationAnalyticsSession(
         finalInsertedTranscript = finalInsertedText.trim().takeIf { it.isNotEmpty() }
     }
 
-    fun finalize(durationMs: Long): Outcome? {
+    fun finalize(durationMs: Long, model: AnalyticsModelSample? = null): Outcome? {
         if (terminalOutcomeRecorded) return null
         val rawText = rawTranscript ?: return null
         terminalOutcomeRecorded = true
@@ -26,6 +26,7 @@ class DictationAnalyticsSession(
             durationMs = durationMs.coerceAtLeast(0L),
             rawText = rawText,
             finalInsertedText = finalInsertedTranscript ?: rawText,
+            model = model,
         )
     }
 
@@ -47,6 +48,7 @@ class DictationAnalyticsSession(
             override val durationMs: Long,
             val rawText: String,
             val finalInsertedText: String,
+            val model: AnalyticsModelSample? = null,
         ) : Outcome()
 
         data class Cancelled(

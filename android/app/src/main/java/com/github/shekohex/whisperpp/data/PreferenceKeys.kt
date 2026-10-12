@@ -93,6 +93,11 @@ object PreferenceKeys {
     val DICTIONARY_VOCABULARY_JSON = stringPreferencesKey("dictionary_vocabulary_json")
     /** Built-in prompt profiles were seeded once; later deletes by the user stick. */
     val PROMPT_LIBRARY_SEEDED = booleanPreferencesKey("prompt_library_seeded_v1")
+    /** Transcript history (§4.8): record completed dictations (default true), keep their audio (default false). */
+    val HISTORY_ENABLED = booleanPreferencesKey("history-enabled")
+    val HISTORY_KEEP_AUDIO = booleanPreferencesKey("history-keep-audio")
+    /** Entries older than this many days are pruned on app start; 0 keeps them forever. Default 30. */
+    val HISTORY_RETENTION_DAYS = intPreferencesKey("history-retention-days")
 
     val SETTINGS: List<PreferenceKey<*>> = listOf(
         SPEECH_TO_TEXT_BACKEND,
@@ -159,6 +164,9 @@ object PreferenceKeys {
         DICTIONARY_REPLACEMENTS_JSON,
         DICTIONARY_VOCABULARY_JSON,
         PROMPT_LIBRARY_SEEDED,
+        HISTORY_ENABLED,
+        HISTORY_KEEP_AUDIO,
+        HISTORY_RETENTION_DAYS,
     )
 
     // Analytics DataStore ("analytics")
@@ -171,6 +179,17 @@ object PreferenceKeys {
         val TOTAL_INSERTED_CHARACTER_COUNT = intPreferencesKey("analytics_total_inserted_character_count")
         val DAILY_BUCKETS_JSON = stringPreferencesKey("analytics_daily_buckets_json")
 
+        /** Analytics schema; 2 = lifetime totals, hourly and per-model buckets (seeded once from daily buckets). */
+        val SCHEMA_VERSION = intPreferencesKey("analytics_schema_version")
+        val LIFETIME_WORDS = longPreferencesKey("analytics_lifetime_words")
+        val LIFETIME_SESSIONS = longPreferencesKey("analytics_lifetime_sessions")
+        val LIFETIME_RECORDING_SECONDS = longPreferencesKey("analytics_lifetime_recording_seconds")
+        val LIFETIME_TIME_SAVED_SECONDS = longPreferencesKey("analytics_lifetime_time_saved_seconds")
+        /** JSON int[24]: completed sessions per local hour of day, lifetime. */
+        val LIFETIME_HOURLY_JSON = stringPreferencesKey("analytics_lifetime_hourly_json")
+        /** JSON list of per provider/model buckets, lifetime. */
+        val MODEL_BUCKETS_JSON = stringPreferencesKey("analytics_model_buckets_json")
+
         val ALL: List<PreferenceKey<*>> = listOf(
             TOTAL_COMPLETED_SESSIONS,
             TOTAL_CANCELLED_SESSIONS,
@@ -179,6 +198,13 @@ object PreferenceKeys {
             TOTAL_FINAL_INSERTED_WORD_COUNT,
             TOTAL_INSERTED_CHARACTER_COUNT,
             DAILY_BUCKETS_JSON,
+            SCHEMA_VERSION,
+            LIFETIME_WORDS,
+            LIFETIME_SESSIONS,
+            LIFETIME_RECORDING_SECONDS,
+            LIFETIME_TIME_SAVED_SECONDS,
+            LIFETIME_HOURLY_JSON,
+            MODEL_BUCKETS_JSON,
         )
     }
 

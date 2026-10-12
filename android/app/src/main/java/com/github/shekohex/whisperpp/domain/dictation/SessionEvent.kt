@@ -55,6 +55,7 @@ sealed interface SessionEvent {
         val durationMs: Long,
         val focus: FocusKey,
         val runId: Long,
+        val stats: CompletionStats = CompletionStats(),
     ) : SessionEvent
 
     /** Terminal analytics: a started recording was discarded. */

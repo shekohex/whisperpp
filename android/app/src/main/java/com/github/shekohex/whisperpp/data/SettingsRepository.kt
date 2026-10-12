@@ -110,6 +110,31 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         .map { prefs -> prefs[PreferenceKeys.TAP_TO_RECORD] ?: true }
         .distinctUntilChanged()
 
+    /** Transcript history (§4.8); see [PreferenceKeys.HISTORY_ENABLED]. */
+    val historySettings: Flow<HistorySettings> = dataStore.data
+        .map { prefs ->
+            HistorySettings(
+                enabled = prefs[PreferenceKeys.HISTORY_ENABLED] ?: true,
+                keepAudio = prefs[PreferenceKeys.HISTORY_KEEP_AUDIO] ?: false,
+                retentionDays = (prefs[PreferenceKeys.HISTORY_RETENTION_DAYS] ?: HistorySettings.DEFAULT_RETENTION_DAYS)
+                    .coerceAtLeast(0),
+            )
+        }
+        .distinctUntilChanged()
+
+    suspend fun setHistoryEnabled(enabled: Boolean) {
+        dataStore.edit { it[PreferenceKeys.HISTORY_ENABLED] = enabled }
+    }
+
+    suspend fun setHistoryKeepAudio(keepAudio: Boolean) {
+        dataStore.edit { it[PreferenceKeys.HISTORY_KEEP_AUDIO] = keepAudio }
+    }
+
+    /** 0 keeps entries forever. */
+    suspend fun setHistoryRetentionDays(days: Int) {
+        dataStore.edit { it[PreferenceKeys.HISTORY_RETENTION_DAYS] = days.coerceAtLeast(0) }
+    }
+
     val providers: Flow<List<ServiceProvider>> = dataStore.data.map { prefs ->
         val json = prefs[PROVIDERS_JSON]
         if (json.isNullOrEmpty()) {

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
     <exclude domain="file" path="datastore/analytics.preferences_pb" />
+    <exclude domain="file" path="history/" />
+    <exclude domain="database" path="history.db" />
+    <exclude domain="database" path="history.db-wal" />
+    <exclude domain="database" path="history.db-shm" />
     <exclude domain="sharedpref" path="whisperpp_secrets.xml" />
 </full-backup-content>

@@ -10,6 +10,7 @@ class WhisperApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container.startMigrations()
+        container.startDataMaintenance()
     }
 }
 

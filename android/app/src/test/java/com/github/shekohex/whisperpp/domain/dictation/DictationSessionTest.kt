@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -149,6 +150,7 @@ class DictationSessionTest {
         var useContext = false
         var addTrailingSpace = false
         var postProcess: (String) -> String = { it }
+        var history: HistoryRecorder? = null
         val committer = TextCommitter { ic }
         var nextAudioFile: (() -> File)? = null
         val requests = mutableListOf<TranscriptionRequest>()
@@ -187,6 +189,7 @@ class DictationSessionTest {
                     scope = scope,
                     streamingDispatcher = dispatcher,
                     postProcess = { postProcess(it) },
+                    history = history,
                 ),
             ).also { session ->
                 session.onFocusChanged(focus)
@@ -206,6 +209,97 @@ class DictationSessionTest {
             scope.cancel()
             audioFile.delete()
         }
+    }
+
+    private class FakeHistory(private val keepAudio: Boolean) : HistoryRecorder {
+        val entries = mutableListOf<HistoryRecorder.Entry>()
+        val retained = mutableListOf<String>()
+        val discarded = mutableListOf<String>()
+
+        override suspend fun retainAudio(file: File): String? {
+            if (!keepAudio) return null
+            return "kept/${file.name}".also { retained += it }
+        }
+
+        override fun record(entry: HistoryRecorder.Entry) {
+            entries += entry
+        }
+
+        override fun discardAudio(path: String) {
+            discarded += path
+        }
+    }
+
+    @Test
+    fun completion_recordsHistoryEntry_withStatsAndKeptAudio() = sessionTest { h ->
+        val history = FakeHistory(keepAudio = true)
+        h.history = history
+        h.recordFor(1_000)
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        val entry = history.entries.single()
+        assertEquals("hello", entry.rawText)
+        assertNull(entry.enhancedText)
+        assertEquals(STATS, entry.stats)
+        assertEquals("com.example", entry.appPackage)
+        assertEquals(1_000L, entry.durationMs)
+        assertEquals(history.retained.single(), entry.audioPath)
+        assertTrue(history.discarded.isEmpty())
+    }
+
+    @Test
+    fun enhancedCompletion_recordsRawAndEnhancedText_andEnhancementModel() = sessionTest { h ->
+        val history = FakeHistory(keepAudio = false)
+        h.history = history
+        h.enhancer = object : DictationEnhancer {
+            override suspend fun isEnabled(request: DictationEnhancer.Request) = true
+            override suspend fun enhance(request: DictationEnhancer.Request): DictationEnhancer.Result {
+                delay(250)
+                return DictationEnhancer.Result.Enhanced("Hello.", "P (gpt)", providerId = "p2", modelId = "gpt")
+            }
+        }
+        h.recordFor(1_000)
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        val entry = history.entries.single()
+        assertEquals("hello", entry.rawText)
+        assertEquals("Hello.", entry.enhancedText)
+        assertNull(entry.audioPath)
+        assertEquals("p2", entry.stats.enhancementProviderId)
+        assertEquals("gpt", entry.stats.enhancementModelId)
+        assertEquals(250L, entry.stats.enhancementLatencyMs)
+        val completed = h.events.filterIsInstance<SessionEvent.Completed>().single()
+        assertEquals(entry.stats, completed.stats)
+    }
+
+    @Test
+    fun failedTranscription_recordsNoHistory_andKeepsNoAudio() = sessionTest { h ->
+        val history = FakeHistory(keepAudio = true)
+        h.history = history
+        h.transcript = { Result.failure(IllegalStateException("boom")) }
+        h.recordFor(1_000)
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        assertTrue(history.entries.isEmpty())
+        assertTrue(history.retained.isEmpty())
+    }
+
+    @Test
+    fun commitBlockedByFocus_discardsKeptAudio_withoutHistoryEntry() = sessionTest { h ->
+        val history = FakeHistory(keepAudio = true)
+        h.history = history
+        h.recordFor(1_000)
+        h.session.onStop()
+        h.session.onFocusChanged(h.otherFocus)
+        advanceUntilIdle()
+
+        assertTrue(h.events.any { it is SessionEvent.CommitBlockedByFocus })
+        assertTrue(history.entries.isEmpty())
+        assertEquals(history.retained, history.discarded)
+        assertEquals(1, history.discarded.size)
     }
 
     private fun request() = TranscriptionRequest(
@@ -284,7 +378,7 @@ class DictationSessionTest {
         assertTrue(states.any { it is SessionState.Transcribing })
         assertEquals("prefix hello", h.ic.getText())
         assertTrue(h.events.contains(SessionEvent.Committed("hello")))
-        assertTrue(h.events.contains(SessionEvent.Completed("hello", "hello", 1_000L, h.focus, 1L)))
+        assertTrue(h.events.contains(SessionEvent.Completed("hello", "hello", 1_000L, h.focus, 1L, STATS)))
         assertFalse(h.audioFile.exists())
         assertEquals(1, h.recorder.stops)
         assertEquals(0, h.recorder.cancels)
@@ -607,7 +701,7 @@ class DictationSessionTest {
 
         assertEquals(SessionState.Idle, h.session.state.value)
         assertEquals("prefix hello", h.ic.getText())
-        assertTrue(h.events.contains(SessionEvent.Completed("hello", "hello", 1_000L, h.focus, 1L)))
+        assertTrue(h.events.contains(SessionEvent.Completed("hello", "hello", 1_000L, h.focus, 1L, STATS)))
         assertEquals(1, h.gateway.abandons)
     }
 
@@ -848,4 +942,9 @@ class DictationSessionTest {
     }
 
     // endregion
+
+    private companion object {
+        /** What the harness plan produces: provider "p", whisper-1, auto language, instant transcription. */
+        val STATS = CompletionStats(providerId = "p", sttModelId = "whisper-1")
+    }
 }

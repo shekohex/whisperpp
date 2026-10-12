@@ -45,6 +45,7 @@ import androidx.core.view.WindowCompat
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import com.github.shekohex.whisperpp.analytics.AnalyticsModelSample
 import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.DictationAnalyticsSession
 import com.github.shekohex.whisperpp.app.appContainer
@@ -94,6 +95,7 @@ import com.github.shekohex.whisperpp.dictation.FocusIdentity
 import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.domain.dictation.AudioRecorderSource
 import com.github.shekohex.whisperpp.domain.dictation.AutoSend
+import com.github.shekohex.whisperpp.domain.dictation.CompletionStats
 import com.github.shekohex.whisperpp.domain.dictation.DictationSession
 import com.github.shekohex.whisperpp.domain.dictation.SessionEvent
 import com.github.shekohex.whisperpp.domain.dictation.SessionState
@@ -126,7 +128,6 @@ import com.github.shekohex.whisperpp.ui.keyboard.RecordIntent
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
 import java.io.File
 import java.io.IOException
-import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -296,6 +297,7 @@ class WhisperInputService : InputMethodService() {
                 clock = SystemClock::elapsedRealtime,
                 scope = serviceScope,
                 postProcess = ::postProcessTranscript,
+                history = container.historyRecorder,
             )
         )
         observeAudioCore()
@@ -532,7 +534,7 @@ class WhisperInputService : InputMethodService() {
                     recordRawTranscript(event.rawText)
                     recordFinalInsertedText(event.finalText)
                 }
-                analytics.finalize(event.durationMs)?.let(::persistDictationAnalyticsOutcome)
+                analytics.finalize(event.durationMs, event.stats.toAnalyticsSample())?.let(::persistDictationAnalyticsOutcome)
                 afterDictationCompleted(event)
             }
             is SessionEvent.Discarded -> {
@@ -1488,8 +1490,17 @@ class WhisperInputService : InputMethodService() {
     }
 
     private fun persistDictationAnalyticsOutcome(outcome: DictationAnalyticsSession.Outcome) {
-        serviceScope.launch(Dispatchers.IO) { analyticsRepository.recordOutcome(outcome, LocalDate.now()) }
+        serviceScope.launch(Dispatchers.IO) { analyticsRepository.recordOutcome(outcome) }
     }
+
+    private fun CompletionStats.toAnalyticsSample() = AnalyticsModelSample(
+        providerId = providerId,
+        modelId = sttModelId,
+        transcriptionLatencyMs = transcriptionLatencyMs,
+        enhancementProviderId = enhancementProviderId,
+        enhancementModelId = enhancementModelId,
+        enhancementLatencyMs = enhancementLatencyMs,
+    )
 
     private fun confirmCancelAction(onConfirm: () -> Unit) {
         serviceScope.launch {
