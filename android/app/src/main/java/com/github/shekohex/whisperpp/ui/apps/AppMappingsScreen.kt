@@ -62,8 +62,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.PromptProfile
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.components.SectionCard
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
@@ -131,7 +131,7 @@ fun AppMappingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(8.dp))
-            SettingsGroup(title = stringResource(R.string.apps_search_group)) {
+            SectionCard(title = stringResource(R.string.apps_search_group)) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -167,7 +167,7 @@ fun AppMappingsScreen(
                 }
             }
 
-            SettingsGroup(title = stringResource(R.string.apps_installed_group)) {
+            SectionCard(title = stringResource(R.string.apps_installed_group)) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),

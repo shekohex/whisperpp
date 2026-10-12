@@ -46,8 +46,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.PromptProfile
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.components.SectionCard
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
@@ -98,7 +98,7 @@ fun PromptsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SettingsGroup(title = stringResource(R.string.prompts_base_group)) {
+            SectionCard(title = stringResource(R.string.prompts_base_group)) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -120,7 +120,7 @@ fun PromptsScreen(
                     )
                 }
             }
-            SettingsGroup(title = stringResource(R.string.prompts_profiles_group)) {
+            SectionCard(title = stringResource(R.string.prompts_profiles_group)) {
                 ProfileList(
                     profiles = promptProfiles,
                     onAdd = { onNavigate(Destination.PromptEdit(id = null)) },

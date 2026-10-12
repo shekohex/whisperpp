@@ -47,7 +47,7 @@ import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.LanguageProfile
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
+import com.github.shekohex.whisperpp.ui.components.SectionCard
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
@@ -89,7 +89,7 @@ fun LanguageDefaultsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (languageDefaults.isEmpty()) {
-                SettingsGroup(title = stringResource(R.string.apps_languages_group)) {
+                SectionCard(title = stringResource(R.string.apps_languages_group)) {
                     Text(
                         text = stringResource(R.string.apps_language_empty),
                         style = MaterialTheme.typography.bodyMedium,

@@ -61,8 +61,8 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_EN
 import com.github.shekohex.whisperpp.data.validateSelections
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.components.SectionCard
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
@@ -157,7 +157,7 @@ fun PrivacySafetyScreen(
         ) {
             Spacer(Modifier.height(8.dp))
 
-            SettingsGroup(title = stringResource(R.string.privacy_disclosure_group)) {
+            SectionCard(title = stringResource(R.string.privacy_disclosure_group)) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -179,7 +179,7 @@ fun PrivacySafetyScreen(
                 }
             }
 
-            SettingsGroup(title = stringResource(R.string.privacy_diagnostics_group)) {
+            SectionCard(title = stringResource(R.string.privacy_diagnostics_group)) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -229,14 +229,14 @@ fun PrivacySafetyScreen(
                 }
             }
 
-            SettingsGroup(title = stringResource(R.string.autolearn_privacy_group_title)) {
+            SectionCard(title = stringResource(R.string.autolearn_privacy_group_title)) {
                 AutoLearnPrivacyNote(
                     enabled = settingsState[AUTO_LEARN_ENABLED] ?: false,
                     onOpenSettings = { onNavigate(Destination.DictionarySettings) },
                 )
             }
 
-            SettingsGroup(title = stringResource(R.string.privacy_send_policy_group)) {
+            SectionCard(title = stringResource(R.string.privacy_send_policy_group)) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -322,7 +322,7 @@ fun PrivacySafetyScreen(
                 }
             }
 
-            SettingsGroup(title = stringResource(R.string.privacy_add_rule_group)) {
+            SectionCard(title = stringResource(R.string.privacy_add_rule_group)) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()

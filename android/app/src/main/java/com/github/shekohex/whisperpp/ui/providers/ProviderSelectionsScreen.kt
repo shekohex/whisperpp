@@ -24,10 +24,10 @@ import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.components.SectionCard
 import com.github.shekohex.whisperpp.ui.navigation.Destination
 import com.github.shekohex.whisperpp.ui.providers.ProviderSelectionsViewModel.Slot
 import com.github.shekohex.whisperpp.ui.settings.common.ProviderModelDropdowns
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
@@ -64,7 +64,7 @@ fun ProviderSelectionsScreen(
             )
 
             val (sttProviderId, sttModelId) = ids(Slot.STT)
-            SettingsGroup(title = stringResource(R.string.provider_selection_ref_dictation)) {
+            SectionCard(title = stringResource(R.string.provider_selection_ref_dictation)) {
                 SelectionPickers(
                     providers = providers,
                     providerId = sttProviderId,
@@ -76,7 +76,7 @@ fun ProviderSelectionsScreen(
             }
 
             val (textProviderId, textModelId) = ids(Slot.TEXT)
-            SettingsGroup(title = stringResource(R.string.provider_selection_ref_enhancement)) {
+            SectionCard(title = stringResource(R.string.provider_selection_ref_enhancement)) {
                 SelectionPickers(
                     providers = providers,
                     providerId = textProviderId,
@@ -88,7 +88,7 @@ fun ProviderSelectionsScreen(
             }
 
             val (commandProviderId, commandModelId) = ids(Slot.COMMAND)
-            SettingsGroup(title = stringResource(R.string.provider_selections_advanced)) {
+            SectionCard(title = stringResource(R.string.provider_selections_advanced)) {
                 CommandOverridePickers(
                     providers = providers,
                     providerId = commandProviderId,

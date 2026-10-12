@@ -50,12 +50,12 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.REALTIME_STT_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.TAP_TO_RECORD
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
-import com.github.shekohex.whisperpp.ui.settings.common.commonLanguages
+import com.github.shekohex.whisperpp.ui.components.SectionCard
+import com.github.shekohex.whisperpp.ui.components.SettingsSwitchRow
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsDropdown
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsToggle
+import com.github.shekohex.whisperpp.ui.settings.common.commonLanguages
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
 import com.github.shekohex.whisperpp.ui.settings.common.languageLabel
 
@@ -68,8 +68,8 @@ fun DictationSettingsScreen(
     val prefs by viewModel.prefs.collectAsStateWithLifecycle()
 
     @Composable
-    fun Toggle(icon: ImageVector, title: String, key: Preferences.Key<Boolean>, default: Boolean) = SettingsToggle(
-        icon = icon,
+    fun Toggle(icon: ImageVector, title: String, key: Preferences.Key<Boolean>, default: Boolean) = SettingsSwitchRow(
+        leadingIcon = icon,
         title = title,
         checked = prefs?.get(key) ?: default,
         onCheckedChange = { viewModel.set(key, it) },
@@ -80,7 +80,7 @@ fun DictationSettingsScreen(
         intro = stringResource(R.string.dictation_settings_intro),
         onBack = onBack,
     ) {
-        SettingsGroup(title = stringResource(R.string.dictation_group_language)) {
+        SectionCard(title = stringResource(R.string.dictation_group_language)) {
             SettingsDropdown(
                 label = stringResource(R.string.dictation_language_label),
                 value = languageLabel(prefs?.get(LANGUAGE_CODE) ?: "auto"),
@@ -91,7 +91,7 @@ fun DictationSettingsScreen(
             )
             Toggle(Icons.Default.GraphicEq, stringResource(R.string.settings_realtime_stt_enabled), REALTIME_STT_ENABLED, true)
         }
-        SettingsGroup(title = stringResource(R.string.dictation_group_automation)) {
+        SectionCard(title = stringResource(R.string.dictation_group_automation)) {
             Toggle(Icons.Default.Mic, stringResource(R.string.dictation_auto_start), AUTO_RECORDING_START, true)
             Toggle(Icons.Default.TouchApp, stringResource(R.string.settings_tap_to_record), TAP_TO_RECORD, true)
             Toggle(Icons.Default.SwapHoriz, stringResource(R.string.dictation_auto_switch_back), AUTO_SWITCH_BACK, false)
@@ -102,7 +102,7 @@ fun DictationSettingsScreen(
                 true,
             )
         }
-        SettingsGroup(title = stringResource(R.string.dictation_group_extras)) {
+        SectionCard(title = stringResource(R.string.dictation_group_extras)) {
             Toggle(Icons.Default.SpaceBar, stringResource(R.string.dictation_trailing_space), ADD_TRAILING_SPACE, false)
             Toggle(
                 Icons.Default.QuestionMark,
@@ -111,7 +111,7 @@ fun DictationSettingsScreen(
                 true,
             )
         }
-        SettingsGroup(title = stringResource(R.string.settings_group_dictation)) {
+        SectionCard(title = stringResource(R.string.settings_group_dictation)) {
             Toggle(Icons.Default.CleaningServices, stringResource(R.string.settings_filter_fillers), FILTER_FILLERS_ENABLED, false)
             Toggle(Icons.Default.ViewStream, stringResource(R.string.settings_format_paragraphs), FORMAT_PARAGRAPHS_ENABLED, false)
             Toggle(Icons.AutoMirrored.Filled.Send, stringResource(R.string.settings_auto_send), AUTO_SEND_AFTER_INSERT, false)
@@ -128,8 +128,8 @@ fun AudioSettingsScreen(
     val prefs by viewModel.prefs.collectAsStateWithLifecycle()
 
     @Composable
-    fun Toggle(icon: ImageVector, title: String, key: Preferences.Key<Boolean>, default: Boolean) = SettingsToggle(
-        icon = icon,
+    fun Toggle(icon: ImageVector, title: String, key: Preferences.Key<Boolean>, default: Boolean) = SettingsSwitchRow(
+        leadingIcon = icon,
         title = title,
         checked = prefs?.get(key) ?: default,
         onCheckedChange = { viewModel.set(key, it) },
@@ -140,7 +140,7 @@ fun AudioSettingsScreen(
         intro = stringResource(R.string.audio_settings_intro),
         onBack = onBack,
     ) {
-        SettingsGroup(title = stringResource(R.string.dictation_audio_group_feedback)) {
+        SectionCard(title = stringResource(R.string.dictation_audio_group_feedback)) {
             Toggle(Icons.Default.Vibration, stringResource(R.string.dictation_audio_haptics), HAPTIC_FEEDBACK_ENABLED, true)
             Toggle(Icons.AutoMirrored.Filled.VolumeUp, stringResource(R.string.dictation_audio_sounds), SOUND_EFFECTS_ENABLED, true)
             Toggle(Icons.Default.MusicOff, stringResource(R.string.settings_pause_media_while_recording), PAUSE_MEDIA_WHILE_RECORDING, true)

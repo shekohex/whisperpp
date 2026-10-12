@@ -45,11 +45,11 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.components.SectionCard
+import com.github.shekohex.whisperpp.ui.components.SettingsNavRow
+import com.github.shekohex.whisperpp.ui.components.SettingsSwitchRow
 import com.github.shekohex.whisperpp.ui.navigation.Destination
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsDropdown
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsItem
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsToggle
 import com.github.shekohex.whisperpp.ui.settings.common.appVersionName
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
 import com.github.shekohex.whisperpp.updater.InstallResult
@@ -80,17 +80,17 @@ fun AboutScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
-                SettingsGroup(title = stringResource(R.string.about_group_app)) {
-                    SettingsItem(
-                        icon = Icons.Default.Info,
+                SectionCard(title = stringResource(R.string.about_group_app)) {
+                    SettingsNavRow(
+                        leadingIcon = Icons.Default.Info,
                         title = stringResource(R.string.about_version_label),
-                        subtitle = viewModel.versionName,
+                        supporting = viewModel.versionName,
                         onClick = {},
                     )
-                    SettingsItem(
-                        icon = Icons.Default.Description,
+                    SettingsNavRow(
+                        leadingIcon = Icons.Default.Description,
                         title = stringResource(R.string.about_licenses_title),
-                        subtitle = stringResource(R.string.about_licenses_summary),
+                        supporting = stringResource(R.string.about_licenses_summary),
                         onClick = { showLicenses = true },
                     )
                 }
@@ -99,9 +99,9 @@ fun AboutScreen(
                 UpdateSection(viewModel = viewModel, showUpdate = showUpdate)
             }
             item {
-                SettingsGroup(title = stringResource(R.string.about_group_advanced)) {
-                    SettingsToggle(
-                        icon = Icons.Default.BugReport,
+                SectionCard(title = stringResource(R.string.about_group_advanced)) {
+                    SettingsSwitchRow(
+                        leadingIcon = Icons.Default.BugReport,
                         title = stringResource(R.string.about_verbose_logs_title),
                         checked = verboseLogs ?: false,
                         onCheckedChange = viewModel::setVerboseLogs,
@@ -112,16 +112,16 @@ fun AboutScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
-                    SettingsItem(
-                        icon = Icons.Default.Speed,
+                    SettingsNavRow(
+                        leadingIcon = Icons.Default.Speed,
                         title = stringResource(R.string.about_provider_advanced_title),
-                        subtitle = stringResource(R.string.about_provider_advanced_summary),
+                        supporting = stringResource(R.string.about_provider_advanced_summary),
                         onClick = { onNavigate(Destination.ProviderList) },
                     )
-                    SettingsItem(
-                        icon = Icons.Default.Security,
+                    SettingsNavRow(
+                        leadingIcon = Icons.Default.Security,
                         title = stringResource(R.string.about_diagnostics_title),
-                        subtitle = stringResource(R.string.about_diagnostics_summary),
+                        supporting = stringResource(R.string.about_diagnostics_summary),
                         onClick = { onNavigate(Destination.PrivacySafety) },
                     )
                 }
@@ -178,7 +178,7 @@ private fun UpdateSection(viewModel: AboutViewModel, showUpdate: Boolean) {
         )
     }
 
-    SettingsGroup(title = stringResource(R.string.settings_check_for_updates)) {
+    SectionCard(title = stringResource(R.string.settings_check_for_updates)) {
         val stableLabel = stringResource(R.string.settings_update_channel_stable)
         val nightlyLabel = stringResource(R.string.settings_update_channel_nightly)
         SettingsDropdown(

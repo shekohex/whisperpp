@@ -53,6 +53,25 @@ fun SettingsRow(
     )
 }
 
+/** A [SettingsRow] that navigates somewhere: trailing chevron, mirrored in RTL. */
+@Composable
+fun SettingsNavRow(
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    supporting: String? = null,
+    leadingIcon: ImageVector? = null,
+) {
+    SettingsRow(
+        title = title,
+        supporting = supporting,
+        leadingIcon = leadingIcon,
+        modifier = modifier,
+        trailing = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+        onClick = onClick,
+    )
+}
+
 @ThemePreviews
 @Composable
 private fun SettingsRowPreview() {

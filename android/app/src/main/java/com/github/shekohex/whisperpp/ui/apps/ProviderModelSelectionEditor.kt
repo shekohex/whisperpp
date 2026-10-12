@@ -13,8 +13,8 @@ import androidx.compose.ui.unit.dp
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.data.ServiceProvider
+import com.github.shekohex.whisperpp.ui.components.SectionCard
 import com.github.shekohex.whisperpp.ui.settings.common.ProviderModelDropdowns
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 
 /** Provider + model override where blank means "inherit"; used by app and language rules. */
 @Composable
@@ -29,7 +29,7 @@ internal fun ProviderModelSelectionEditor(
     val selectedProvider = providers.firstOrNull { it.id == providerId }
     val selectedModel = selectedProvider?.models?.firstOrNull { it.id == modelId }
     val inherit = stringResource(R.string.provider_inherit)
-    SettingsGroup(title = title) {
+    SectionCard(title = title) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

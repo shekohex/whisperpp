@@ -33,14 +33,14 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_MODEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_PROMPT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.components.SectionCard
+import com.github.shekohex.whisperpp.ui.components.SettingsNavRow
+import com.github.shekohex.whisperpp.ui.components.SettingsSwitchRow
 import com.github.shekohex.whisperpp.ui.navigation.Destination
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsDropdown
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsEditDialog
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsItem
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsToggle
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
 
 /** Post-dictation cleanup (old "Post processing" screen) plus links to prompts and presets. */
@@ -73,29 +73,29 @@ fun EnhancementScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SettingsGroup(title = stringResource(R.string.enhancement_group_behavior)) {
-                SettingsToggle(
-                    icon = Icons.Default.AutoFixHigh,
+            SectionCard(title = stringResource(R.string.enhancement_group_behavior)) {
+                SettingsSwitchRow(
+                    leadingIcon = Icons.Default.AutoFixHigh,
                     title = stringResource(R.string.settings_enhancement_enabled),
                     checked = prefs?.get(ENHANCEMENT_ENABLED) ?: false,
                     onCheckedChange = { viewModel.set(ENHANCEMENT_ENABLED, it) }
                 )
-                SettingsToggle(
-                    icon = Icons.Default.History,
+                SettingsSwitchRow(
+                    leadingIcon = Icons.Default.History,
                     title = stringResource(R.string.enhancement_use_context),
                     checked = prefs?.get(USE_CONTEXT) ?: false,
                     onCheckedChange = { viewModel.set(USE_CONTEXT, it) }
                 )
-                SettingsItem(
-                    icon = Icons.Default.EditNote,
+                SettingsNavRow(
+                    leadingIcon = Icons.Default.EditNote,
                     title = stringResource(R.string.enhancement_custom_prompt),
-                    subtitle = promptPreview(prefs?.get(ENHANCEMENT_PROMPT))
+                    supporting = promptPreview(prefs?.get(ENHANCEMENT_PROMPT))
                         ?: stringResource(R.string.enhancement_prompt_default),
                     onClick = { showPromptDialog = true }
                 )
             }
 
-            SettingsGroup(title = stringResource(R.string.enhancement_group_model)) {
+            SectionCard(title = stringResource(R.string.enhancement_group_model)) {
                 val itemModifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 SettingsDropdown(
                     label = stringResource(R.string.provider_label),
@@ -119,17 +119,17 @@ fun EnhancementScreen(
                 )
             }
 
-            SettingsGroup(title = stringResource(R.string.enhancement_group_prompts)) {
-                SettingsItem(
-                    icon = Icons.Default.TextFields,
+            SectionCard(title = stringResource(R.string.enhancement_group_prompts)) {
+                SettingsNavRow(
+                    leadingIcon = Icons.Default.TextFields,
                     title = stringResource(R.string.enhancement_prompts_link_title),
-                    subtitle = stringResource(R.string.enhancement_prompts_link_summary),
+                    supporting = stringResource(R.string.enhancement_prompts_link_summary),
                     onClick = { onNavigate(Destination.Prompts) },
                 )
-                SettingsItem(
-                    icon = Icons.Default.AutoFixHigh,
+                SettingsNavRow(
+                    leadingIcon = Icons.Default.AutoFixHigh,
                     title = stringResource(R.string.settings_transform_presets_title),
-                    subtitle = stringResource(R.string.enhancement_presets_link_summary),
+                    supporting = stringResource(R.string.enhancement_presets_link_summary),
                     onClick = { onNavigate(Destination.Presets) },
                 )
             }

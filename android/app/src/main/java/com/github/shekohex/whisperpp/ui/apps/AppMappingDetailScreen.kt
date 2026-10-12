@@ -39,11 +39,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.AppendMode
-import com.github.shekohex.whisperpp.data.ProviderModelOverride
 import com.github.shekohex.whisperpp.data.PromptProfile
+import com.github.shekohex.whisperpp.data.ProviderModelOverride
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.components.SectionCard
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsDropdown
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
@@ -98,7 +98,7 @@ fun AppMappingDetailScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SettingsGroup(title = stringResource(R.string.apps_group_app)) {
+            SectionCard(title = stringResource(R.string.apps_group_app)) {
                 Text(
                     text = packageName,
                     style = MaterialTheme.typography.bodyMedium,
@@ -106,7 +106,7 @@ fun AppMappingDetailScreen(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                 )
             }
-            SettingsGroup(title = stringResource(R.string.apps_group_profile)) {
+            SectionCard(title = stringResource(R.string.apps_group_profile)) {
                 ProfilePicker(
                     profiles = promptProfiles,
                     profileId = draft.profileId,
@@ -114,7 +114,7 @@ fun AppMappingDetailScreen(
                     onSelect = { id -> viewModel.update { it.copy(profileId = id) } },
                 )
             }
-            SettingsGroup(title = stringResource(R.string.apps_group_prompt_append)) {
+            SectionCard(title = stringResource(R.string.apps_group_prompt_append)) {
                 AppendEditor(
                     appendMode = draft.appendMode,
                     append = draft.appPromptAppend.orEmpty(),

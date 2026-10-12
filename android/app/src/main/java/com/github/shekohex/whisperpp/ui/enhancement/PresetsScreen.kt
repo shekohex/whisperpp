@@ -43,7 +43,7 @@ import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_CLEANUP
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
 import com.github.shekohex.whisperpp.data.presetById
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
+import com.github.shekohex.whisperpp.ui.components.SectionCard
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
@@ -79,7 +79,7 @@ fun PresetsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SettingsGroup(title = stringResource(R.string.settings_transform_presets_group_title)) {
+            SectionCard(title = stringResource(R.string.settings_transform_presets_group_title)) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.settings_transform_presets_enhancement_label)) },

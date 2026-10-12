@@ -36,11 +36,11 @@ import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ThinkingType
 import com.github.shekohex.whisperpp.ui.components.SecureTextField
+import com.github.shekohex.whisperpp.ui.components.SettingsSwitchRow
 import com.github.shekohex.whisperpp.ui.providers.ProviderEditViewModel.KeyStatus
 import com.github.shekohex.whisperpp.ui.providers.ProviderEditViewModel.TestOptions
-import com.github.shekohex.whisperpp.ui.settings.common.commonLanguages
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsDropdown
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsToggle
+import com.github.shekohex.whisperpp.ui.settings.common.commonLanguages
 import com.github.shekohex.whisperpp.ui.settings.common.languageLabel
 
 private val THINKING_LEVELS = listOf("minimal", "low", "medium", "high", "xhigh")
@@ -282,8 +282,8 @@ internal fun ProviderTuningSection(
     )
     HorizontalDivider()
     SubsectionTitle(stringResource(R.string.provider_thinking_title))
-    SettingsToggle(
-        icon = Icons.Default.Psychology,
+    SettingsSwitchRow(
+        leadingIcon = Icons.Default.Psychology,
         title = stringResource(R.string.provider_thinking_enable),
         checked = draft.thinkingEnabled,
         onCheckedChange = onThinkingEnabledChange,

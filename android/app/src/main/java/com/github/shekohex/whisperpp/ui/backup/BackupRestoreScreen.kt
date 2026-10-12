@@ -42,8 +42,8 @@ import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_MANIFEST
 import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS
 import com.github.shekohex.whisperpp.ui.backup.BackupNotice.Tone
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.components.SectionCard
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.appVersionName
@@ -111,7 +111,7 @@ fun BackupRestoreScreen(
                 )
             }
             item {
-                SettingsGroup(title = stringResource(R.string.backup_import_group)) {
+                SectionCard(title = stringResource(R.string.backup_import_group)) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -189,7 +189,7 @@ private fun ExportSection(
     enabled: Boolean,
     onExport: () -> Unit,
 ) {
-    SettingsGroup(title = stringResource(R.string.backup_export_group)) {
+    SectionCard(title = stringResource(R.string.backup_export_group)) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),

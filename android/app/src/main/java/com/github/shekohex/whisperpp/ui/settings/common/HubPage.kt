@@ -13,6 +13,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.components.SectionCard
+import com.github.shekohex.whisperpp.ui.components.SettingsNavRow
 import com.github.shekohex.whisperpp.ui.navigation.Destination
 
 /** One row of a hub tab (Modes / More) that opens [destination]. */
@@ -76,12 +78,12 @@ fun HubSectionList(
         }
         sections.forEach { section ->
             item(key = section.title) {
-                SettingsGroup(title = section.title) {
+                SectionCard(title = section.title) {
                     section.entries.forEach { entry ->
-                        SettingsItem(
-                            icon = entry.icon,
+                        SettingsNavRow(
+                            leadingIcon = entry.icon,
                             title = stringResource(entry.titleRes),
-                            subtitle = stringResource(entry.summaryRes),
+                            supporting = stringResource(entry.summaryRes),
                             onClick = { onNavigate(entry.destination) },
                         )
                     }
