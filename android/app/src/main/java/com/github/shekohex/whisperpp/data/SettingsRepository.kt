@@ -83,7 +83,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             PreferenceKeys.SMART_FIX_ENABLED,
             PreferenceKeys.HAPTIC_FEEDBACK_ENABLED,
             PreferenceKeys.SOUND_EFFECTS_ENABLED,
-            PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING
+            PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING,
+            PreferenceKeys.TAP_TO_RECORD
         )
         private val EXPORTABLE_INT_KEYS = listOf(PreferenceKeys.TIMEOUT)
         private val EXPORTABLE_FLOAT_KEYS = listOf(PreferenceKeys.SMART_FIX_TEMPERATURE)
@@ -95,6 +96,11 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     val pauseMediaWhileRecording: Flow<Boolean> = dataStore.data
         .map { prefs -> prefs[PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING] ?: true }
+        .distinctUntilChanged()
+
+    /** A tap on the idle mic starts a locked (hands-free) recording; holding always records. */
+    val tapToRecord: Flow<Boolean> = dataStore.data
+        .map { prefs -> prefs[PreferenceKeys.TAP_TO_RECORD] ?: true }
         .distinctUntilChanged()
 
     val providers: Flow<List<ServiceProvider>> = dataStore.data.map { prefs ->

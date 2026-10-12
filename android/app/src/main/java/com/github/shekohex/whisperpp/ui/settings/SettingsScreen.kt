@@ -67,6 +67,7 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_MODEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_PROMPT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.TAP_TO_RECORD
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SPEECH_TO_TEXT_BACKEND
 import com.github.shekohex.whisperpp.data.PreferenceKeys.UPDATE_CHANNEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
@@ -3947,6 +3948,12 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     title = "Auto Start Recording",
                     checked = settingsState?.get(AUTO_RECORDING_START) ?: true,
                     onCheckedChange = { scope.launch { dataStore.edit { s -> s[AUTO_RECORDING_START] = it } } }
+                )
+                SettingsToggle(
+                    icon = Icons.Default.TouchApp,
+                    title = stringResource(R.string.settings_tap_to_record),
+                    checked = settingsState?.get(TAP_TO_RECORD) ?: true,
+                    onCheckedChange = { scope.launch { dataStore.edit { s -> s[TAP_TO_RECORD] = it } } }
                 )
                 SettingsToggle(
                     icon = Icons.Default.SwapHoriz,

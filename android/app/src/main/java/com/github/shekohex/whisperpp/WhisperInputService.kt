@@ -111,6 +111,7 @@ import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
 import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeStyle
 import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeUiState
 import com.github.shekohex.whisperpp.ui.keyboard.KeyboardScreen
+import com.github.shekohex.whisperpp.ui.keyboard.RecordIntent
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
 import java.io.File
 import java.time.LocalDate
@@ -175,6 +176,7 @@ class WhisperInputService : InputMethodService() {
     private var shouldOfferImeSwitch = mutableStateOf(false)
     private var recordingTimeMs = mutableStateOf(0L)
     private var showLongPressHint = mutableStateOf(false)
+    private val tapToRecord = mutableStateOf(true)
     private var undoAvailable = mutableStateOf(false)
     private var undoQuickActionVisible = mutableStateOf(false)
     private var enhancementNotice = mutableStateOf<EnhancementNoticeUiState?>(null)
@@ -236,6 +238,7 @@ class WhisperInputService : InputMethodService() {
             repository.pauseMediaWhileRecording.stateIn(serviceScope, SharingStarted.Eagerly, true),
         )
         soundCues = SoundCues(this, serviceScope, repository.soundEffectsEnabled)
+        serviceScope.launch { repository.tapToRecord.collect { tapToRecord.value = it } }
         smartFixer = SmartFixer(this, container.okHttpClient)
         configLoader = RuntimeConfigLoader(dataStore, repository)
         disclosureGate = FirstUseDisclosureGate(dataStore, serviceScope)
@@ -513,19 +516,16 @@ class WhisperInputService : InputMethodService() {
                     KeyboardScreen(
                         state = keyboardState.value,
                         languageLabel = languageLabel.value,
-                        level = micLevel.value,
-                        recordingTimeMs = recordingTimeMs.value,
+                        level = { micLevel.value },
+                        recordingTimeMs = { recordingTimeMs.value },
                         showLongPressHint = showLongPressHint.value,
+                        tapToRecord = tapToRecord.value,
                         undoAvailable = undoAvailable.value,
                         undoQuickActionVisible = undoQuickActionVisible.value,
                         enhancementNotice = enhancementNotice.value,
                         enhancementUndoAvailable = enhancementUndoAvailable.value,
-                        onPressStart = { onPressStart() },
-                        onPressRelease = { session.onPressRelease() },
-                        onResumeAction = { session.onResume() },
+                        onRecordIntent = ::onRecordIntent,
                         onCancelAction = { onCancelAction() },
-                        onDiscardAction = { discardRecording() },
-                        onSendAction = { onSendAction() },
                         onDeleteAction = { onDeleteText() },
                         onUndoAction = { onUndoAction() },
                         onEnhancementUndoAction = {
@@ -541,8 +541,6 @@ class WhisperInputService : InputMethodService() {
                         onOpenSettingsDestination = { launchMainActivity(it) },
                         onLanguageClick = { showLanguageMenu(this) },
                         onDismissHint = { showLongPressHint.value = false },
-                        onLockAction = { session.onLock() },
-                        onUnlockAction = { session.onPause() },
                         externalSendBlockedReason = externalSendBlockReason.value,
                         externalSendBlockedByAppPolicy = externalSendBlockedByAppPolicy.value,
                         blockedPackageName = externalSendBlockedPackageName.value,
@@ -796,6 +794,21 @@ class WhisperInputService : InputMethodService() {
     }
 
     // region Dictation intents (thin forwarders to DictationSession)
+
+    private fun onRecordIntent(intent: RecordIntent) {
+        when (intent) {
+            is RecordIntent.PressStart -> onPressStart(intent.locked)
+            RecordIntent.PressRelease -> session.onPressRelease()
+            RecordIntent.Lock -> session.onLock()
+            RecordIntent.Cancel -> discardRecording()
+            RecordIntent.Stop -> onSendAction()
+            RecordIntent.Pause -> session.onPause()
+            RecordIntent.Resume -> session.onResume()
+            RecordIntent.HoldHint -> showLongPressHint.value = true
+            // Haptics are played by the button itself.
+            is RecordIntent.Haptic -> Unit
+        }
+    }
 
     private fun onPressStart(locked: Boolean = false) {
         if (isCommandModeActive.value) return

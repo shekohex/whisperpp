@@ -35,8 +35,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.github.shekohex.whisperpp.R
@@ -47,7 +57,6 @@ import com.github.shekohex.whisperpp.data.presetById
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isLocked
 import com.github.shekohex.whisperpp.keyboard.isPaused
-import com.github.shekohex.whisperpp.keyboard.isRecording
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
@@ -76,19 +85,17 @@ data class EnhancementNoticeUiState(
 fun KeyboardScreen(
     state: KeyboardState,
     languageLabel: String,
-    level: Float,
-    recordingTimeMs: Long,
+    level: () -> Float,
+    recordingTimeMs: () -> Long,
     showLongPressHint: Boolean,
+    tapToRecord: Boolean = true,
     undoAvailable: Boolean = false,
     undoQuickActionVisible: Boolean = false,
     enhancementNotice: EnhancementNoticeUiState? = null,
     enhancementUndoAvailable: Boolean = false,
-    onPressStart: () -> Unit,
-    onPressRelease: () -> Unit,
-    onResumeAction: () -> Unit,
+    /** Record gesture, accessibility actions and the pause/resume buttons all go through here. */
+    onRecordIntent: (RecordIntent) -> Unit,
     onCancelAction: () -> Unit,
-    onDiscardAction: () -> Unit,
-    onSendAction: () -> Unit,
     onDeleteAction: () -> Unit,
     onUndoAction: () -> Unit = {},
     onEnhancementUndoAction: () -> Unit = {},
@@ -97,8 +104,6 @@ fun KeyboardScreen(
     onOpenSettingsDestination: (String) -> Unit = {},
     onLanguageClick: () -> Unit,
     onDismissHint: () -> Unit,
-    onLockAction: () -> Unit = {},
-    onUnlockAction: () -> Unit = {},
     externalSendBlockedReason: SecureFieldDetector.Reason? = null,
     externalSendBlockedByAppPolicy: Boolean = false,
     blockedPackageName: String? = null,
@@ -138,11 +143,7 @@ fun KeyboardScreen(
 ) {
     val context = LocalContext.current
     val overlayMaxHeight = keyboardOverlayMaxHeight()
-    var swipeProgress by remember { mutableFloatStateOf(0f) }
-    var swipeUpProgress by remember { mutableFloatStateOf(0f) }
-    val isSwiping = swipeProgress > 0.05f
-    val isSwipingUp = swipeUpProgress > 0.05f
-    val isRecordingState = state.isRecording
+    var gestureUi by remember { mutableStateOf(GestureUi.Idle) }
     val isPausedState = state.isPaused
     val externalSendingBlocked = externalSendBlockedReason != null || externalSendBlockedByAppPolicy
     val canShowBlockedExplanation = externalSendingBlocked && (externalSendBlockedByAppPolicy || showSecureFieldExplanation)
@@ -174,13 +175,6 @@ fun KeyboardScreen(
         CommandStage.PROCESSING -> stringResource(R.string.command_stage_processing)
         CommandStage.DONE -> stringResource(R.string.command_stage_done)
         CommandStage.ERROR -> stringResource(R.string.command_stage_error)
-    }
-    
-    LaunchedEffect(state) {
-        if (!isRecordingState) {
-            swipeProgress = 0f
-            swipeUpProgress = 0f
-        }
     }
 
     LaunchedEffect(externalSendingBlocked) {
@@ -672,59 +666,46 @@ fun KeyboardScreen(
             ) {
                 // Left Cluster
                 Box(modifier = Modifier.width(100.dp), contentAlignment = Alignment.CenterStart) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = isSwiping && isRecordingState,
-                        enter = fadeIn() + scaleIn(),
-                        exit = fadeOut() + scaleOut()
-                    ) {
-                        PulsatingTrashIcon(swipeProgress)
-                    }
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = !isSwiping || !isRecordingState,
-                        enter = fadeIn() + scaleIn(),
-                        exit = fadeOut() + scaleOut()
-                    ) {
-                        AnimatedContent(
-                            targetState = state,
-                            transitionSpec = {
-                                fadeIn() + slideInHorizontally() togetherWith fadeOut() + slideOutHorizontally()
-                            },
-                            label = "LeftClusterTransition"
-                        ) { targetState ->
-                            when (targetState) {
-                                KeyboardState.Recording, KeyboardState.RecordingLocked -> {
-                                    RecordingTimer(recordingTimeMs)
+                    AnimatedContent(
+                        targetState = state,
+                        transitionSpec = {
+                            fadeIn() + slideInHorizontally() togetherWith fadeOut() + slideOutHorizontally()
+                        },
+                        label = "LeftClusterTransition"
+                    ) { targetState ->
+                        when (targetState) {
+                            KeyboardState.Recording, KeyboardState.RecordingLocked -> {
+                                RecordingTimer(recordingTimeMs)
+                            }
+                            KeyboardState.Paused, KeyboardState.PausedLocked -> {
+                                IconButton(onClick = onCancelAction) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = stringResource(R.string.record_action_cancel),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
                                 }
-                                KeyboardState.Paused, KeyboardState.PausedLocked -> {
-                                    IconButton(onClick = onCancelAction) {
+                            }
+                            KeyboardState.Ready, KeyboardState.Transcribing, KeyboardState.SmartFixing -> {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(onClick = onOpenSettings) {
                                         Icon(
-                                            Icons.Default.Delete,
-                                            null,
-                                            tint = MaterialTheme.colorScheme.error
+                                            Icons.Default.Settings,
+                                            contentDescription = stringResource(R.string.btn_settings_hint),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                }
-                                else -> {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        IconButton(onClick = onOpenSettings) {
-                                            Icon(
-                                                Icons.Default.Settings,
-                                                null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Surface(
-                                            onClick = onLanguageClick,
-                                            shape = RoundedCornerShape(16.dp),
-                                            color = MaterialTheme.colorScheme.secondaryContainer
-                                        ) {
-                                            Text(
-                                                text = languageLabel,
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                        }
+                                    Surface(
+                                        onClick = onLanguageClick,
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer
+                                    ) {
+                                        Text(
+                                            text = languageLabel,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
                                     }
                                 }
                             }
@@ -737,38 +718,35 @@ fun KeyboardScreen(
                     modifier = Modifier.weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = isSwiping && isRecordingState,
-                        enter = fadeIn() + scaleIn(),
-                        exit = fadeOut() + scaleOut()
-                    ) {
-                        ShimmerText(
-                            text = stringResource(R.string.swipe_to_discard),
-                            progress = swipeProgress
-                        )
-                    }
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = isSwipingUp && state == KeyboardState.Recording && !isSwiping,
-                        enter = fadeIn() + scaleIn(),
-                        exit = fadeOut() + scaleOut()
-                    ) {
-                        ShimmerLockText(progress = swipeUpProgress)
-                    }
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = !isSwiping && !isSwipingUp || !isRecordingState,
-                        enter = fadeIn() + scaleIn(),
-                        exit = fadeOut() + scaleOut()
-                    ) {
-                        if (isPausedState) {
-                            PausedControlsCenter(
-                                state = state,
-                                recordingTimeMs = recordingTimeMs,
-                                onResume = if (externalSendingBlocked) showBlockedExplanationAction else onResumeAction,
+                    AnimatedContent(
+                        targetState = centerContentFor(state, gestureUi),
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "CenterContentTransition"
+                    ) { content ->
+                        when (content) {
+                            CenterContent.CancelHint -> CancelHint(
+                                progress = gestureUi.cancelProgress,
+                                committed = gestureUi.phase == GesturePhase.Cancelled,
                             )
-                        } else if (micPermissionMissing && state == KeyboardState.Ready) {
-                            MicPermissionBanner(onAllow = onAllowMicPermission)
-                        } else {
-                            StatusContent(state, level, recordingTimeMs)
+                            CenterContent.LockHint -> LockHint(
+                                progress = gestureUi.lockProgress,
+                                locked = gestureUi.phase == GesturePhase.Locked,
+                            )
+                            CenterContent.Status -> if (isPausedState) {
+                                PausedControlsCenter(
+                                    state = state,
+                                    recordingTimeMs = recordingTimeMs,
+                                    onResume = if (externalSendingBlocked) {
+                                        showBlockedExplanationAction
+                                    } else {
+                                        { onRecordIntent(RecordIntent.Resume) }
+                                    },
+                                )
+                            } else if (micPermissionMissing && state == KeyboardState.Ready) {
+                                MicPermissionBanner(onAllow = onAllowMicPermission)
+                            } else {
+                                StatusContent(state, level, recordingTimeMs)
+                            }
                         }
                     }
                 }
@@ -778,7 +756,7 @@ fun KeyboardScreen(
                     AnimatedVisibility(visible = showEnhancementUndoAction) {
                         AssistChip(
                             onClick = onEnhancementUndoAction,
-                            label = { Text("Undo") },
+                            label = { Text(stringResource(R.string.undo)) },
                             leadingIcon = {
                                 Icon(
                                     Icons.AutoMirrored.Filled.Undo,
@@ -793,7 +771,7 @@ fun KeyboardScreen(
                         IconButton(onClick = onUndoAction) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Undo,
-                                null,
+                                contentDescription = stringResource(R.string.undo),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
@@ -824,41 +802,47 @@ fun KeyboardScreen(
                         }
                     }
 
+                    AnimatedVisibility(visible = state == KeyboardState.RecordingLocked) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = onCancelAction) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = stringResource(R.string.record_action_cancel),
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                            IconButton(onClick = { onRecordIntent(RecordIntent.Pause) }) {
+                                Icon(
+                                    Icons.Default.Pause,
+                                    contentDescription = stringResource(R.string.record_action_pause),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+
                     AnimatedVisibility(visible = state == KeyboardState.Transcribing || state == KeyboardState.SmartFixing) {
                         IconButton(onClick = onCancelAction) {
-                            Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.error)
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = stringResource(R.string.cancel_processing),
+                                tint = MaterialTheme.colorScheme.error,
+                            )
                         }
                     }
 
                     Spacer(Modifier.width(8.dp))
 
-                    if (isPausedState) {
-                        FilledIconButton(
-                            onClick = if (externalSendingBlocked) showBlockedExplanationAction else onSendAction,
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Send,
-                                contentDescription = null,
-                            )
-                        }
-                    } else {
-                        MainActionButton(
-                            state = state,
-                            externalSendingBlocked = externalSendingBlocked,
-                            showLongPressHint = showLongPressHint,
-                            onSwipeProgress = { swipeProgress = it },
-                            onSwipeUpProgress = { swipeUpProgress = it },
-                            onPressStart = onPressStart,
-                            onPressRelease = onPressRelease,
-                            onResumeAction = onResumeAction,
-                            onDiscardAction = onDiscardAction,
-                            onSendAction = onSendAction,
-                            onDismissHint = onDismissHint,
-                            onLockAction = onLockAction,
-                            onUnlockAction = onUnlockAction,
-                            onBlockedAction = showBlockedExplanationAction,
-                        )
-                    }
+                    MainActionButton(
+                        state = state,
+                        externalSendingBlocked = externalSendingBlocked,
+                        showLongPressHint = showLongPressHint,
+                        tapToRecord = tapToRecord,
+                        onIntent = onRecordIntent,
+                        onUi = { gestureUi = it },
+                        onDismissHint = onDismissHint,
+                        onBlockedAction = showBlockedExplanationAction,
+                    )
                 }
             }
         }
@@ -1016,14 +1000,6 @@ internal fun FirstUseDisclosureContent(
     }
 }
 
-fun formatTime(millis: Long): String {
-    val totalSeconds = millis / 1000
-    val mins = totalSeconds / 60
-    val secs = totalSeconds % 60
-    val ms = (millis % 1000) / 10
-    return "%02d:%02d.%02d".format(mins, secs, ms)
-}
-
 private fun formatCommandUndoSeconds(remainingMs: Long): Int {
     if (remainingMs <= 0L) return 0
     val seconds = (remainingMs + 999L) / 1000L
@@ -1031,39 +1007,9 @@ private fun formatCommandUndoSeconds(remainingMs: Long): Int {
 }
 
 @Composable
-fun RecordingTimer(millis: Long) {
-    val infiniteTransition = rememberInfiniteTransition(label = "RecDot")
-    val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(500, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "DotAlpha"
-    )
-    
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.error.copy(alpha = dotAlpha))
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = formatTime(millis),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.error,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
 fun PausedControlsCenter(
     state: KeyboardState,
-    recordingTimeMs: Long,
+    recordingTimeMs: () -> Long,
     onResume: () -> Unit,
 ) {
     Column(
@@ -1090,11 +1036,10 @@ fun PausedControlsCenter(
                 modifier = Modifier.size(16.dp),
             )
             Spacer(Modifier.width(6.dp))
-            Text(
-                text = formatTime(recordingTimeMs),
+            ElapsedTimeText(
+                millis = recordingTimeMs,
                 color = MaterialTheme.colorScheme.tertiary,
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
+                style = MaterialTheme.typography.titleMedium,
             )
         }
         Spacer(Modifier.height(6.dp))
@@ -1103,14 +1048,14 @@ fun PausedControlsCenter(
         ) {
             Icon(
                 Icons.Default.PlayArrow,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.record_action_resume),
             )
         }
     }
 }
 
 @Composable
-fun StatusContent(state: KeyboardState, level: Float, recordingTimeMs: Long) {
+fun StatusContent(state: KeyboardState, level: () -> Float, recordingTimeMs: () -> Long) {
     AnimatedContent(
         targetState = state,
         transitionSpec = {
@@ -1141,29 +1086,21 @@ fun StatusContent(state: KeyboardState, level: Float, recordingTimeMs: Long) {
                     StatusWaveform(level)
                 }
             }
-            KeyboardState.Paused -> {
-                Text(
-                    text = formatTime(recordingTimeMs),
-                    color = MaterialTheme.colorScheme.tertiary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    modifier = Modifier.animateAlphaLoop()
-                )
-            }
-            KeyboardState.PausedLocked -> {
+            KeyboardState.Paused, KeyboardState.PausedLocked -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = formatTime(recordingTimeMs),
+                    if (targetState.isLocked) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    ElapsedTimeText(
+                        millis = recordingTimeMs,
                         color = MaterialTheme.colorScheme.tertiary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                         modifier = Modifier.animateAlphaLoop()
                     )
                 }
@@ -1214,81 +1151,87 @@ fun TranscribingStatus() {
 }
 
 @Composable
-private fun StatusWaveform(level: Float) {
+private fun StatusWaveform(level: () -> Float) {
     // 48 bars at 3 dp + 2 dp gap; a narrower parent just shows fewer (newest) bars.
     LiveWaveform(
-        level = { level },
+        level = level,
         modifier = Modifier.width(238.dp).height(32.dp),
     )
 }
 
-@Composable
-fun PulsatingTrashIcon(progress: Float) {
-    val pulseDuration = (600 - (progress * 400)).toInt().coerceAtLeast(160)
-    
-    val infiniteTransition = rememberInfiniteTransition(label = "TrashPulse")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.3f + (progress * 0.2f),
-        animationSpec = infiniteRepeatable(
-            animation = tween(pulseDuration, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "TrashScale"
-    )
-    
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(pulseDuration, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "TrashAlpha"
-    )
-    
-    Icon(
-        Icons.Default.Delete,
-        contentDescription = null,
-        tint = MaterialTheme.colorScheme.error.copy(alpha = alpha),
-        modifier = Modifier
-            .size(28.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-    )
+private enum class CenterContent {
+    Status,
+    CancelHint,
+    LockHint,
 }
 
+/** Committed hints stay up until the finger lifts so the shake / click is visible. */
+private fun centerContentFor(state: KeyboardState, gesture: GestureUi): CenterContent = when {
+    gesture.phase == GesturePhase.Cancelled -> CenterContent.CancelHint
+    gesture.phase == GesturePhase.Locked -> CenterContent.LockHint
+    state != KeyboardState.Recording -> CenterContent.Status
+    gesture.axis == GestureAxis.Horizontal -> CenterContent.CancelHint
+    gesture.axis == GestureAxis.Vertical -> CenterContent.LockHint
+    else -> CenterContent.Status
+}
+
+private fun HapticKind.toFeedbackType(): HapticFeedbackType = when (this) {
+    HapticKind.LongPress -> HapticFeedbackType.LongPress
+    HapticKind.Confirm -> HapticFeedbackType.Confirm
+    HapticKind.Reject -> HapticFeedbackType.Reject
+}
+
+/**
+ * Follows the tracked pointer until it lifts or is cancelled. Compose delivers a system cancel as an
+ * already-consumed release, which is how it is told apart from a real lift.
+ */
+private suspend fun AwaitPointerEventScope.trackRecordPointer(
+    down: PointerInputChange,
+    dispatch: (GestureInput) -> Unit,
+) {
+    while (true) {
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: continue
+        if (!change.pressed) {
+            dispatch(if (change.isConsumed) GestureInput.Cancel else GestureInput.Up(change.uptimeMillis))
+            change.consume()
+            return
+        }
+        if (change.positionChanged()) {
+            val offset = change.position - down.position
+            dispatch(GestureInput.Move(offset.x, offset.y, change.uptimeMillis))
+            change.consume()
+        }
+    }
+}
+
+/** Main record button: one gesture handler (§4.1) plus accessibility actions mapped to the same intents (H-15). */
 @Composable
 fun MainActionButton(
     state: KeyboardState,
     externalSendingBlocked: Boolean,
     showLongPressHint: Boolean,
-    onSwipeProgress: (Float) -> Unit,
-    onSwipeUpProgress: (Float) -> Unit,
-    onPressStart: () -> Unit,
-    onPressRelease: () -> Unit,
-    onResumeAction: () -> Unit,
-    onDiscardAction: () -> Unit,
-    onSendAction: () -> Unit,
+    tapToRecord: Boolean,
+    onIntent: (RecordIntent) -> Unit,
+    onUi: (GestureUi) -> Unit,
     onDismissHint: () -> Unit,
-    onLockAction: () -> Unit,
-    onUnlockAction: () -> Unit,
     onBlockedAction: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val currentState by rememberUpdatedState(state)
-    val swipeThreshold = 420f
-    val swipeUpThreshold = 220f
-    
+    val currentBlocked by rememberUpdatedState(externalSendingBlocked)
+    val currentTapToRecord by rememberUpdatedState(tapToRecord)
+    val currentOnIntent by rememberUpdatedState(onIntent)
+    val currentOnUi by rememberUpdatedState(onUi)
+    val currentOnBlockedAction by rememberUpdatedState(onBlockedAction)
+
     LaunchedEffect(showLongPressHint) {
         if (showLongPressHint) {
             delay(2500)
             onDismissHint()
         }
     }
-    
+
     val size by animateDpAsState(
         targetValue = when (state) {
             KeyboardState.Recording -> 64.dp
@@ -1304,7 +1247,7 @@ fun MainActionButton(
             externalSendingBlocked -> MaterialTheme.colorScheme.surfaceVariant
             state == KeyboardState.Recording -> MaterialTheme.colorScheme.error
             state == KeyboardState.RecordingLocked -> MaterialTheme.colorScheme.tertiary
-            state == KeyboardState.Paused -> MaterialTheme.colorScheme.primary
+            state.isPaused -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.primaryContainer
         },
         label = "ContainerColor"
@@ -1315,7 +1258,7 @@ fun MainActionButton(
             externalSendingBlocked -> MaterialTheme.colorScheme.onSurfaceVariant
             state == KeyboardState.Recording -> MaterialTheme.colorScheme.onError
             state == KeyboardState.RecordingLocked -> MaterialTheme.colorScheme.onTertiary
-            state == KeyboardState.Paused -> MaterialTheme.colorScheme.onPrimary
+            state.isPaused -> MaterialTheme.colorScheme.onPrimary
             else -> MaterialTheme.colorScheme.onPrimaryContainer
         },
         label = "ContentColor"
@@ -1323,260 +1266,111 @@ fun MainActionButton(
 
     val icon = when {
         externalSendingBlocked -> Icons.Default.Lock
-        state == KeyboardState.Paused -> Icons.AutoMirrored.Filled.Send
-        state == KeyboardState.RecordingLocked -> Icons.Default.Lock
-        else -> Icons.Default.Mic
+        else -> when (state) {
+            KeyboardState.RecordingLocked,
+            KeyboardState.Paused,
+            KeyboardState.PausedLocked,
+            -> Icons.AutoMirrored.Filled.Send
+            KeyboardState.Ready,
+            KeyboardState.Recording,
+            KeyboardState.Transcribing,
+            KeyboardState.SmartFixing,
+            -> Icons.Default.Mic
+        }
     }
 
-    val interactionModifier = if (externalSendingBlocked) {
-        Modifier.clickable(onClick = onBlockedAction)
-    } else {
-        Modifier.pointerInput(Unit) {
-            awaitEachGesture {
-                awaitFirstDown()
-                val stateAtDown = currentState
+    val description = stringResource(
+        when {
+            externalSendingBlocked -> R.string.record_button_blocked
+            else -> when (state) {
+                KeyboardState.Ready -> if (tapToRecord) R.string.record_button_ready_tap else R.string.record_button_ready_hold
+                KeyboardState.Recording -> R.string.record_button_recording
+                KeyboardState.RecordingLocked -> R.string.record_button_locked
+                KeyboardState.Paused, KeyboardState.PausedLocked -> R.string.record_button_paused
+                KeyboardState.Transcribing, KeyboardState.SmartFixing -> R.string.record_button_busy
+            }
+        }
+    )
+    val startLabel = stringResource(R.string.record_action_start)
+    val sendLabel = stringResource(R.string.record_action_send)
+    val lockLabel = stringResource(R.string.record_action_lock)
+    val cancelLabel = stringResource(R.string.record_action_cancel)
+    val pauseLabel = stringResource(R.string.record_action_pause)
+    val resumeLabel = stringResource(R.string.record_action_resume)
+    // TalkBack never needs the drag: every gesture outcome is a click or a custom action.
+    val a11yActions: List<Pair<String, RecordIntent>> = when (state) {
+        KeyboardState.Ready -> listOf(startLabel to RecordIntent.PressStart(locked = true))
+        KeyboardState.Recording -> listOf(
+            sendLabel to RecordIntent.Stop,
+            lockLabel to RecordIntent.Lock,
+            cancelLabel to RecordIntent.Cancel,
+        )
+        KeyboardState.RecordingLocked -> listOf(
+            sendLabel to RecordIntent.Stop,
+            pauseLabel to RecordIntent.Pause,
+            cancelLabel to RecordIntent.Cancel,
+        )
+        KeyboardState.Paused, KeyboardState.PausedLocked -> listOf(
+            sendLabel to RecordIntent.Stop,
+            resumeLabel to RecordIntent.Resume,
+            cancelLabel to RecordIntent.Cancel,
+        )
+        KeyboardState.Transcribing, KeyboardState.SmartFixing -> emptyList()
+    }
+    val a11yModifier = Modifier.semantics(mergeDescendants = true) {
+        contentDescription = description
+        role = Role.Button
+        if (externalSendingBlocked) {
+            onClick { currentOnBlockedAction(); true }
+            return@semantics
+        }
+        a11yActions.firstOrNull()?.let { (label, intent) ->
+            onClick(label = label) { currentOnIntent(intent); true }
+        }
+        customActions = a11yActions.map { (label, intent) ->
+            CustomAccessibilityAction(label) { currentOnIntent(intent); true }
+        }
+    }
 
-                if (stateAtDown == KeyboardState.Ready) {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onPressStart()
-
-                    var currentDragX = 0f
-                    var currentDragY = 0f
-                    var didHapticAtThreshold = false
-                    var didHapticAtLockThreshold = false
-
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: break
-
-                        if (event.type == PointerEventType.Move) {
-                            val dragDelta = change.positionChange()
-                            currentDragX += dragDelta.x
-                            currentDragY += dragDelta.y
-
-                            val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                            val upProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
-
-                            if (leftProgress > upProgress) {
-                                onSwipeProgress(leftProgress)
-                                onSwipeUpProgress(0f)
-
-                                if (leftProgress >= 1f && !didHapticAtThreshold) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    didHapticAtThreshold = true
-                                } else if (leftProgress < 0.9f) {
-                                    didHapticAtThreshold = false
-                                }
-                            } else if (upProgress > 0.05f) {
-                                onSwipeUpProgress(upProgress)
-                                onSwipeProgress(0f)
-
-                                if (upProgress >= 1f && !didHapticAtLockThreshold) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    didHapticAtLockThreshold = true
-                                } else if (upProgress < 0.9f) {
-                                    didHapticAtLockThreshold = false
-                                }
-                            } else {
-                                onSwipeProgress(0f)
-                                onSwipeUpProgress(0f)
-                            }
-                        }
-
-                        if (!change.pressed) {
-                            val finalLeftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                            val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
-
-                            if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onDiscardAction()
-                            } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onLockAction()
-                            } else {
-                                onPressRelease()
-                            }
-                            onSwipeProgress(0f)
-                            onSwipeUpProgress(0f)
-                            break
-                        }
-                    }
-                } else if (stateAtDown == KeyboardState.Recording) {
-                    var currentDragX = 0f
-                    var currentDragY = 0f
-                    var didHapticAtThreshold = false
-                    var didHapticAtLockThreshold = false
-
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: break
-
-                        if (event.type == PointerEventType.Move) {
-                            val dragDelta = change.positionChange()
-                            currentDragX += dragDelta.x
-                            currentDragY += dragDelta.y
-
-                            val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                            val upProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
-
-                            if (leftProgress > upProgress) {
-                                onSwipeProgress(leftProgress)
-                                onSwipeUpProgress(0f)
-
-                                if (leftProgress >= 1f && !didHapticAtThreshold) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    didHapticAtThreshold = true
-                                } else if (leftProgress < 0.9f) {
-                                    didHapticAtThreshold = false
-                                }
-                            } else if (upProgress > 0.05f) {
-                                onSwipeUpProgress(upProgress)
-                                onSwipeProgress(0f)
-
-                                if (upProgress >= 1f && !didHapticAtLockThreshold) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    didHapticAtLockThreshold = true
-                                } else if (upProgress < 0.9f) {
-                                    didHapticAtLockThreshold = false
-                                }
-                            } else {
-                                onSwipeProgress(0f)
-                                onSwipeUpProgress(0f)
-                            }
-                        }
-
-                        if (!change.pressed) {
-                            val finalLeftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                            val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
-
-                            if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onDiscardAction()
-                            } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onLockAction()
-                            } else {
-                                onPressRelease()
-                            }
-                            onSwipeProgress(0f)
-                            onSwipeUpProgress(0f)
-                            break
-                        }
-                    }
-                } else if (stateAtDown == KeyboardState.RecordingLocked) {
-                    var currentDragX = 0f
-                    var didHapticAtThreshold = false
-
-                    val up = withTimeoutOrNull(400) {
-                        waitForUpOrCancellation()
-                    }
-
-                    if (up != null) {
-                        onUnlockAction()
-                    } else {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull() ?: break
-
-                            if (event.type == PointerEventType.Move) {
-                                val dragDelta = change.positionChange()
-                                currentDragX += dragDelta.x
-
-                                val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                                onSwipeProgress(leftProgress)
-
-                                if (leftProgress >= 1f && !didHapticAtThreshold) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    didHapticAtThreshold = true
-                                } else if (leftProgress < 0.9f) {
-                                    didHapticAtThreshold = false
-                                }
-                            }
-
-                            if (!change.pressed) {
-                                val finalProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                                if (finalProgress >= 1f) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onDiscardAction()
-                                }
-                                onSwipeProgress(0f)
-                                break
-                            }
-                        }
-                    }
-                } else if (stateAtDown == KeyboardState.Paused) {
-                    val up = withTimeoutOrNull(400) {
-                        waitForUpOrCancellation()
-                    }
-                    if (up != null) {
-                        onSendAction()
-                    } else {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onResumeAction()
-
-                        var currentDragX = 0f
-                        var currentDragY = 0f
-                        var didHapticAtThreshold = false
-                        var didHapticAtLockThreshold = false
-
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull() ?: break
-
-                            if (event.type == PointerEventType.Move) {
-                                val dragDelta = change.positionChange()
-                                currentDragX += dragDelta.x
-                                currentDragY += dragDelta.y
-
-                                val leftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                                val upProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
-
-                                if (leftProgress > upProgress) {
-                                    onSwipeProgress(leftProgress)
-                                    onSwipeUpProgress(0f)
-
-                                    if (leftProgress >= 1f && !didHapticAtThreshold) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        didHapticAtThreshold = true
-                                    } else if (leftProgress < 0.9f) {
-                                        didHapticAtThreshold = false
-                                    }
-                                } else if (upProgress > 0.05f) {
-                                    onSwipeUpProgress(upProgress)
-                                    onSwipeProgress(0f)
-
-                                    if (upProgress >= 1f && !didHapticAtLockThreshold) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        didHapticAtLockThreshold = true
-                                    } else if (upProgress < 0.9f) {
-                                        didHapticAtLockThreshold = false
-                                    }
-                                } else {
-                                    onSwipeProgress(0f)
-                                    onSwipeUpProgress(0f)
-                                }
-                            }
-
-                            if (!change.pressed) {
-                                val finalLeftProgress = ((-currentDragX) / swipeThreshold).coerceIn(0f, 1f)
-                                val finalUpProgress = ((-currentDragY) / swipeUpThreshold).coerceIn(0f, 1f)
-
-                                if (finalLeftProgress >= 1f && finalLeftProgress > finalUpProgress) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onDiscardAction()
-                                } else if (finalUpProgress >= 1f && finalUpProgress > finalLeftProgress) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onLockAction()
-                                } else {
-                                    onPressRelease()
-                                }
-                                onSwipeProgress(0f)
-                                onSwipeUpProgress(0f)
-                                break
-                            }
-                        }
-                    }
+    val gestureModifier = Modifier.pointerInput(isRtl) {
+        val machine = RecordGestureStateMachine(
+            density = density,
+            touchSlopPx = viewConfiguration.touchSlop,
+            tapToRecord = { currentTapToRecord },
+            startIsLeft = !isRtl,
+        )
+        val dispatch: (GestureInput) -> Unit = { input ->
+            val output = machine.reduce(input, currentState.toRecordSession())
+            output.intents.forEach { intent ->
+                if (intent is RecordIntent.Haptic) {
+                    haptic.performHapticFeedback(intent.kind.toFeedbackType())
+                } else {
+                    currentOnIntent(intent)
                 }
+            }
+            currentOnUi(output.ui)
+        }
+        awaitEachGesture {
+            val down = awaitFirstDown()
+            down.consume()
+            if (currentBlocked) {
+                if (waitForUpOrCancellation() != null) currentOnBlockedAction()
+                return@awaitEachGesture
+            }
+            dispatch(GestureInput.Down(down.uptimeMillis))
+            var ended = false
+            try {
+                val endedBeforeHold = withTimeoutOrNull(GestureTokens.HOLD_THRESHOLD_MS) {
+                    trackRecordPointer(down, dispatch)
+                }
+                if (endedBeforeHold == null) {
+                    dispatch(GestureInput.HoldTimerFired)
+                    trackRecordPointer(down, dispatch)
+                }
+                ended = true
+            } finally {
+                // The input view went away mid-gesture (window hidden / recomposed out).
+                if (!ended) dispatch(GestureInput.Cancel)
             }
         }
     }
@@ -1605,13 +1399,14 @@ fun MainActionButton(
                 }
             }
         }
-        
+
         Box(
             modifier = Modifier
                 .size(size)
                 .clip(CircleShape)
                 .background(containerColor)
-                .then(interactionModifier),
+                .then(a11yModifier)
+                .then(gestureModifier),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -1759,79 +1554,4 @@ fun Modifier.animateAlphaLoop(): Modifier = this.composed {
         label = "AlphaValue"
     )
     this.then(Modifier.graphicsLayer { this.alpha = alpha })
-}
-
-@Composable
-fun ShimmerText(text: String, progress: Float) {
-    val infiniteTransition = rememberInfiniteTransition(label = "Shimmer")
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ShimmerOffset"
-    )
-    
-    val baseColor = MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
-    val highlightColor = MaterialTheme.colorScheme.error
-    
-    val brush = Brush.linearGradient(
-        colors = listOf(baseColor, highlightColor, baseColor),
-        start = Offset(shimmerOffset * 500f - 100f, 0f),
-        end = Offset(shimmerOffset * 500f + 100f, 0f)
-    )
-    
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium.copy(
-            brush = brush
-        ),
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.graphicsLayer {
-            alpha = 0.7f + (progress * 0.3f)
-        }
-    )
-}
-
-@Composable
-fun ShimmerLockText(progress: Float) {
-    val infiniteTransition = rememberInfiniteTransition(label = "LockShimmer")
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "LockShimmerOffset"
-    )
-    
-    val baseColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f)
-    val highlightColor = MaterialTheme.colorScheme.tertiary
-    
-    val brush = Brush.linearGradient(
-        colors = listOf(baseColor, highlightColor, baseColor),
-        start = Offset(shimmerOffset * 500f - 100f, 0f),
-        end = Offset(shimmerOffset * 500f + 100f, 0f)
-    )
-    
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            Icons.Default.Lock,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.tertiary,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = stringResource(R.string.swipe_to_lock),
-            style = MaterialTheme.typography.titleMedium.copy(brush = brush),
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.graphicsLayer {
-                alpha = 0.7f + (progress * 0.3f)
-            }
-        )
-    }
 }
