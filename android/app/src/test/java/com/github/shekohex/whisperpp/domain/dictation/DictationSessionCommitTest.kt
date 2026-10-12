@@ -173,6 +173,43 @@ class DictationSessionCommitTest {
     }
 
     @Test
+    fun enhancement_runsBeforeInsert_soTheFieldNeverHoldsTheRawText() = sessionTest { h ->
+        val gate = CompletableDeferred<DictationEnhancer.Result>()
+        h.enhancer = object : DictationEnhancer {
+            override suspend fun isEnabled(request: DictationEnhancer.Request) = true
+            override suspend fun enhance(request: DictationEnhancer.Request) = gate.await()
+        }
+        h.recordFor(1_000)
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        assertEquals(SessionState.Enhancing(h.focus, "hello"), h.session.state.value)
+        assertEquals("prefix ", h.ic.getText())
+
+        gate.complete(DictationEnhancer.Result.Enhanced("Hello.", "P (m)"))
+        advanceUntilIdle()
+
+        assertEquals("prefix Hello.", h.ic.getText())
+        assertTrue(h.events.contains(SessionEvent.EnhancementApplied))
+    }
+
+    @Test
+    fun enhancementFailure_insertsTheRawTextOnce() = sessionTest { h ->
+        h.enhancer = object : DictationEnhancer {
+            override suspend fun isEnabled(request: DictationEnhancer.Request) = true
+            override suspend fun enhance(request: DictationEnhancer.Request) =
+                DictationEnhancer.Result.Kept("offline", isError = true)
+        }
+        h.recordFor(1_000)
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        assertEquals("prefix hello", h.ic.getText())
+        assertTrue(h.events.contains(SessionEvent.EnhancementNotice("offline", true)))
+        assertTrue(h.events.none { it is SessionEvent.EnhancementApplied })
+    }
+
+    @Test
     fun contextPrompt_isCapturedAtStop_beforeFocusMoves() = sessionTest { h ->
         h.useContext = true
         h.recordFor(1_000, locked = true)

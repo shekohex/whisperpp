@@ -39,7 +39,7 @@ class ImeComponents(private val host: ImeHost, private val scope: CoroutineScope
     private val container = context.appContainer
     private val dataStore = container.settingsDataStore
     private val providerFactory = container.providerFactory
-    private val repository = container.settingsRepository
+    val repository = container.settingsRepository
     private val dictionaryRepository = container.dictionaryRepository
 
     val textCommitter = TextCommitter { host.inputConnection }
@@ -54,7 +54,7 @@ class ImeComponents(private val host: ImeHost, private val scope: CoroutineScope
     val autoLearnObserver: AutoLearnObserver = createAutoLearnObserver()
     private val postProcessor = TranscriptPostProcessor.create(scope, dataStore, dictionaryRepository)
     val audioRecorder = AudioRecorder(context, scope, AmplitudeMeter())
-    private val recordingFiles = RecordingFiles(directory = { context.externalCacheDir ?: context.cacheDir })
+    val recordingFiles = RecordingFiles(directory = { context.externalCacheDir ?: context.cacheDir })
     val audioFocus = AudioFocusController(
         SystemAudioFocusGateway(context.getSystemService(Context.AUDIO_SERVICE) as AudioManager),
         repository.pauseMediaWhileRecording.stateIn(scope, SharingStarted.Eagerly, true),

@@ -234,17 +234,21 @@ fun MainActionButton(
         }
     }
 
+    // The gesture lives on this fixed-size box: the visible button below grows when recording starts, and
+    // pointer offsets measured in a resizing node would drift diagonally and flip the slide axis.
     Box(
-        modifier = Modifier.size(64.dp),
+        modifier = Modifier
+            .size(64.dp)
+            .clip(CircleShape)
+            .then(a11yModifier)
+            .then(gestureModifier),
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
                 .size(size)
                 .clip(CircleShape)
-                .background(containerColor)
-                .then(a11yModifier)
-                .then(gestureModifier),
+                .background(containerColor),
             contentAlignment = Alignment.Center
         ) {
             Icon(

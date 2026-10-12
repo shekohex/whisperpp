@@ -116,8 +116,11 @@ class TextCommitter(
         }
     }
 
-    /** Inserts [text] for [focus], replacing our composing partial if any, and records undo. */
-    fun commit(focus: FocusKey, text: String): CommitResult {
+    /**
+     * Inserts [text] for [focus], replacing our composing partial if any, and records undo.
+     * [rawBeforeEnhancement] is the transcript [text] was enhanced from; it enables "undo enhancement".
+     */
+    fun commit(focus: FocusKey, text: String, rawBeforeEnhancement: String? = null): CommitResult {
         val ic = inputConnection()
         if (ic == null || focus.inputType == 0) {
             dropComposing()
@@ -157,6 +160,14 @@ class TextCommitter(
                 selectionAfterInsert = selectionAfter ?: DictationUndoEntry.SelectionSnapshot(end, end),
             )
         )
+        if (rawBeforeEnhancement != null) {
+            enhancementUndoEntry = EnhancementUndoEntry(
+                focusKey = focus,
+                start = insertionStart,
+                endAtReplace = end,
+                rawText = rawBeforeEnhancement,
+            )
+        }
         return CommitResult.Inserted(CapturedSegment(focus, insertionStart, end, text))
     }
 

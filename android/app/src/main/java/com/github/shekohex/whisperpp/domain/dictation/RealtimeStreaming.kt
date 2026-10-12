@@ -103,7 +103,7 @@ internal class RealtimeStreaming(
         if (s !is SessionState.Recording && s !is SessionState.Transcribing) return
         if (currentFocus() != r.focus || !deps.sendAllowed()) return
         // Partials would overwrite the selection to replace, or touch a field that gets nothing.
-        if (r.options.outputMode != OutputMode.INSERT) return
+        if (r.options.outputMode != OutputMode.INSERT || r.suppressPartials) return
         val now = deps.clock()
         val last = r.lastPartialAt
         if (last != null && now - last < deps.partialThrottleMs) return

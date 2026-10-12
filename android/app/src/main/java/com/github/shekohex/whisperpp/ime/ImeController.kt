@@ -13,6 +13,7 @@ import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isRecording
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -55,6 +56,9 @@ class ImeController(
         projector.observeRecorder(c.audioRecorder, c.commands::onCaptureError)
         projector.observeSession(c.session, c.sessionEvents::onEvent)
         c.undo.refresh()
+
+        scope.launch { c.repository.tapToRecord.collect { c.ui.tapToRecord.value = it } }
+        scope.launch(Dispatchers.IO) { c.recordingFiles.deleteStale() }
 
         scope.launch {
             // The retry runs from onStartInputView once the host app regains focus.

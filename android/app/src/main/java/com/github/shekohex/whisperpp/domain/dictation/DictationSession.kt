@@ -278,6 +278,7 @@ class DictationSession(private val deps: Deps) {
             StartDecision.PermissionRequired -> return finish(r, SessionState.Idle)
         }
         r.plan = plan
+        r.suppressPartials = enhancement.willEnhance(r)
         if (plan.options.outputMode == OutputMode.REPLACE_SELECTION && currentFocus == r.focus) {
             r.replaceRange = deps.committer.selectedRange()
         }
@@ -368,44 +369,52 @@ class DictationSession(private val deps: Deps) {
         // Applied once here, for streamed and batch transcripts alike.
         val addSpace = r.plan?.request?.addTrailingSpace == true && !processed.endsWith(' ')
         val raw = if (addSpace) "$processed " else processed
-        _state.value = SessionState.Committing(r.focus, raw)
+        if (r.options.outputMode == OutputMode.CLIPBOARD) {
+            _state.value = SessionState.Committing(r.focus, raw)
+            deps.cues(SoundCues.Cue.DONE)
+            windowVisible.first { it }
+            if (run !== r) return
+            return deliverToClipboard(r, raw)
+        }
+
+        // Enhancement happens first: the field only ever receives the final text, never the raw one.
+        val outcome = enhancement.beforeInsert(r, raw) ?: return
+        val text = outcome.text
+        _state.value = SessionState.Committing(r.focus, text)
         deps.cues(SoundCues.Cue.DONE)
         // A hidden keyboard holds the commit until the user is back (A-05).
         windowVisible.first { it }
         if (run !== r) return
-        if (r.options.outputMode == OutputMode.CLIPBOARD) return deliverToClipboard(r, raw)
 
         if (currentFocus != r.focus) {
-            _pendingCommit.value = raw
-            emit(SessionEvent.CommitBlockedByFocus(raw))
+            _pendingCommit.value = text
+            emit(SessionEvent.CommitBlockedByFocus(text))
             return finish(r, SessionState.Idle)
         }
         if (!deps.sendAllowed()) {
-            emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.BLOCKED))
+            emit(SessionEvent.CommitFailed(text, SessionEvent.CommitFailed.Reason.BLOCKED))
             return finish(r, SessionState.Idle)
         }
         r.replaceRange?.let(deps.committer::select)
-        val result = deps.committer.commit(r.focus, raw)
+        val result = deps.committer.commit(r.focus, text, rawBeforeEnhancement = raw.takeIf { outcome.enhanced })
         r.composing = false
-        val segment = when (result) {
+        when (result) {
             TextCommitter.CommitResult.NoField -> {
-                emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.NO_FIELD))
+                emit(SessionEvent.CommitFailed(text, SessionEvent.CommitFailed.Reason.NO_FIELD))
                 return finish(r, SessionState.Idle)
             }
             is TextCommitter.CommitResult.Failed -> {
                 // Not in the field: keep it for Insert here / Copy instead of reporting success.
-                _pendingCommit.value = raw
-                emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.INSERT_FAILED))
+                _pendingCommit.value = text
+                emit(SessionEvent.CommitFailed(text, SessionEvent.CommitFailed.Reason.INSERT_FAILED))
                 return finish(r, SessionState.Idle)
             }
-            is TextCommitter.CommitResult.Inserted -> result.segment
+            is TextCommitter.CommitResult.Inserted -> Unit
         }
         r.rawText = raw
-        emit(SessionEvent.Committed(raw))
-
-        val finalText = if (segment != null) enhancement.enhance(r, raw, segment) else raw
-        if (run !== r) return
-        completion.complete(r, raw, finalText)
+        emit(SessionEvent.Committed(text))
+        if (outcome.enhanced) emit(SessionEvent.EnhancementApplied)
+        completion.complete(r, raw, text)
         finish(r, SessionState.Idle)
     }
 
@@ -417,6 +426,36 @@ class DictationSession(private val deps: Deps) {
         emit(SessionEvent.CopyToClipboard(finalText))
         completion.complete(r, raw, finalText)
         finish(r, SessionState.Idle)
+    }
+
+    /** Cancelling while enhancing skips the enhancement; the raw text still lands (or is held for Insert here). */
+    private fun insertRawAfterCancel(r: DictationRun, raw: String): Boolean {
+        if (currentFocus != r.focus || !windowVisible.value) {
+            _pendingCommit.value = raw
+            emit(SessionEvent.CommitBlockedByFocus(raw))
+            return false
+        }
+        if (!deps.sendAllowed()) {
+            emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.BLOCKED))
+            return false
+        }
+        r.replaceRange?.let(deps.committer::select)
+        return when (deps.committer.commit(r.focus, raw)) {
+            TextCommitter.CommitResult.NoField -> {
+                emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.NO_FIELD))
+                false
+            }
+            is TextCommitter.CommitResult.Failed -> {
+                _pendingCommit.value = raw
+                emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.INSERT_FAILED))
+                false
+            }
+            is TextCommitter.CommitResult.Inserted -> {
+                r.rawText = raw
+                emit(SessionEvent.Committed(raw))
+                true
+            }
+        }
     }
 
     private fun pause(s: SessionState.Recording) {
@@ -444,10 +483,14 @@ class DictationSession(private val deps: Deps) {
     private fun cancelRun(recordDiscard: Boolean) {
         val r = run ?: return
         when (val s = _state.value) {
-            // The raw text is already in the field; only the enhancement is abandoned.
+            // Only the enhancement is abandoned: the raw transcript is what the user gets.
             is SessionState.Enhancing -> {
-                if (r.options.outputMode == OutputMode.CLIPBOARD) emit(SessionEvent.CopyToClipboard(s.raw))
-                completion.complete(r, s.raw, s.raw)
+                if (r.options.outputMode == OutputMode.CLIPBOARD) {
+                    emit(SessionEvent.CopyToClipboard(s.raw))
+                    completion.complete(r, s.raw, s.raw)
+                } else if (insertRawAfterCancel(r, s.raw)) {
+                    completion.complete(r, s.raw, s.raw)
+                }
             }
             is SessionState.Recording -> if (recordDiscard) emit(SessionEvent.Discarded(s.elapsedMs(deps.clock())))
             is SessionState.Transcribing,

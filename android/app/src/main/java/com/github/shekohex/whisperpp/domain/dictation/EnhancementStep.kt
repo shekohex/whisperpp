@@ -23,23 +23,35 @@ internal class EnhancementStep(
             null -> raw
         }
 
-    suspend fun enhance(r: DictationRun, raw: String, segment: TextCommitter.CapturedSegment): String {
-        val result = request(r, raw) ?: return raw
+    /** What goes into the field: the enhanced text, or [raw] when enhancement is off or failed. */
+    class Outcome(val text: String, val enhanced: Boolean)
+
+    /**
+     * Enhancement before anything is written (the field only ever gets the final text). Null when the
+     * run ended meanwhile. Failure keeps [raw] and says why.
+     */
+    suspend fun beforeInsert(r: DictationRun, raw: String): Outcome? {
+        val result = request(r, raw)
+        if (!isCurrent(r)) return null
         return when (result) {
+            null -> Outcome(raw, enhanced = false)
             is DictationEnhancer.Result.Kept -> {
                 result.notice?.let { emit(SessionEvent.EnhancementNotice(it, result.isError)) }
-                raw
+                Outcome(raw, enhanced = false)
             }
-            is DictationEnhancer.Result.Enhanced -> {
-                if (deps.committer.replaceSegment(segment, result.text, currentFocus())) {
-                    emit(SessionEvent.EnhancementApplied)
-                    result.text
-                } else {
-                    emit(SessionEvent.EnhancementKeptRaw(result.label))
-                    raw
-                }
+            is DictationEnhancer.Result.Enhanced -> if (result.text.isBlank()) {
+                emit(SessionEvent.EnhancementKeptRaw(result.label))
+                Outcome(raw, enhanced = false)
+            } else {
+                Outcome(result.text, enhanced = true)
             }
         }
+    }
+
+    /** Whether this run will enhance, known up front so streaming partials can stay out of the field. */
+    suspend fun willEnhance(r: DictationRun): Boolean {
+        val enhancer = deps.enhancer ?: return false
+        return enhancer.isEnabled(DictationEnhancer.Request(r.focus, PROBE_TEXT, null, r.options))
     }
 
     /** Enhancement context: text before the cursor plus the mode's extra sources. */
@@ -77,5 +89,10 @@ internal class EnhancementStep(
             r.enhancementModelId = result.modelId
         }
         return result
+    }
+
+    private companion object {
+        /** Any non-blank, non-punctuation text: only the enabled switch matters for [willEnhance]. */
+        const val PROBE_TEXT = "a"
     }
 }
