@@ -590,7 +590,7 @@ Order within a phase is flexible unless a dependency is noted. Commit per WP wit
 
 **WP-2.7 Phase 2 review fixes** — 15 findings from the Phase 2 review (realtime trailing-audio acknowledgement + grace window, auto-send bound to insertion focus/run id, classifier: `*realtime*` ignored / `*-transcribe*` + `whisper-1` realtime-capable, Gemini realtime=false and bidi-only ignored, shared `fromLegacy` for `MULTIMODAL`, `response_format=json` for `gpt-*-transcribe`, `WebSocket.cancel()` on abort, Gemini 14 MB base64-aware cap + typed block errors, empty post-process → `TranscriptionEmpty`, reasoning-model params, `DiscoveryIdentity` cache key, `IME_FLAG_NO_ENTER_ACTION`, Arabic fillers trimmed, trailing space in shared path). DONE (796d956).
 
-### Phase 3 — App UI rework
+### Phase 3 — App UI rework — DONE (499a86d…1ce5207; WP-3.6 e867a8c, WP-3.7 leftovers 5e7003c)
 
 **WP-3.1 Theme & components** — H-07, H-08 (components part)
 - `ui/theme/*` full M3 scale, shapes, spacing, branded fallback palette; shared `SettingsRow`, `SectionCard`, `StatusChip`, `EmptyState`, `ErrorState`, `SecureTextField`.
@@ -620,7 +620,9 @@ Order within a phase is flexible unless a dependency is noted. Commit per WP wit
 **WP-3.11 Dictionary UI** — §4.11 (replacements + vocabulary tabs, settings sheet, export/import). Depends on WP-2.4 for `WordReplacements`.
 **WP-3.12 Auto-Learn** — §4.11 steps 1–6: `AutoLearnObserver` (IME capture), `CorrectionDiffEngine` port with tests ported from VoiceInk's cases, pending queue, AI reviewer with the verbatim prompt + validation tests, proposals review sheet, undo, privacy note. Off by default. Depends on WP-3.11 and WP-1.2.
 
-### Phase 4 — Polish & hardening
+### Phase 4 — Polish & hardening — code done, needs device verification
+
+Status: WP-4.1 done (1a61275). WP-4.2 done (`WhisperInputService` 1761 → 224 lines, settings/backup repositories and `DictationSession` split under ~600 lines; `ProviderRepository`/`PromptRepository`/`AppMappingRepository` split of `SettingsRepository` deliberately not done). WP-4.3 partial: keyboard per-state semantics test added, onboarding flow test still open (needs a ViewModel seam). WP-4.4 partial: R8 keep rules + README done; version bump/tag pending a target `versionName`. None of the Phase 4 changes have been run on a device.
 
 **WP-4.1 Updater fixes + tests** — K-01, K-02, L-07
 **WP-4.2 Dead code & service slimming audit** — I-01, I-06 (verify `WhisperInputService` < 400 lines)
