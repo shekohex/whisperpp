@@ -64,21 +64,30 @@ data class ModelCapabilities(
     companion object {
         val TEXT = ModelCapabilities(text = true)
 
+        /** Gemini chat models take inline audio through `generateContent` (G-04, WP-2.2). */
+        val GEMINI_AUDIO = ModelCapabilities(
+            stt = true,
+            text = true,
+            vocabulary = ProviderType.GEMINI.acceptsTranscriptionPrompt,
+        )
+
         /**
-         * Maps the pre-v3 flags. `MULTIMODAL` becomes text-only: STT always used the Whisper
-         * multipart API, which Gemini does not serve (G-04; WP-2.2 may re-enable it).
+         * Maps the pre-v3 flags. `gemini-*` models of a Gemini provider are always STT + text: STT
+         * used to be Whisper multipart only, so `MULTIMODAL` was first migrated to text-only.
          */
         fun fromLegacy(
             kind: ModelKind?,
             isThinking: Boolean,
             streamingPartialsSupported: Boolean,
             providerType: ProviderType,
+            modelId: String = "",
         ): ModelCapabilities {
-            val stt = kind == ModelKind.STT
+            val geminiAudio = providerType.isGeminiAudioModel(modelId)
+            val stt = kind == ModelKind.STT || geminiAudio
             return ModelCapabilities(
                 stt = stt,
-                text = kind != ModelKind.STT,
-                realtime = stt && streamingPartialsSupported,
+                text = kind != ModelKind.STT || geminiAudio,
+                realtime = kind == ModelKind.STT && streamingPartialsSupported,
                 thinking = isThinking,
                 vocabulary = stt && providerType.acceptsTranscriptionPrompt,
             )
@@ -92,9 +101,15 @@ data class ModelCapabilities(
     }
 }
 
-/** OpenAI-compatible transcription endpoints accept a `prompt` (vocabulary) field. */
+/** OpenAI-compatible endpoints take a `prompt` field; Gemini gets it as preferred spellings. */
 val ProviderType.acceptsTranscriptionPrompt: Boolean
-    get() = this == ProviderType.OPENAI || this == ProviderType.CUSTOM
+    get() = this == ProviderType.OPENAI || this == ProviderType.CUSTOM || this == ProviderType.GEMINI
+
+/** Gemini `generateContent` models (not embeddings) accept inline audio. */
+fun ProviderType.isGeminiAudioModel(modelId: String): Boolean {
+    val id = modelId.trim().removePrefix("models/").lowercase()
+    return this == ProviderType.GEMINI && id.startsWith("gemini-") && !id.contains("embedding")
+}
 
 data class ModelConfig(
     val id: String,

@@ -7,7 +7,6 @@ import com.google.gson.JsonParser
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -53,12 +52,35 @@ class ProviderSchemaV3MigrationTest {
     }
 
     @Test
-    fun multimodal_becomesTextOnly_andLegacyKindIsRewritten() {
+    fun geminiModels_becomeSttAndText_andLegacyKindStaysMultimodal() {
         val migrated = JsonParser.parseString(migrateProvidersJsonToSchemaV3(v2Json)).asJsonArray
 
         val flash = migrated[1].model(0)
-        assertEquals(capabilities(text = true), flash.capabilities())
-        assertEquals("TEXT", flash.get("kind").asString)
+        assertEquals(capabilities(stt = true, text = true, vocabulary = true), flash.capabilities())
+        assertEquals("MULTIMODAL", flash.get("kind").asString)
+    }
+
+    @Test
+    fun geminiFixUp_onlyTouchesGeminiChatModels() {
+        val json = """
+            [
+              {"id": "g", "name": "G", "type": "GEMINI", "endpoint": "https://x/v1beta", "models": [
+                {"id": "gemini-2.5-pro", "name": "Pro", "kind": "TEXT"},
+                {"id": "gemini-embedding-001", "name": "Emb", "kind": "TEXT"},
+                {"id": "custom-tuned", "name": "Tuned", "kind": "MULTIMODAL"}
+              ]},
+              {"id": "c", "name": "C", "type": "CUSTOM", "endpoint": "https://y/v1", "models": [
+                {"id": "gemini-via-proxy", "name": "Proxy", "kind": "TEXT"}
+              ]}
+            ]
+        """.trimIndent()
+
+        val migrated = JsonParser.parseString(migrateProvidersJsonToSchemaV3(json)).asJsonArray
+
+        assertEquals(capabilities(stt = true, text = true, vocabulary = true), migrated[0].model(0).capabilities())
+        assertEquals(capabilities(text = true), migrated[0].model(1).capabilities())
+        assertEquals(capabilities(text = true), migrated[0].model(2).capabilities())
+        assertEquals(capabilities(text = true), migrated[1].model(0).capabilities())
     }
 
     @Test
@@ -81,7 +103,7 @@ class ProviderSchemaV3MigrationTest {
         assertTrue(prefs[PreferenceKeys.PROVIDER_SCHEMA_V3_MIGRATION_DONE] == true)
         assertTrue(prefs[PreferenceKeys.PROVIDERS_JSON]!!.contains("\"capabilities\""))
         val flash = repository.providers.first().single { it.id == "gemini" }.models.single()
-        assertFalse(flash.capabilities.stt)
+        assertTrue(flash.capabilities.stt)
         assertTrue(flash.capabilities.text)
 
         dataStore.edit { it[PreferenceKeys.PROVIDERS_JSON] = v2Json }
@@ -99,6 +121,8 @@ class ProviderSchemaV3MigrationTest {
 
         val whisper = providers.single { it.id == "openai" }.models.first()
         assertEquals(ModelCapabilities(stt = true, realtime = true, vocabulary = true), whisper.capabilities)
+        val flash = providers.single { it.id == "gemini" }.models.single()
+        assertEquals(ModelCapabilities.GEMINI_AUDIO, flash.capabilities)
     }
 
     private fun com.google.gson.JsonElement.model(index: Int): JsonObject =

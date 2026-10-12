@@ -1364,6 +1364,7 @@ class SettingsBackupRepository(
             isThinking = modelObject.booleanValue("isThinking") ?: false,
             streamingPartialsSupported = modelObject.booleanValue("streamingPartialsSupported") ?: false,
             providerType = providerType,
+            modelId = modelObject.stringValue("id"),
         )
     }
 

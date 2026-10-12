@@ -40,9 +40,9 @@ object Presets {
         endpoint = "https://generativelanguage.googleapis.com/v1beta",
         apiKey = "",
         models = listOf(
-            ModelConfig(id = "gemini-1.5-flash", name = "Gemini 1.5 Flash"),
-            ModelConfig(id = "gemini-1.5-pro", name = "Gemini 1.5 Pro"),
-            ModelConfig(id = "gemini-2.0-flash", name = "Gemini 2.0 Flash")
+            ModelConfig(id = "gemini-1.5-flash", name = "Gemini 1.5 Flash", capabilities = ModelCapabilities.GEMINI_AUDIO),
+            ModelConfig(id = "gemini-1.5-pro", name = "Gemini 1.5 Pro", capabilities = ModelCapabilities.GEMINI_AUDIO),
+            ModelConfig(id = "gemini-2.0-flash", name = "Gemini 2.0 Flash", capabilities = ModelCapabilities.GEMINI_AUDIO)
         ),
         temperature = 0.7f,
         prompt = "You are a helpful assistant.",

@@ -6,6 +6,7 @@ import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.providers.gemini.GeminiChat
+import com.github.shekohex.whisperpp.providers.gemini.GeminiTranscription
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleChat
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleTranscription
 import okhttp3.OkHttpClient
@@ -23,6 +24,7 @@ class ProviderFactoryTest {
         assertTrue(factory.transcription(provider(ProviderType.OPENAI), stt).getOrThrow() is OpenAiCompatibleTranscription)
         assertTrue(factory.transcription(provider(ProviderType.WHISPER_ASR), stt).getOrThrow() is OpenAiCompatibleTranscription)
         assertTrue(factory.transcription(provider(ProviderType.CUSTOM), stt).getOrThrow() is OpenAiCompatibleTranscription)
+        assertTrue(factory.transcription(provider(ProviderType.GEMINI), stt).getOrThrow() is GeminiTranscription)
         assertTrue(factory.enhancement(provider(ProviderType.OPENAI), stt).getOrThrow() is OpenAiCompatibleChat)
         assertTrue(factory.enhancement(provider(ProviderType.GEMINI), stt).getOrThrow() is GeminiChat)
     }
@@ -31,7 +33,6 @@ class ProviderFactoryTest {
     fun unsupportedCombinations_failWithTypedProblem() {
         val both = ModelConfig("m", "m", ModelCapabilities(stt = true, text = true))
 
-        assertProblem(ProviderConfigException.Problem.UNSUPPORTED_PROVIDER_TYPE, factory.transcription(provider(ProviderType.GEMINI), both))
         assertProblem(ProviderConfigException.Problem.UNSUPPORTED_PROVIDER_TYPE, factory.enhancement(provider(ProviderType.WHISPER_ASR), both))
         assertProblem(ProviderConfigException.Problem.MODEL_LACKS_STT, factory.transcription(provider(ProviderType.OPENAI), ModelConfig("t", "t")))
         assertProblem(

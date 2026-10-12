@@ -1,8 +1,13 @@
 package com.github.shekohex.whisperpp.data
 
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class RuntimeSelectionResolverTest {
 
@@ -190,6 +195,39 @@ class RuntimeSelectionResolverTest {
 
         assertEquals("BASE", effective.prompt)
         assertTrue(effective.warnings.any { it.kind == RuntimeWarningKind.MISSING_PROFILE })
+    }
+
+    @Test
+    fun resolve_geminiModelFromV2Storage_isSelectableForSttAfterMigration() = runBlocking {
+        val file = File.createTempFile("settings-gemini-stt", ".preferences_pb").apply { delete(); deleteOnExit() }
+        val dataStore = PreferenceDataStoreFactory.create(produceFile = { file })
+        dataStore.edit {
+            it[PreferenceKeys.PROVIDERS_JSON] = """
+                [{"id": "gem", "name": "Gemini", "type": "GEMINI", "endpoint": "https://generativelanguage.googleapis.com/v1beta",
+                  "authMode": "API_KEY", "models": [{"id": "gemini-2.0-flash", "name": "Flash", "kind": "MULTIMODAL"}]}]
+            """.trimIndent()
+        }
+        val repository = SettingsRepository(dataStore)
+        repository.migrateProviderSchemaV3IfNeeded()
+
+        val effective = RuntimeSelectionResolver.resolve(
+            packageName = null,
+            languageCode = null,
+            providers = repository.providers.first(),
+            languageDefaults = emptyList(),
+            appMappings = emptyList(),
+            globalSttProviderId = "gem",
+            globalSttModelId = "gemini-2.0-flash",
+            globalTextProviderId = "gem",
+            globalTextModelId = "gemini-2.0-flash",
+            basePrompt = "BASE",
+            profiles = emptyList(),
+        )
+
+        assertEquals("gem", effective.sttProviderId)
+        assertEquals("gemini-2.0-flash", effective.sttModelId)
+        assertEquals("gemini-2.0-flash", effective.textModelId)
+        assertTrue(effective.warnings.isEmpty())
     }
 
     private fun provider(id: String, models: List<ModelConfig>): ServiceProvider {

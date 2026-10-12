@@ -912,12 +912,14 @@ private fun sanitizeCapabilities(model: ModelConfig, providerType: ProviderType,
         isThinking = (model.isThinking as? Boolean) ?: false,
         streamingPartialsSupported = (model.streamingPartialsSupported as? Boolean) ?: false,
         providerType = providerType,
+        modelId = model.id,
     )
 }
 
 /**
  * Schema v3: adds `capabilities` to every model that lacks it (from `kind`, `isThinking`,
- * `streamingPartialsSupported`) and rewrites those legacy fields as mirrors of the result.
+ * `streamingPartialsSupported`, and the Gemini model id) and rewrites those legacy fields as
+ * mirrors of the result.
  * Returns null when nothing changed.
  */
 internal fun migrateProvidersJsonToSchemaV3(rawProvidersJson: String): String? {
@@ -955,6 +957,7 @@ internal fun migrateProvidersJsonToSchemaV3(rawProvidersJson: String): String? {
                 isThinking = modelObject.booleanOrNull("isThinking") ?: false,
                 streamingPartialsSupported = modelObject.booleanOrNull("streamingPartialsSupported") ?: false,
                 providerType = providerType,
+                modelId = modelObject.stringOrNull("id").orEmpty(),
             )
             modelObject.add("capabilities", gson.toJsonTree(capabilities))
             modelObject.addProperty("kind", capabilities.legacyKind.name)

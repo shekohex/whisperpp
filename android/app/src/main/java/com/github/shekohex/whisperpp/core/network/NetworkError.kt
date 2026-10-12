@@ -1,6 +1,7 @@
 package com.github.shekohex.whisperpp.core.network
 
 import android.content.Context
+import androidx.annotation.StringRes
 import com.github.shekohex.whisperpp.R
 
 /**
@@ -26,7 +27,12 @@ sealed class NetworkError(message: String, cause: Throwable? = null) : Exception
     class Offline(cause: Throwable? = null) : NetworkError("Network unavailable", cause)
 
     /** 2xx response that could not be parsed or carried no usable content. */
-    class InvalidResponse(val detail: String, cause: Throwable? = null) :
+    class InvalidResponse(
+        val detail: String,
+        cause: Throwable? = null,
+        /** Specific user text for failures the generic "unexpected response" message would obscure. */
+        @StringRes val userMessageRes: Int? = null,
+    ) :
         NetworkError("Invalid response: $detail", cause)
 
     /** Cleartext to a non-local host (J-01); the request is never sent. */
@@ -38,7 +44,7 @@ sealed class NetworkError(message: String, cause: Throwable? = null) : Exception
         is Timeout -> context.getString(R.string.network_error_timeout)
         is Http -> context.getString(R.string.network_error_http, status, host)
         is Offline -> context.getString(R.string.network_error_offline)
-        is InvalidResponse -> context.getString(R.string.network_error_invalid_response)
+        is InvalidResponse -> context.getString(userMessageRes ?: R.string.network_error_invalid_response)
         is InsecureTransport -> context.getString(R.string.error_insecure_http_endpoint)
     }
 }

@@ -336,6 +336,7 @@
     <string name="network_error_http">Request failed (HTTP %1$d, host: %2$s)</string>
     <string name="network_error_offline">Can\'t reach the server. Check your connection.</string>
     <string name="network_error_invalid_response">The provider returned an unexpected response.</string>
+    <string name="gemini_error_audio_too_large">This recording is too long for Gemini transcription. Record a shorter clip or use another speech model.</string>
     <string name="provider_error_invalid_endpoint">Error: The endpoint URL is invalid.</string>
     <string name="provider_error_missing_model">Error: No model is selected for this provider.</string>
     <string name="provider_error_unsupported_type">This provider type doesn\'t support this task.</string>

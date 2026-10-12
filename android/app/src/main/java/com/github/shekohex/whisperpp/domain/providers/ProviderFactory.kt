@@ -6,8 +6,12 @@ import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.domain.providers.ProviderConfigException.Problem
 import com.github.shekohex.whisperpp.providers.gemini.GeminiChat
+import com.github.shekohex.whisperpp.providers.gemini.GeminiDiscovery
+import com.github.shekohex.whisperpp.providers.gemini.GeminiTranscription
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleChat
+import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleDiscovery
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleTranscription
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import java.io.File
 
@@ -33,8 +37,7 @@ class ProviderFactory(
         return when (provider.type) {
             ProviderType.OPENAI, ProviderType.WHISPER_ASR, ProviderType.CUSTOM ->
                 Result.success(OpenAiCompatibleTranscription(client, provider, model, credentials))
-            // Gemini audio transcription is WP-2.2.
-            ProviderType.GEMINI -> unsupported(Problem.UNSUPPORTED_PROVIDER_TYPE)
+            ProviderType.GEMINI -> Result.success(GeminiTranscription(client, provider, model, credentials))
         }
     }
 
@@ -61,6 +64,25 @@ class ProviderFactory(
         val model = provider.models.find { it.id == modelId } ?: return unsupported(Problem.MODEL_NOT_FOUND)
         return enhancement(provider, model)
     }
+
+    /**
+     * Model listing for [provider] (§4.5.2), or null when it has none (Whisper ASR webservice
+     * without an OpenAI-style `/v1` base) — the editor then keeps manual entry.
+     */
+    fun discovery(provider: ServiceProvider, credentials: Credentials = credentials(provider)): ModelDiscovery? {
+        return when (provider.type) {
+            ProviderType.OPENAI, ProviderType.CUSTOM -> OpenAiCompatibleDiscovery(client, provider, credentials)
+            ProviderType.WHISPER_ASR -> if (hasOpenAiStyleBase(provider)) {
+                OpenAiCompatibleDiscovery(client, provider, credentials)
+            } else {
+                null
+            }
+            ProviderType.GEMINI -> GeminiDiscovery(client, provider, credentials)
+        }
+    }
+
+    private fun hasOpenAiStyleBase(provider: ServiceProvider): Boolean =
+        provider.endpoint.trim().toHttpUrlOrNull()?.pathSegments?.contains("v1") == true
 
     /** Routes [request] to its provider/model and transcribes [audio]. */
     suspend fun transcribe(audio: File, request: TranscriptionRequest): Result<Transcript> {
