@@ -19,6 +19,9 @@ interface ImeHost {
     /** Switches to the previously used input method. */
     fun switchToPreviousIme()
 
+    /** Keeps the screen on while the keyboard window is showing; cleared with `false`. */
+    fun setKeepScreenOn(keepOn: Boolean)
+
     /** Hides the keyboard window. */
     fun hideKeyboard()
 }

@@ -27,6 +27,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedText
 import android.view.inputmethod.InputConnection
@@ -75,6 +76,12 @@ class WhisperInputService : InputMethodService() {
                 @Suppress("DEPRECATION")
                 imm.switchToLastInputMethod(window?.window?.attributes?.token)
             }
+        }
+
+        override fun setKeepScreenOn(keepOn: Boolean) {
+            val flags = window?.window ?: return
+            if (keepOn) flags.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            else flags.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
 
         override fun hideKeyboard() = requestHideSelf(0)

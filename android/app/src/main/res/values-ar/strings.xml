@@ -170,6 +170,7 @@
     <string name="settings_tap_to_record">انقر للتسجيل (دون استخدام اليدين)</string>
     <string name="dictation_group_keyboard">لوحة المفاتيح</string>
     <string name="settings_command_mode_button">إظهار زر وضع الأوامر</string>
+    <string name="settings_keep_screen_awake">إبقاء الشاشة مضاءة أثناء التسجيل</string>
     <string name="settings_show_mode_on_keyboard">إظهار أيقونة الوضع على لوحة المفاتيح</string>
     <string name="settings_realtime_stt_enabled">استخدام النسخ الفوري عند توفره</string>
 

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MusicOff
 import androidx.compose.material.icons.filled.QuestionMark
+import androidx.compose.material.icons.filled.ScreenLockPortrait
 import androidx.compose.material.icons.filled.SpaceBar
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TouchApp
@@ -47,6 +48,7 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_MODE_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.FILTER_FILLERS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.FORMAT_PARAGRAPHS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.HAPTIC_FEEDBACK_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.KEEP_SCREEN_AWAKE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.KEYBOARD_SHOW_MODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.LANGUAGE_CODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING
@@ -108,6 +110,7 @@ fun DictationSettingsScreen(
         }
         SectionCard(title = stringResource(R.string.dictation_group_keyboard)) {
             Toggle(Icons.Default.AutoFixHigh, stringResource(R.string.settings_command_mode_button), COMMAND_MODE_ENABLED, false)
+            Toggle(Icons.Default.ScreenLockPortrait, stringResource(R.string.settings_keep_screen_awake), KEEP_SCREEN_AWAKE, true)
             Toggle(Icons.Default.Category, stringResource(R.string.settings_show_mode_on_keyboard), KEYBOARD_SHOW_MODE, true)
         }
         SectionCard(title = stringResource(R.string.dictation_group_extras)) {

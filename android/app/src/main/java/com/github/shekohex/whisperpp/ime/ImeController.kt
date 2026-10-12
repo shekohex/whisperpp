@@ -5,6 +5,7 @@ import android.text.TextUtils
 import android.util.Log
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import androidx.compose.runtime.snapshotFlow
 import com.github.shekohex.whisperpp.EXTRA_SETTINGS_DESTINATION
 import com.github.shekohex.whisperpp.MainActivity
 import com.github.shekohex.whisperpp.app.appContainer
@@ -14,6 +15,8 @@ import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isRecording
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -60,6 +63,11 @@ class ImeController(
         scope.launch { c.repository.tapToRecord.collect { c.ui.tapToRecord.value = it } }
         scope.launch { c.repository.commandModeEnabled.collect { c.ui.commandModeEnabled.value = it } }
         scope.launch { c.repository.showModeOnKeyboard.collect { c.ui.showModeOnKeyboard.value = it } }
+        scope.launch {
+            combine(snapshotFlow { c.ui.keyboardState.value }, c.repository.keepScreenAwake, ::shouldKeepScreenOn)
+                .distinctUntilChanged()
+                .collect(host::setKeepScreenOn)
+        }
         scope.launch(Dispatchers.IO) { c.recordingFiles.deleteStale() }
         context.appContainer.pruneHistoryIfDue()
 
