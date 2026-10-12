@@ -87,6 +87,7 @@ class OpenAiRealtimeSessionTest {
         language: String = "ar",
         prompt: String = "Vocab",
         inputSampleRate: Int = 24_000,
+        vad: Vad = Vad.ServerVad(),
     ) = OpenAiRealtimeSession(
         sockets = factory,
         provider = ServiceProvider(id = "p", name = "OpenAI", type = ProviderType.OPENAI, endpoint = endpoint, models = emptyList()),
@@ -100,12 +101,32 @@ class OpenAiRealtimeSessionTest {
         ),
         commitTimeoutMs = COMMIT_TIMEOUT_MS,
         inputSampleRate = inputSampleRate,
+        vad = vad,
     )
 
     private fun completed(itemId: String, text: String) =
         """{"type":"conversation.item.input_audio_transcription.completed","item_id":"$itemId","transcript":"$text"}"""
 
     private fun committed(itemId: String) = """{"type":"input_audio_buffer.committed","item_id":"$itemId"}"""
+
+    private fun delta(itemId: String, text: String) =
+        """{"type":"conversation.item.input_audio_transcription.delta","item_id":"$itemId","delta":"$text"}"""
+
+    private fun speechStarted(itemId: String) = """{"type":"input_audio_buffer.speech_started","item_id":"$itemId"}"""
+
+    private fun speechStopped(itemId: String) = """{"type":"input_audio_buffer.speech_stopped","item_id":"$itemId"}"""
+
+    private val emptyCommitError =
+        """{"type":"error","error":{"type":"invalid_request_error","code":"input_audio_buffer_commit_empty","message":"buffer too small"}}"""
+
+    /** One VAD utterance: speech, auto-commit, deltas and completion. */
+    private fun FakeSocket.utterance(itemId: String, vararg deltas: String) {
+        receive(speechStarted(itemId))
+        receive(speechStopped(itemId))
+        receive(committed(itemId))
+        deltas.forEach { receive(delta(itemId, it)) }
+        receive(completed(itemId, deltas.joinToString("")))
+    }
 
     private fun TestScope.collectEvents(session: OpenAiRealtimeSession): MutableList<StreamEvent> {
         val events = mutableListOf<StreamEvent>()
@@ -132,8 +153,11 @@ class OpenAiRealtimeSessionTest {
         assertEquals("transcription_session.update", update.getString("type"))
         val config = update.getJSONObject("session")
         assertEquals("pcm16", config.getString("input_audio_format"))
-        assertTrue(config.isNull("turn_detection"))
-        assertTrue(config.has("turn_detection"))
+        val turnDetection = config.getJSONObject("turn_detection")
+        assertEquals("server_vad", turnDetection.getString("type"))
+        assertEquals(0.5, turnDetection.getDouble("threshold"), 0.0)
+        assertEquals(300, turnDetection.getInt("prefix_padding_ms"))
+        assertEquals(500, turnDetection.getInt("silence_duration_ms"))
         val transcription = config.getJSONObject("input_audio_transcription")
         assertEquals("gpt-4o-transcribe", transcription.getString("model"))
         assertEquals("ar", transcription.getString("language"))
@@ -192,28 +216,35 @@ class OpenAiRealtimeSessionTest {
     }
 
     @Test
-    fun commit_returnsOnlyAFinalThatArrivesAfterTheCommit() = runTest {
-        val session = session()
+    fun start_withoutVad_sendsNullTurnDetection() = runTest {
+        session(vad = Vad.None).start()
+        val socket = factory.sockets.single()
+        socket.open()
+
+        val config = socket.sent.single().getJSONObject("session")
+        assertTrue(config.has("turn_detection"))
+        assertTrue(config.isNull("turn_detection"))
+    }
+
+    @Test
+    fun manualCommit_awaitsTheCompletion_neverReturnsPartials() = runTest {
+        val session = session(vad = Vad.None)
         val events = collectEvents(session)
         session.start()
         val socket = factory.sockets.single()
         socket.open()
-        // Stale: transcribed before we committed anything.
-        socket.receive(completed("item_old", "stale"))
+        session.sendAudio(byteArrayOf(1, 2))
 
         val result = async { session.commit() }
         runCurrent()
         assertEquals("input_audio_buffer.commit", socket.types().last())
-        assertFalse(result.isCompleted)
-
-        socket.receive(committed("item_new"))
-        socket.receive("""{"type":"conversation.item.input_audio_transcription.delta","item_id":"item_new","delta":"hel"}""")
-        socket.receive("""{"type":"conversation.item.input_audio_transcription.delta","item_id":"item_new","delta":"lo"}""")
-        socket.receive(completed("item_old", "stale again"))
+        socket.receive(committed("item_1"))
+        socket.receive(delta("item_1", "hel"))
+        socket.receive(delta("item_1", "lo"))
         runCurrent()
         assertFalse(result.isCompleted)
 
-        socket.receive(completed("item_new", "hello"))
+        socket.receive(completed("item_1", "hello"))
         runCurrent()
 
         assertEquals("hello", result.await().getOrThrow().text)
@@ -223,6 +254,117 @@ class OpenAiRealtimeSessionTest {
         assertTrue(events.contains(StreamEvent.Final("hello")))
         assertEquals(StreamEvent.Closed, events.last())
         assertEquals(1000, socket.closeCode)
+    }
+
+    @Test
+    fun serverVad_twoUtterances_cumulativePartials_commitAwaitsBoth() = runTest {
+        val session = session()
+        val events = collectEvents(session)
+        session.start()
+        val socket = factory.sockets.single()
+        socket.open()
+        session.sendAudio(byteArrayOf(1, 2))
+
+        socket.utterance("item_1", "Hello", " there.")
+        socket.receive(speechStarted("item_2"))
+        socket.receive(speechStopped("item_2"))
+        socket.receive(committed("item_2"))
+        socket.receive(delta("item_2", "How"))
+        runCurrent()
+        assertEquals(StreamEvent.Partial("Hello there. How"), events.last())
+
+        // Trailing audio after the last auto-commit is committed by us.
+        session.sendAudio(byteArrayOf(3, 4))
+        val result = async { session.commit() }
+        runCurrent()
+        assertEquals("input_audio_buffer.commit", socket.types().last())
+
+        socket.receive(delta("item_2", " are you?"))
+        socket.receive(completed("item_2", "How are you?"))
+        runCurrent()
+        assertFalse("waits for the manually committed item", result.isCompleted)
+
+        socket.receive(committed("item_3"))
+        socket.receive(completed("item_3", "Bye."))
+        runCurrent()
+
+        assertEquals("Hello there. How are you? Bye.", result.await().getOrThrow().text)
+        runCurrent()
+        assertTrue(events.contains(StreamEvent.Partial("Hello")))
+        assertTrue(events.contains(StreamEvent.Partial("Hello there.")))
+        assertTrue(events.contains(StreamEvent.Partial("Hello there. How are you?")))
+        assertTrue(events.contains(StreamEvent.Final("Hello there. How are you? Bye.")))
+    }
+
+    @Test
+    fun serverVad_autoCommittedTrailingAudio_needsNoManualCommit() = runTest {
+        val session = session()
+        session.start()
+        val socket = factory.sockets.single()
+        socket.open()
+        session.sendAudio(byteArrayOf(1, 2))
+        socket.receive(speechStarted("item_1"))
+        socket.receive(speechStopped("item_1"))
+        socket.receive(committed("item_1"))
+
+        val result = async { session.commit() }
+        runCurrent()
+        assertFalse(socket.types().contains("input_audio_buffer.commit"))
+        assertFalse("item_1 is still transcribing", result.isCompleted)
+
+        socket.receive(completed("item_1", "Done."))
+        runCurrent()
+        assertEquals("Done.", result.await().getOrThrow().text)
+    }
+
+    @Test
+    fun serverVad_emptyBufferOnCommit_isNothingPending() = runTest {
+        val session = session()
+        session.start()
+        val socket = factory.sockets.single()
+        socket.open()
+        session.sendAudio(byteArrayOf(1, 2))
+        socket.utterance("item_1", "Only this.")
+        // Audio the server had already consumed before its commit event reached us.
+        session.sendAudio(byteArrayOf(3, 4))
+
+        val result = async { session.commit() }
+        runCurrent()
+        assertEquals("input_audio_buffer.commit", socket.types().last())
+        socket.receive(emptyCommitError)
+        runCurrent()
+
+        assertEquals("Only this.", result.await().getOrThrow().text)
+    }
+
+    @Test
+    fun serverVad_lateDeltaForOldItem_keepsOrder_andIsDroppedOnceCompleted() = runTest {
+        val session = session()
+        val events = collectEvents(session)
+        session.start()
+        val socket = factory.sockets.single()
+        socket.open()
+        session.sendAudio(byteArrayOf(1, 2))
+
+        socket.receive(speechStarted("item_1"))
+        socket.receive(speechStopped("item_1"))
+        socket.receive(committed("item_1"))
+        socket.receive(delta("item_1", "One"))
+        socket.receive(speechStarted("item_2"))
+        socket.receive(speechStopped("item_2"))
+        socket.receive(committed("item_2"))
+        socket.receive(delta("item_2", "Two"))
+        // item_1 is still transcribing; its delta lands in item_1, not after "Two".
+        socket.receive(delta("item_1", " more"))
+        runCurrent()
+        assertEquals(StreamEvent.Partial("One more Two"), events.last())
+
+        socket.receive(completed("item_1", "One more."))
+        socket.receive(delta("item_1", " ghost"))
+        socket.receive(completed("item_2", "Two."))
+        runCurrent()
+
+        assertEquals("One more. Two.", session.commit().getOrThrow().text)
     }
 
     @Test
@@ -236,6 +378,7 @@ class OpenAiRealtimeSessionTest {
         socket.open()
 
         assertEquals(listOf("transcription_session.update", "input_audio_buffer.append", "input_audio_buffer.commit"), socket.types())
+        socket.receive(committed("item_1"))
         socket.receive(completed("item_1", "ok"))
         runCurrent()
         assertEquals("ok", result.await().getOrThrow().text)
@@ -305,6 +448,7 @@ class OpenAiRealtimeSessionTest {
         session.start()
         val socket = factory.sockets.single()
         socket.open()
+        session.sendAudio(byteArrayOf(1, 2))
         val result = async { session.commit() }
         runCurrent()
 

@@ -32,10 +32,13 @@ import org.json.JSONObject
 import java.io.IOException
 
 /**
- * OpenAI Realtime transcription (`/v1/realtime?intent=transcription`, §4.5.1). Server VAD is off:
- * the whole take is one input buffer that [commit] finalizes. Audio is resampled to the 24 kHz the
- * API expects and kept in memory so one reconnect before [commit] can replay it; after the commit
- * a broken stream fails instead, and the caller falls back to batch.
+ * OpenAI Realtime transcription (`/v1/realtime?intent=transcription`, §4.5.1). With [Vad.ServerVad]
+ * the server commits each utterance on silence, so every utterance becomes one conversation item
+ * transcribed while the user keeps speaking; [Vad.None] makes the whole take one item. Items are
+ * kept in arrival order: partials show the whole take so far, and [commit] returns the join of all
+ * items once each is completed. Audio is resampled to the 24 kHz the API expects and kept in memory
+ * so one reconnect before [commit] can replay it; after the commit a broken stream fails instead,
+ * and the caller falls back to batch.
  *
  * [sockets] is the shared client derived with a ping interval (OkHttp upgrades the http(s) URL).
  */
@@ -48,7 +51,17 @@ class OpenAiRealtimeSession(
     private val postProcess: suspend (String, ScriptConversion) -> String = { text, _ -> text },
     private val commitTimeoutMs: Long = request.timeoutMs.coerceAtLeast(MIN_COMMIT_TIMEOUT_MS),
     inputSampleRate: Int = AudioRecorder.DEFAULT_SAMPLE_RATE,
+    private val vad: Vad = Vad.ServerVad(),
 ) : StreamingTranscriptionSession {
+    /** One committed (or in-progress) utterance; [final] is set once its transcription completed. */
+    private class Item {
+        val deltas = StringBuilder()
+        var final: String? = null
+
+        val text: String
+            get() = final ?: deltas.toString()
+    }
+
     private val _events = MutableSharedFlow<StreamEvent>(
         extraBufferCapacity = 64,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -59,7 +72,9 @@ class OpenAiRealtimeSession(
     private val lock = Any()
     private val resampler = Pcm16Resampler(inputSampleRate, API_SAMPLE_RATE)
     private val final = CompletableDeferred<Result<String>>()
-    private val partial = StringBuilder()
+
+    // Insertion order is utterance order (items appear when speech starts or the buffer is committed).
+    private val items = LinkedHashMap<String, Item>()
     private val sentAudio = ArrayList<ByteArray>()
     private var sentBytes = 0L
     private var replayable = true
@@ -68,8 +83,16 @@ class OpenAiRealtimeSession(
     private var open = false
     private var reconnectsLeft = 1
     private var commitRequested = false
-    private var commitSent = false
-    private var committedItemId: String? = null
+
+    // Our manual commit was sent and neither its `committed` event nor an empty-buffer error came back.
+    private var manualCommitPending = false
+
+    // Audio appended since the last `input_audio_buffer.committed` (the server buffer is not empty).
+    private var appendedSinceCommit = false
+
+    // Server VAD: `speech_stopped` events whose auto-commit has not arrived yet.
+    private var autoCommitsPending = 0
+    private var speechActive = false
     private var failure: NetworkError? = null
     private var closed = false
 
@@ -89,7 +112,10 @@ class OpenAiRealtimeSession(
             val audio = resampler.process(pcm16)
             if (audio.isEmpty()) return
             rememberLocked(audio)
-            if (open) socket?.send(appendMessage(audio))
+            if (open) {
+                socket?.send(appendMessage(audio))
+                appendedSinceCommit = true
+            }
         }
     }
 
@@ -98,7 +124,7 @@ class OpenAiRealtimeSession(
             failure?.let { return Result.failure(it) }
             if (closed || upgrade == null) return Result.failure(NetworkError.InvalidResponse("realtime session not open"))
             commitRequested = true
-            if (open) sendCommitLocked()
+            if (open) commitTrailingAudioLocked()
         }
         try {
             val raw = withTimeoutOrNull(commitTimeoutMs) { final.await() }
@@ -136,8 +162,12 @@ class OpenAiRealtimeSession(
     private fun connectLocked() {
         val upgradeRequest = upgrade ?: return
         open = false
-        partial.setLength(0)
-        committedItemId = null
+        // A new connection transcribes the replayed take from scratch.
+        items.clear()
+        manualCommitPending = false
+        appendedSinceCommit = false
+        autoCommitsPending = 0
+        speechActive = false
         socket = sockets.newWebSocket(upgradeRequest, Listener())
     }
 
@@ -145,9 +175,10 @@ class OpenAiRealtimeSession(
         ws.send(sessionUpdateMessage())
         // A reconnect starts with an empty server buffer: replay the take so far.
         for (chunk in sentAudio) ws.send(appendMessage(chunk))
+        if (sentAudio.isNotEmpty()) appendedSinceCommit = true
         open = true
         emit(StreamEvent.Connected)
-        if (commitRequested) sendCommitLocked()
+        if (commitRequested) commitTrailingAudioLocked()
     }
 
     private fun onMessageLocked(text: String) {
@@ -156,31 +187,88 @@ class OpenAiRealtimeSession(
         } catch (_: JSONException) {
             return
         }
+        val itemId = event.optString("item_id")
         when (event.optString("type")) {
+            "input_audio_buffer.speech_started" -> {
+                speechActive = true
+                itemLocked(itemId)
+            }
+            "input_audio_buffer.speech_stopped" -> {
+                speechActive = false
+                autoCommitsPending += 1
+                itemLocked(itemId)
+            }
+            "input_audio_buffer.committed" -> onCommittedLocked(itemId)
+            "conversation.item.created" -> itemLocked(event.optJSONObject("item")?.optString("id").orEmpty().ifEmpty { itemId })
             "conversation.item.input_audio_transcription.delta" -> {
                 val delta = event.optString("delta")
+                val item = deltaTargetLocked(itemId) ?: return
                 if (delta.isEmpty()) return
-                partial.append(delta)
-                emit(StreamEvent.Partial(partial.toString()))
+                item.deltas.append(delta)
+                emitPartialLocked()
             }
-            "input_audio_buffer.committed" -> {
-                if (commitSent) committedItemId = event.optString("item_id").ifEmpty { null }
+            "conversation.item.input_audio_transcription.completed" -> {
+                val item = itemLocked(itemId.ifEmpty { lastOpenItemKeyLocked() ?: ANONYMOUS_ITEM })
+                item.final = event.optString("transcript").trim()
+                emitPartialLocked()
+                checkDoneLocked()
             }
-            "conversation.item.input_audio_transcription.completed" -> onCompletedLocked(event)
-            "conversation.item.input_audio_transcription.failed" -> {
-                if (commitSent) failLocked(NetworkError.InvalidResponse("realtime transcription failed"))
+            // A hole in the take: the stream can no longer match the WAV, so batch takes over.
+            "conversation.item.input_audio_transcription.failed" ->
+                failLocked(NetworkError.InvalidResponse("realtime transcription failed"))
+            "error" -> {
+                if (isEmptyCommitError(event)) {
+                    // Nothing was pending (the server had already committed everything).
+                    manualCommitPending = false
+                    appendedSinceCommit = false
+                    checkDoneLocked()
+                } else {
+                    failLocked(errorEventToNetworkError(event))
+                }
             }
-            "error" -> failLocked(errorEventToNetworkError(event))
         }
     }
 
-    // Only the transcript of the buffer we committed counts; anything earlier is stale.
-    private fun onCompletedLocked(event: JSONObject) {
-        if (!commitSent) return
-        val itemId = event.optString("item_id")
-        val expected = committedItemId
-        if (expected != null && itemId.isNotEmpty() && itemId != expected) return
-        final.complete(Result.success(event.optString("transcript").trim()))
+    private fun onCommittedLocked(itemId: String) {
+        itemLocked(itemId)
+        appendedSinceCommit = false
+        speechActive = false
+        // Server VAD commits follow `speech_stopped`; any other commit answers ours.
+        if (autoCommitsPending > 0) {
+            autoCommitsPending -= 1
+        } else {
+            manualCommitPending = false
+        }
+        checkDoneLocked()
+    }
+
+    private fun itemLocked(itemId: String): Item {
+        val key = itemId.ifEmpty { ANONYMOUS_ITEM }
+        return items.getOrPut(key) { Item() }
+    }
+
+    // Deltas for an item that already completed are late and dropped; they never move text between items.
+    private fun deltaTargetLocked(itemId: String): Item? {
+        val key = itemId.ifEmpty { lastOpenItemKeyLocked() ?: ANONYMOUS_ITEM }
+        val item = itemLocked(key)
+        return if (item.final != null) null else item
+    }
+
+    private fun lastOpenItemKeyLocked(): String? = items.entries.lastOrNull { it.value.final == null }?.key
+
+    private fun joinedTextLocked(): String = items.values.map { it.text.trim() }.filter { it.isNotEmpty() }.joinToString(" ")
+
+    private fun emitPartialLocked() {
+        val text = joinedTextLocked()
+        if (text.isNotEmpty()) emit(StreamEvent.Partial(text))
+    }
+
+    /** After [commit]: done when our commit is answered and every known item has completed. */
+    private fun checkDoneLocked() {
+        if (!commitRequested || !open) return
+        if (manualCommitPending || autoCommitsPending > 0) return
+        if (items.values.any { it.final == null }) return
+        final.complete(Result.success(joinedTextLocked()))
     }
 
     private fun onTransportLostLocked(error: NetworkError) {
@@ -212,12 +300,14 @@ class OpenAiRealtimeSession(
         emit(StreamEvent.Closed)
     }
 
-    private fun sendCommitLocked() {
+    /** Commits audio the server has not committed yet, then waits for every item (see [checkDoneLocked]). */
+    private fun commitTrailingAudioLocked() {
         val ws = socket ?: return
-        if (commitSent) return
-        ws.send(JSONObject().put("type", "input_audio_buffer.commit").toString())
-        commitSent = true
-        partial.setLength(0)
+        if (appendedSinceCommit || speechActive) {
+            ws.send(JSONObject().put("type", "input_audio_buffer.commit").toString())
+            manualCommitPending = true
+        }
+        checkDoneLocked()
     }
 
     private fun rememberLocked(audio: ByteArray) {
@@ -240,12 +330,26 @@ class OpenAiRealtimeSession(
         val session = JSONObject()
             .put("input_audio_format", "pcm16")
             .put("input_audio_transcription", transcription)
-            // We commit manually: the take is one buffer, matching the WAV used for fallback.
-            .put("turn_detection", JSONObject.NULL)
+            .put("turn_detection", turnDetection())
         return JSONObject()
             .put("type", "transcription_session.update")
             .put("session", session)
             .toString()
+    }
+
+    private fun turnDetection(): Any = when (vad) {
+        Vad.None -> JSONObject.NULL
+        is Vad.ServerVad -> JSONObject()
+            .put("type", "server_vad")
+            .put("threshold", vad.threshold)
+            .put("prefix_padding_ms", vad.prefixPaddingMs)
+            .put("silence_duration_ms", vad.silenceDurationMs)
+    }
+
+    private fun isEmptyCommitError(event: JSONObject): Boolean {
+        val error = event.optJSONObject("error") ?: return false
+        if (error.optString("code") == "input_audio_buffer_commit_empty") return true
+        return manualCommitPending && error.optString("message").contains("buffer too small", ignoreCase = true)
     }
 
     private fun appendMessage(audio: ByteArray): String = JSONObject()
@@ -317,6 +421,7 @@ class OpenAiRealtimeSession(
         private const val API_SAMPLE_RATE = 24_000
         private const val NORMAL_CLOSURE = 1000
         private const val SWITCHING_PROTOCOLS = 101
+        private const val ANONYMOUS_ITEM = "_"
 
         // ~5.8 min of 24 kHz PCM16; longer takes are not replayed after a reconnect.
         private const val MAX_REPLAY_BYTES = 16L * 1024 * 1024
