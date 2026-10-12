@@ -1,71 +1,140 @@
 package com.github.shekohex.whisperpp.data.history
 
-import android.util.Log
 import com.github.shekohex.whisperpp.core.text.WordCounter
 import com.github.shekohex.whisperpp.data.HistorySettings
+import com.github.shekohex.whisperpp.domain.dictation.CompletionStats
+import com.github.shekohex.whisperpp.domain.dictation.HistoryFailureReason
 import com.github.shekohex.whisperpp.domain.dictation.HistoryRecorder
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineDispatcher
+import com.github.shekohex.whisperpp.domain.dictation.HistoryStatus
+import com.github.shekohex.whisperpp.domain.dictation.HistoryTicket
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 
-private const val TAG = "HistoryRecorder"
-
-/** Writes completed dictations into [TranscriptHistoryRepository] when history is enabled. */
+/**
+ * Writes every take into [TranscriptHistoryRepository] as soon as it has audio and follows it through
+ * the pipeline, so a failure never loses a recording. Updates run in call order on [scope] (the app
+ * scope, which outlives the keyboard service). With history disabled nothing is stored and the take's
+ * file is deleted when its run ends; otherwise the file stays while the take is unresolved, and after
+ * completion only while "keep recordings" is on.
+ */
 class DictationHistoryRecorder(
     private val repository: TranscriptHistoryRepository,
     private val audio: HistoryAudioStore,
     private val settings: Flow<HistorySettings>,
-    private val scope: CoroutineScope,
+    scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : HistoryRecorder {
-    override suspend fun retainAudio(file: File): String? {
-        val current = settings.first()
-        if (!current.enabled || !current.keepAudio) return null
-        return withContext(ioDispatcher) { audio.retain(file, "${clock()}_${file.name}") }
+    private class Ticket(val file: File) : HistoryTicket {
+        @Volatile var rowId: Long? = null
+
+        /** History was off (or the file is not ours to keep): delete it once the run ends. */
+        @Volatile var discardAtEnd = false
     }
 
-    override fun record(entry: HistoryRecorder.Entry) {
-        scope.launch {
-            if (!settings.first().enabled) {
-                entry.audioPath?.let(audio::delete)
-                return@launch
+    private val worker = SerialWorker(scope)
+
+    override fun begin(take: HistoryRecorder.Take): HistoryTicket {
+        val ticket = Ticket(take.file)
+        worker.submit {
+            if (!settings.first().enabled || !audio.contains(take.file)) {
+                ticket.discardAtEnd = true
+                return@submit
             }
-            val raw = entry.rawText.trim()
-            val enhanced = entry.enhancedText?.trim()?.takeIf { it.isNotEmpty() && it != raw }
+            val path = take.file.absolutePath
             try {
-                repository.insert(
-                    TranscriptHistoryEntry(
-                        createdAt = clock(),
-                        rawText = raw,
-                        enhancedText = enhanced,
-                        providerId = entry.stats.providerId,
-                        sttModelId = entry.stats.sttModelId,
-                        enhancementModelId = entry.stats.enhancementModelId.takeIf { enhanced != null },
-                        language = entry.stats.languageCode,
-                        appPackage = entry.appPackage,
-                        durationMs = entry.durationMs.coerceAtLeast(0L),
-                        wordCount = WordCounter.count(enhanced ?: raw),
-                        audioPath = entry.audioPath,
-                    )
+                audio.repairWavHeader(take.file)
+                ticket.rowId = repository.insert(newEntry(take, path))
+            } finally {
+                // Referenced now; if the insert failed the file stays for orphan recovery.
+                audio.release(path)
+            }
+        }
+        return ticket
+    }
+
+    override fun transcribing(ticket: HistoryTicket) = step(ticket) { it.copy(status = HistoryStatus.TRANSCRIBING, failureReason = null) }
+
+    override fun transcribed(ticket: HistoryTicket, rawText: String) = step(ticket) {
+        it.copy(rawText = rawText.trim(), wordCount = WordCounter.count(rawText), status = HistoryStatus.TRANSCRIBED, failureReason = null)
+    }
+
+    override fun enhancing(ticket: HistoryTicket) = step(ticket) { it.copy(status = HistoryStatus.ENHANCING) }
+
+    override fun complete(
+        ticket: HistoryTicket,
+        rawText: String,
+        enhancedText: String?,
+        stats: CompletionStats,
+        enhancementFailed: Boolean,
+    ) {
+        val t = ticket as Ticket
+        worker.submit {
+            val id = t.rowId
+            if (id == null) {
+                discardIfOwned(t)
+                return@submit
+            }
+            val raw = rawText.trim()
+            val enhanced = enhancedText?.trim()?.takeIf { it.isNotEmpty() && it != raw }
+            repository.complete(id, keepAudio = settings.first().keepAudio) {
+                it.copy(
+                    rawText = raw,
+                    enhancedText = enhanced,
+                    enhancementModelId = stats.enhancementModelId.takeIf { enhanced != null },
+                    wordCount = WordCounter.count(enhanced ?: raw),
+                    failureReason = HistoryFailureReason.ENHANCEMENT_FAILED.takeIf { enhancementFailed },
                 )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Exception type only: messages could echo bound values.
-                Log.e(TAG, "Failed to store history entry: ${e.javaClass.simpleName}")
-                entry.audioPath?.let(audio::delete)
             }
         }
     }
 
-    override fun discardAudio(path: String) {
-        scope.launch(ioDispatcher) { audio.delete(path) }
+    override fun fail(ticket: HistoryTicket, reason: HistoryFailureReason, rawText: String?, enhancedText: String?) {
+        val t = ticket as Ticket
+        worker.submit {
+            val id = t.rowId
+            if (id == null) {
+                discardIfOwned(t)
+                return@submit
+            }
+            repository.update(id) { current ->
+                val raw = rawText?.trim()?.takeIf { it.isNotEmpty() } ?: current.rawText
+                val enhanced = enhancedText?.trim()?.takeIf { it.isNotEmpty() && it != raw } ?: current.enhancedText
+                current.copy(
+                    rawText = raw,
+                    enhancedText = enhanced,
+                    wordCount = WordCounter.count(enhanced ?: raw),
+                    status = HistoryStatus.FAILED,
+                    failureReason = reason,
+                )
+            }
+        }
     }
+
+    private fun step(ticket: HistoryTicket, change: (TranscriptHistoryEntry) -> TranscriptHistoryEntry) {
+        val t = ticket as Ticket
+        worker.submit {
+            val id = t.rowId ?: return@submit
+            repository.update(id, change)
+        }
+    }
+
+    private fun discardIfOwned(ticket: Ticket) {
+        if (ticket.discardAtEnd) ticket.file.delete()
+    }
+
+    private fun newEntry(take: HistoryRecorder.Take, path: String) = TranscriptHistoryEntry(
+        createdAt = clock(),
+        rawText = "",
+        providerId = take.stats.providerId,
+        sttModelId = take.stats.sttModelId,
+        language = take.stats.languageCode,
+        appPackage = take.appPackage,
+        durationMs = take.durationMs.coerceAtLeast(0L),
+        wordCount = 0,
+        audioPath = path,
+        status = HistoryStatus.RECORDED,
+        modeId = take.modeId,
+    )
 }
