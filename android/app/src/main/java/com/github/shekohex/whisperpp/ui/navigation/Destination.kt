@@ -30,6 +30,10 @@ sealed interface Destination {
     @Serializable
     data object Dictionary : Destination
 
+    /** Dictionary settings as a page (Auto-Learn, export / import), e.g. from Privacy & Safety. */
+    @Serializable
+    data object DictionarySettings : Destination
+
     @Serializable
     data object More : Destination
 

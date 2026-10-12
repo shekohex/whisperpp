@@ -36,6 +36,7 @@ import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedText
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.compose.runtime.collectAsState
@@ -109,6 +110,8 @@ import com.github.shekohex.whisperpp.domain.providers.ThinkingConfig
 import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
 import com.github.shekohex.whisperpp.domain.providers.toProviderUserMessage
 import com.github.shekohex.whisperpp.domain.dictation.toKeyboardState
+import com.github.shekohex.whisperpp.ime.AutoLearnCaptureStateMachine
+import com.github.shekohex.whisperpp.ime.AutoLearnObserver
 import com.github.shekohex.whisperpp.ime.DictationEnhancementStep
 import com.github.shekohex.whisperpp.ime.DictationStartPlanner
 import com.github.shekohex.whisperpp.ime.FirstUseDisclosureGate
@@ -177,6 +180,7 @@ class WhisperInputService : InputMethodService() {
     private lateinit var analyticsRepository: AnalyticsRepository
     private lateinit var sendPolicyRepository: SendPolicyRepository
     private lateinit var dictionaryRepository: DictionaryRepository
+    private lateinit var autoLearnObserver: AutoLearnObserver
     // Latest dictionary rules and filter switches, read synchronously by the post-processing step.
     private lateinit var wordReplacements: StateFlow<WordReplacements>
     private lateinit var transcriptFilterOptions: StateFlow<TranscriptFilter.Options>
@@ -262,6 +266,7 @@ class WhisperInputService : InputMethodService() {
         sendPolicyRules = sendPolicyRepository.getAllRulesFlow()
             .stateIn(serviceScope, SharingStarted.Eagerly, null)
         dictionaryRepository = container.dictionaryRepository
+        autoLearnObserver = createAutoLearnObserver()
         wordReplacements = dictionaryRepository.replacements
             .map(WordReplacements::compile)
             .flowOn(Dispatchers.Default)
@@ -349,6 +354,7 @@ class WhisperInputService : InputMethodService() {
         if (focusKey != lastFocusKey) {
             lastFocusKey = focusKey
             session.onFocusChanged(focusKey)
+            autoLearnObserver.onFocusChanged(focusKey)
             if (isCommandModeActive.value) {
                 cancelCommandMode(showError = true, message = getString(R.string.command_error_focus_changed))
             }
@@ -566,6 +572,7 @@ class WhisperInputService : InputMethodService() {
                     recordFinalInsertedText(event.finalText)
                 }
                 analytics.finalize(event.durationMs, event.stats.toAnalyticsSample())?.let(::persistDictationAnalyticsOutcome)
+                autoLearnObserver.onCompleted(event)
                 afterDictationCompleted(event)
             }
             is SessionEvent.Discarded -> {
@@ -583,6 +590,7 @@ class WhisperInputService : InputMethodService() {
         serviceScope.launch {
             val autoSend = event.inserted && (event.autoSend ?: shouldAutoSend(focus.packageName))
             if (lastFocusKey == focus && autoSend) {
+                autoLearnObserver.onAutoSend(focus)
                 delay(AutoSend.DELAY_MS)
                 val stillTarget = lastFocusKey == focus && session.latestRunId == event.runId && !session.isBusy
                 if (stillTarget && !shouldBlockExternalSend()) {
@@ -1030,6 +1038,48 @@ class WhisperInputService : InputMethodService() {
     }
 
     // endregion
+
+    /** Auto-Learn capture (§4.11 step 1); gates are read when a dictation lands, field text is never logged. */
+    private fun createAutoLearnObserver(): AutoLearnObserver {
+        val enabled = repository.autoLearnSettings.map { it.enabled }
+            .stateIn(serviceScope, SharingStarted.Eagerly, false)
+        return AutoLearnObserver(
+            scope = serviceScope,
+            inputConnection = { currentInputConnection },
+            currentFocus = ::currentFocusKey,
+            gates = { event ->
+                AutoLearnCaptureStateMachine.Gates(
+                    enabled = enabled.value,
+                    secureField = SecureFieldDetector.detect(currentInputEditorInfo).isSecure,
+                    blockedApp = sendPolicyRules.value?.get(event.focus.packageName) == true,
+                    autoSend = event.autoSend == true,
+                )
+            },
+            onRevision = appContainer.autoLearnCoordinator::onRevisionCaptured,
+        )
+    }
+
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int,
+    ) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        autoLearnObserver.onFieldUpdated()
+    }
+
+    override fun onUpdateExtractedText(token: Int, text: ExtractedText?) {
+        super.onUpdateExtractedText(token, text)
+        autoLearnObserver.onFieldUpdated()
+    }
+
+    override fun onFinishInput() {
+        autoLearnObserver.onFieldLeft()
+        super.onFinishInput()
+    }
 
     private fun currentFocusKey(): FocusKey? {
         return FocusKey.from(currentInputEditorInfo, focusIdentity.currentId)
@@ -1650,6 +1700,7 @@ class WhisperInputService : InputMethodService() {
         disclosureGate.cancel()
         dictationDisclosureJob?.cancel()
         session.onWindowHidden()
+        autoLearnObserver.onFieldLeft()
         if (isCommandModeActive.value) {
             resetCommandRunState()
             isCommandModeActive.value = false
@@ -1664,6 +1715,7 @@ class WhisperInputService : InputMethodService() {
         viewLifecycle = null
         savedViewState = null
         session.release()
+        autoLearnObserver.cancel()
         resetCommandRunState()
         commandUndoJob?.cancel()
         commandUndoJob = null

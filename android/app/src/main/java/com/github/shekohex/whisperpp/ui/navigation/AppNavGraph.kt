@@ -12,6 +12,7 @@ import com.github.shekohex.whisperpp.ui.backup.BackupRestoreScreen
 import com.github.shekohex.whisperpp.ui.dictation.AudioSettingsScreen
 import com.github.shekohex.whisperpp.ui.dictation.DictationSettingsScreen
 import com.github.shekohex.whisperpp.ui.dictionary.DictionaryScreen
+import com.github.shekohex.whisperpp.ui.dictionary.DictionarySettingsScreen
 import com.github.shekohex.whisperpp.ui.enhancement.EnhancementScreen
 import com.github.shekohex.whisperpp.ui.enhancement.PresetsScreen
 import com.github.shekohex.whisperpp.ui.enhancement.PromptEditScreen
@@ -48,6 +49,7 @@ internal fun NavGraphBuilder.appGraph(
         HistoryDetailScreen(entryId = entry.toRoute<Destination.HistoryDetail>().id, onBack = onBack)
     }
     composable<Destination.Dictionary> { DictionaryScreen() }
+    composable<Destination.DictionarySettings> { DictionarySettingsScreen(onBack = onBack) }
     composable<Destination.More> { MoreScreen(onNavigate = onNavigate) }
 
     composable<Destination.ProviderList> { ProviderListScreen(onBack = onBack, onNavigate = onNavigate) }
@@ -73,7 +75,7 @@ internal fun NavGraphBuilder.appGraph(
     }
     composable<Destination.LanguageDefaults> { LanguageDefaultsScreen(onBack = onBack) }
 
-    composable<Destination.PrivacySafety> { PrivacySafetyScreen(onBack = onBack) }
+    composable<Destination.PrivacySafety> { PrivacySafetyScreen(onBack = onBack, onNavigate = onNavigate) }
     composable<Destination.BackupRestore> { BackupRestoreScreen(onBack = onBack, onNavigate = onNavigate) }
     composable<Destination.Insights> { InsightsScreen(onBack = onBack) }
     composable<Destination.About> {

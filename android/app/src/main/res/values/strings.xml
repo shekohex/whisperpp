@@ -467,7 +467,6 @@
     <string name="backup_history_export_notice">Transcript history was included.</string>
     <string name="backup_history_restore_summary">%1$d in this backup, %2$d on this device. Not restored unless selected.</string>
     <string name="backup_history_restore_checkbox">Restore transcript history</string>
-    <string name="dictionary_placeholder_message">Word replacements and vocabulary will appear here.</string>
     <string name="modes_title">Modes</string>
     <string name="modes_app_mappings_title">App mappings</string>
     <string name="modes_app_mappings_summary">Per-app prompt profiles and provider overrides</string>
@@ -764,4 +763,92 @@
     <string name="about_licenses_summary">Libraries that make Whisper++ possible</string>
     <string name="about_licenses_intro">Whisper++ is built with these open-source libraries.</string>
     <string name="about_licenses_close">Close</string>
+    <!-- Dictionary (§4.11) -->
+    <string name="dictionary_tab_replacements">Word Replacements</string>
+    <string name="dictionary_tab_vocabulary">Vocabulary</string>
+    <string name="dictionary_settings_title">Dictionary settings</string>
+    <string name="dictionary_original_label">Original text</string>
+    <string name="dictionary_original_hint">Use commas for multiple</string>
+    <string name="dictionary_replacement_label">Replacement text</string>
+    <string name="dictionary_add_replacement">Add replacement</string>
+    <string name="dictionary_edit_replacement">Edit replacement</string>
+    <string name="dictionary_rule_format">%1$s → %2$s</string>
+    <string name="dictionary_replacements_empty_title">No replacements yet</string>
+    <string name="dictionary_replacements_empty_body">Fix words the model keeps getting wrong, e.g. “whisper plus plus” → “Whisper++”. Replacements run before enhancement.</string>
+    <string name="dictionary_vocabulary_label">Add a term</string>
+    <string name="dictionary_vocabulary_hint">Names, brands, jargon</string>
+    <string name="dictionary_add_term">Add term</string>
+    <string name="dictionary_remove_term">Remove %1$s</string>
+    <string name="dictionary_vocabulary_empty_title">No vocabulary yet</string>
+    <string name="dictionary_vocabulary_empty_body">Terms here are sent as spelling hints to models that accept them and added to the enhancement prompt.</string>
+    <plurals name="dictionary_vocabulary_count">
+        <item quantity="one">%d term</item>
+        <item quantity="other">%d terms</item>
+    </plurals>
+    <string name="dictionary_added">Added</string>
+    <string name="dictionary_duplicate">Already in your dictionary</string>
+    <string name="dictionary_invalid">Enter both the original and the replacement</string>
+    <string name="dictionary_rule_deleted">Replacement deleted</string>
+    <string name="dictionary_term_removed">Removed “%1$s”</string>
+    <string name="dictionary_save">Save</string>
+    <string name="dictionary_delete">Delete</string>
+    <string name="dictionary_cancel">Cancel</string>
+    <string name="dictionary_ok">OK</string>
+    <string name="dictionary_backup_section_title">Export / Import</string>
+    <string name="dictionary_export">Export dictionary</string>
+    <string name="dictionary_import">Import dictionary</string>
+    <string name="dictionary_export_done">Dictionary exported</string>
+    <string name="dictionary_export_failed">Couldn\'t export the dictionary</string>
+    <string name="dictionary_import_done">Imported %1$d replacements and %2$d terms</string>
+    <string name="dictionary_import_failed">That file isn\'t a valid dictionary export</string>
+
+    <!-- Auto-Learn (§4.11) -->
+    <string name="autolearn_section_title">Auto-Learn</string>
+    <string name="autolearn_toggle_title">Learn from my corrections</string>
+    <string name="autolearn_toggle_summary">When you fix dictated text by hand, suggest new replacements and vocabulary</string>
+    <string name="autolearn_info_title">About Auto-Learn</string>
+    <string name="autolearn_info_body">After a dictation, Whisper++ notices when you edit the inserted text in the same field. Only the edited words plus up to 3 words around each edit leave the device, and only to the review model you choose here (or your enhancement model). Nothing is captured in password or private fields, apps you blocked, or when the text was auto-sent.\n\nImmediately: corrections are learned in the background; when the app is open you\'ll see “Learned N corrections” with Undo for 30 seconds. Daily / Manually: corrections wait for you under “Review now”.\n\nAuto-Learn is off by default; turn it off here at any time.</string>
+    <string name="autolearn_provider_label">Review provider</string>
+    <string name="autolearn_model_label">Review model</string>
+    <string name="autolearn_model_inherit">Same as enhancement</string>
+    <string name="autolearn_model_select">Select a model</string>
+    <string name="autolearn_no_providers">No providers configured</string>
+    <string name="autolearn_schedule_title">Review corrections</string>
+    <string name="autolearn_schedule_immediately">Immediately</string>
+    <string name="autolearn_schedule_daily">Daily</string>
+    <string name="autolearn_schedule_manually">Manually</string>
+    <plurals name="autolearn_to_review">
+        <item quantity="one">Corrections to review: %d</item>
+        <item quantity="other">Corrections to review: %d</item>
+    </plurals>
+    <string name="autolearn_review_now">Review now</string>
+    <string name="autolearn_reviewing">Reviewing…</string>
+    <string name="autolearn_review_title">Review corrections</string>
+    <string name="autolearn_review_subtitle">Choose what to learn from each correction</string>
+    <string name="autolearn_review_empty">Nothing to review right now.</string>
+    <string name="autolearn_review_later">Later</string>
+    <string name="autolearn_apply_all">Apply all</string>
+    <string name="autolearn_learns_replacement">Learns “%1$s” → “%2$s”</string>
+    <string name="autolearn_learns_vocabulary">Adds “%1$s” to vocabulary</string>
+    <string name="autolearn_choice_replacement">Replacement</string>
+    <string name="autolearn_choice_vocabulary">Vocabulary</string>
+    <string name="autolearn_choice_both">Both</string>
+    <string name="autolearn_choice_dismiss">Dismiss</string>
+    <plurals name="autolearn_learned">
+        <item quantity="one">Learned %d correction</item>
+        <item quantity="other">Learned %d corrections</item>
+    </plurals>
+    <plurals name="autolearn_badge_description">
+        <item quantity="one">Dictionary, %d correction to review</item>
+        <item quantity="other">Dictionary, %d corrections to review</item>
+    </plurals>
+    <string name="autolearn_undo">Undo</string>
+    <string name="autolearn_undone">Undone</string>
+    <string name="autolearn_undo_expired">Too late to undo</string>
+    <string name="autolearn_review_failed">Auto-Learn couldn\'t review corrections; they stay queued</string>
+    <string name="autolearn_privacy_group_title">Auto-Learn</string>
+    <string name="autolearn_privacy_status_on">Auto-Learn is on</string>
+    <string name="autolearn_privacy_status_off">Auto-Learn is off</string>
+    <string name="autolearn_privacy_body">When on, edits you make to dictated text are reviewed by an AI model. Only the edited words plus up to 3 words around each edit are sent, and only to the review provider chosen in Dictionary settings (by default your enhancement provider). Nothing is captured in password or private fields or in apps blocked below. Turn it off in Dictionary settings.</string>
+    <string name="autolearn_privacy_open_settings">Open Dictionary settings</string>
 </resources>

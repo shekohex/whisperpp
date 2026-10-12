@@ -41,20 +41,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
+import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_LEARN_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED
 import com.github.shekohex.whisperpp.data.validateSelections
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
+import com.github.shekohex.whisperpp.ui.navigation.Destination
 import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
@@ -65,6 +69,7 @@ import com.github.shekohex.whisperpp.ui.settings.common.mergeAndFilterApps
 @Composable
 fun PrivacySafetyScreen(
     onBack: () -> Unit,
+    onNavigate: (Destination) -> Unit = {},
     viewModel: PrivacySafetyViewModel = defaultPrivacySafetyViewModel(),
 ) {
     val rules by viewModel.rules.collectAsStateWithLifecycle()
@@ -218,6 +223,13 @@ fun PrivacySafetyScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+
+            SettingsGroup(title = stringResource(R.string.autolearn_privacy_group_title)) {
+                AutoLearnPrivacyNote(
+                    enabled = settingsState[AUTO_LEARN_ENABLED] ?: false,
+                    onOpenSettings = { onNavigate(Destination.DictionarySettings) },
+                )
             }
 
             SettingsGroup(title = "Per-app send policy") {

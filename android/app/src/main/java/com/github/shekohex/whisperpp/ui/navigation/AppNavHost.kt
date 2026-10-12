@@ -12,6 +12,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -19,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -34,6 +37,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.app.appContainer
+import com.github.shekohex.whisperpp.ui.dictionary.AutoLearnEventHost
+import com.github.shekohex.whisperpp.ui.dictionary.DictionaryTabIcon
 
 /**
  * App shell: five top-level tabs in a bottom bar on phones (only on tab roots) or a navigation rail
@@ -52,6 +57,7 @@ fun AppNavHost(
     val currentDestination = backStackEntry?.destination
     var currentTab by rememberSaveable { mutableStateOf(TopLevelDestination.HOME) }
     var checkForUpdateOnAbout by rememberSaveable { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
     val tabAtDestination = currentDestination?.topLevelTab()
     LaunchedEffect(tabAtDestination) {
         if (tabAtDestination != null) currentTab = tabAtDestination
@@ -83,6 +89,7 @@ fun AppNavHost(
                     AppNavigationBar(currentTab = currentTab, onSelect = selectTab)
                 }
             },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
         ) { padding ->
             NavHost(
@@ -103,6 +110,7 @@ fun AppNavHost(
     }
 
     MigrationErrorDialog()
+    AutoLearnEventHost(snackbarHostState)
 }
 
 @Composable
@@ -116,7 +124,7 @@ private fun AppNavigationBar(
             NavigationBarItem(
                 selected = selected,
                 onClick = { onSelect(tab) },
-                icon = { Icon(if (selected) tab.selectedIcon else tab.unselectedIcon, contentDescription = null) },
+                icon = { TabIcon(tab, selected) },
                 label = { Text(stringResource(tab.labelRes)) },
             )
         }
@@ -134,11 +142,18 @@ private fun AppNavigationRail(
             NavigationRailItem(
                 selected = selected,
                 onClick = { onSelect(tab) },
-                icon = { Icon(if (selected) tab.selectedIcon else tab.unselectedIcon, contentDescription = null) },
+                icon = { TabIcon(tab, selected) },
                 label = { Text(stringResource(tab.labelRes)) },
             )
         }
     }
+}
+
+/** The Dictionary icon carries the Auto-Learn review badge. */
+@Composable
+private fun TabIcon(tab: TopLevelDestination, selected: Boolean) {
+    val icon = if (selected) tab.selectedIcon else tab.unselectedIcon
+    if (tab == TopLevelDestination.DICTIONARY) DictionaryTabIcon(icon) else Icon(icon, contentDescription = null)
 }
 
 /** Shown when the startup settings migrations threw (H-10): retry, or continue with data as is. */
