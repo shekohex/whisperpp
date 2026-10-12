@@ -6,6 +6,7 @@ import android.net.Uri
 data class HistoryActions(
     val onOpen: (Long) -> Unit,
     val onQueryChange: (String) -> Unit,
+    val onFilterChange: (HistoryFilter) -> Unit,
     val onToggleSelection: (Long) -> Unit,
     val onToggleSelectAll: () -> Unit,
     val onClearSelection: () -> Unit,

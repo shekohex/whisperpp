@@ -44,7 +44,9 @@ internal fun NavGraphBuilder.appGraph(
     composable<Destination.ModeEdit> { entry ->
         ModeEditScreen(modeId = entry.toRoute<Destination.ModeEdit>().id, onBack = onBack)
     }
-    composable<Destination.History> { HistoryScreen(onNavigate = onNavigate) }
+    composable<Destination.History> { entry ->
+        HistoryScreen(onNavigate = onNavigate, failedOnly = entry.toRoute<Destination.History>().failedOnly)
+    }
     composable<Destination.HistoryDetail> { entry ->
         HistoryDetailScreen(entryId = entry.toRoute<Destination.HistoryDetail>().id, onBack = onBack)
     }

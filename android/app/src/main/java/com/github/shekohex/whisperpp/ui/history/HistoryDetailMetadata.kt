@@ -42,13 +42,15 @@ fun HistoryDetailMetadata(
         ) {
             MetadataRow(stringResource(R.string.history_meta_when), whenText)
             MetadataRow(stringResource(R.string.history_meta_duration), formatClock(seconds * 1000))
-            MetadataRow(
-                stringResource(R.string.history_meta_words),
-                pluralStringResource(R.plurals.history_word_count, entry.wordCount, entry.wordCount),
-            )
+            if (entry.hasText) {
+                MetadataRow(
+                    stringResource(R.string.history_meta_words),
+                    pluralStringResource(R.plurals.history_word_count, entry.wordCount, entry.wordCount),
+                )
+            }
             entry.appPackage?.let { MetadataRow(stringResource(R.string.history_meta_app), app?.label ?: it) }
-            MetadataRow(stringResource(R.string.history_meta_provider), entry.providerId)
-            MetadataRow(stringResource(R.string.history_meta_model), entry.sttModelId)
+            if (entry.providerId.isNotBlank()) MetadataRow(stringResource(R.string.history_meta_provider), entry.providerId)
+            if (entry.sttModelId.isNotBlank()) MetadataRow(stringResource(R.string.history_meta_model), entry.sttModelId)
             entry.enhancementModelId?.let { MetadataRow(stringResource(R.string.history_meta_enhancement_model), it) }
             entry.language?.takeIf { it.isNotBlank() }?.let { MetadataRow(stringResource(R.string.history_meta_language), it) }
         }

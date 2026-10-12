@@ -49,7 +49,7 @@ import com.github.shekohex.whisperpp.ui.components.ThemePreviews
 import com.github.shekohex.whisperpp.ui.theme.AppShapes
 import com.github.shekohex.whisperpp.ui.theme.Spacing
 
-/** One transcript in the list: preview, relative time and app / model / enhanced chips. */
+/** One take in the list: preview (or "no transcript"), relative time and status / app / model / enhanced chips. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryRow(
@@ -149,12 +149,20 @@ private fun HistoryRowContent(
                 Checkbox(checked = isSelected, onCheckedChange = null)
             }
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.weight(1f)) {
-                Text(
-                    text = entry.finalText,
-                    style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                if (entry.hasText) {
+                    Text(
+                        text = entry.finalText,
+                        style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.history_no_transcript),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     verticalArrangement = Arrangement.spacedBy(Spacing.xs),
@@ -165,8 +173,9 @@ private fun HistoryRowContent(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    HistoryStatusChip(entry)
                     entry.appPackage?.let { MetaChip(text = app?.label ?: it, app = app) }
-                    MetaChip(text = entry.sttModelId, icon = Icons.Default.Memory)
+                    if (entry.sttModelId.isNotBlank()) MetaChip(text = entry.sttModelId, icon = Icons.Default.Memory)
                     if (entry.enhancedText != null) {
                         StatusChip(
                             text = stringResource(R.string.history_enhanced_marker),

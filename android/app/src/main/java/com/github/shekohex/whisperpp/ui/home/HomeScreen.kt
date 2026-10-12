@@ -69,6 +69,7 @@ fun HomeScreen(
     val analytics by viewModel.analytics.collectAsStateWithLifecycle()
     val backupStatus by viewModel.backupStatus.collectAsStateWithLifecycle()
     val recent by viewModel.recent.collectAsStateWithLifecycle()
+    val needsAttention by viewModel.needsAttention.collectAsStateWithLifecycle()
     RefreshOnResume(viewModel::refreshSetupStatus)
 
     val activity = LocalActivity.current
@@ -78,7 +79,7 @@ fun HomeScreen(
     val clipboard = LocalClipboard.current
     val resources = LocalResources.current
     val copy: (TranscriptHistoryEntry) -> Unit = { entry ->
-        scope.launch {
+        if (entry.hasText) scope.launch {
             clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(resources.getString(R.string.app_name), entry.finalText)))
             snackbarHostState.showSnackbar(resources.getString(R.string.home_recent_copied))
         }
@@ -100,6 +101,7 @@ fun HomeScreen(
             setupStatus = setupStatus,
             hasProviders = current.providers.isNotEmpty(),
             recent = recent,
+            needsAttention = needsAttention,
             onNavigate = onNavigate,
             onCopy = copy,
             onMicRequested = viewModel::setMicRequested,
@@ -145,6 +147,7 @@ private class HomeSections(
     private val setupStatus: SetupStatus?,
     private val hasProviders: Boolean,
     private val recent: List<TranscriptHistoryEntry>,
+    private val needsAttention: Int,
     private val onNavigate: (Destination) -> Unit,
     private val onCopy: (TranscriptHistoryEntry) -> Unit,
     private val onMicRequested: () -> Unit,
@@ -177,13 +180,21 @@ private class HomeSections(
 
     @Composable
     fun Recent() {
-        if (recent.isEmpty()) return
-        RecentTranscriptsCard(
-            entries = recent,
-            onOpen = { entry -> onNavigate(Destination.HistoryDetail(entry.id)) },
-            onCopy = onCopy,
-            onSeeAll = { onNavigate(Destination.History) },
-        )
+        if (recent.isEmpty() && needsAttention == 0) return
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            RecordingsAttentionCard(
+                count = needsAttention,
+                onOpen = { onNavigate(Destination.History(failedOnly = true)) },
+            )
+            if (recent.isNotEmpty()) {
+                RecentTranscriptsCard(
+                    entries = recent,
+                    onOpen = { entry -> onNavigate(Destination.HistoryDetail(entry.id)) },
+                    onCopy = onCopy,
+                    onSeeAll = { onNavigate(Destination.History()) },
+                )
+            }
+        }
     }
 }
 
@@ -229,6 +240,7 @@ private fun HomeContentPreview() {
                     setupStatus = null,
                     hasProviders = true,
                     recent = sampleTranscripts(),
+                    needsAttention = 2,
                     onNavigate = {},
                     onCopy = {},
                     onMicRequested = {},

@@ -49,6 +49,8 @@ import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.RuntimeConfigLoader
 import com.github.shekohex.whisperpp.data.history.HistoryAudioStore
 import com.github.shekohex.whisperpp.data.history.TranscriptHistoryEntry
+import com.github.shekohex.whisperpp.ime.SttRequestFactory
+import com.github.shekohex.whisperpp.ime.SttTranscriber
 import com.github.shekohex.whisperpp.ui.components.ConfirmDialog
 import com.github.shekohex.whisperpp.ui.components.EmptyState
 import com.github.shekohex.whisperpp.ui.components.LoadingState
@@ -67,21 +69,35 @@ fun HistoryDetailScreen(entryId: Long, onBack: () -> Unit) {
     val appContext = LocalContext.current.applicationContext
     val viewModel = containerViewModel(key = "history-detail-$entryId") { container, _ ->
         val audioDir = File(appContext.filesDir, HistoryAudioStore.DIR_NAME)
+        val config = RuntimeConfigLoader(
+            dataStore = container.settingsDataStore,
+            repository = container.settingsRepository,
+            hasCredential = { !container.secretsStore.getProviderApiKey(it).isNullOrBlank() },
+        )
+        val sttTranscriber = SttTranscriber(appContext, container.providerFactory)
         HistoryDetailViewModel(
             entryId = entryId,
             repository = container.transcriptHistoryRepository,
             reEnhancer = PromptHistoryReEnhancer(
                 context = appContext,
-                config = RuntimeConfigLoader(
-                    dataStore = container.settingsDataStore,
-                    repository = container.settingsRepository,
-                    hasCredential = { !container.secretsStore.getProviderApiKey(it).isNullOrBlank() },
-                ),
+                config = config,
                 providers = container.providerFactory,
                 enhancementPresetId = container.settingsRepository.enhancementPresetId,
                 vocabulary = { container.dictionaryRepository.vocabulary.first() },
             ),
+            transcriber = SttHistoryTranscriber(
+                context = appContext,
+                config = config,
+                requests = SttRequestFactory(
+                    scriptConversion = sttTranscriber::scriptConversion,
+                    audioMediaType = SttTranscriber.MEDIA_TYPE_WAV,
+                    vocabulary = { container.dictionaryRepository.vocabulary.first() },
+                ),
+                transcriber = sttTranscriber,
+                replacements = { container.dictionaryRepository.replacements.first() },
+            ),
             appResolver = PackageManagerAppResolver(appContext.packageManager),
+            keepAudio = { container.settingsRepository.historySettings.first().keepAudio },
             resolveAudio = { path -> resolveHistoryAudioFile(audioDir, path) },
         )
     }
@@ -99,6 +115,7 @@ fun HistoryDetailScreen(entryId: Long, onBack: () -> Unit) {
         viewModel.messages.collect { message ->
             val text = when (message) {
                 is HistoryDetailViewModel.Message.Res -> resources.getString(message.textRes)
+                is HistoryDetailViewModel.Message.Format -> resources.getString(message.textRes, message.argument)
                 is HistoryDetailViewModel.Message.Text -> message.text
             }
             snackbarHost.showSnackbar(text)
@@ -114,8 +131,10 @@ fun HistoryDetailScreen(entryId: Long, onBack: () -> Unit) {
         snackbarHost = { SnackbarHost(snackbarHost) },
         actions = {
             if (entry != null) {
-                IconButton(onClick = { shareText(context, entry.finalText) }) {
-                    Icon(Icons.Default.Share, contentDescription = stringResource(R.string.history_share))
+                if (entry.hasText) {
+                    IconButton(onClick = { shareText(context, entry.finalText) }) {
+                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.history_share))
+                    }
                 }
                 IconButton(onClick = { confirmDelete = true }) {
                     Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.history_delete))
@@ -140,6 +159,9 @@ fun HistoryDetailScreen(entryId: Long, onBack: () -> Unit) {
                 },
                 onReEnhance = { confirmEnhance = true },
                 onCancelReEnhance = viewModel::cancelReEnhance,
+                onRetry = viewModel::retryTranscription,
+                onCancelRetry = viewModel::cancelRetry,
+                onMarkResolved = viewModel::markResolved,
             )
         }
     }
@@ -178,9 +200,10 @@ private fun HistoryDetailContent(
     onCopied: (String) -> Unit,
     onReEnhance: () -> Unit,
     onCancelReEnhance: () -> Unit,
+    onRetry: () -> Unit,
+    onCancelRetry: () -> Unit,
+    onMarkResolved: () -> Unit,
 ) {
-    var picked by rememberSaveable(entry.id) { mutableStateOf<DetailTab?>(null) }
-    val tab = picked ?: if (entry.enhancedText != null) DetailTab.Enhanced else DetailTab.Raw
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -188,6 +211,27 @@ private fun HistoryDetailContent(
             .padding(Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(Spacing.lg),
     ) {
+        HistoryAttentionCard(entry, state, onRetry, onCancelRetry, onMarkResolved)
+        if (entry.hasText) TranscriptSection(entry, onCopied)
+        state.player?.let { HistoryAudioCard(it) }
+        if (entry.hasText) {
+            ReEnhanceControls(
+                isEnhancing = state.isEnhancing && !state.isRetrying,
+                enabled = !state.isWorking,
+                onStart = onReEnhance,
+                onCancel = onCancelReEnhance,
+            )
+        }
+        HistoryDetailMetadata(entry = entry, app = state.app)
+    }
+}
+
+/** Raw / enhanced tabs with the text and its copy button. */
+@Composable
+private fun TranscriptSection(entry: TranscriptHistoryEntry, onCopied: (String) -> Unit) {
+    var picked by rememberSaveable(entry.id) { mutableStateOf<DetailTab?>(null) }
+    val tab = picked ?: if (entry.enhancedText != null) DetailTab.Enhanced else DetailTab.Raw
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
             DetailTab.entries.forEachIndexed { index, option ->
                 SegmentedButton(
@@ -222,14 +266,11 @@ private fun HistoryDetailContent(
                 )
             }
         }
-        state.player?.let { HistoryAudioCard(it) }
-        ReEnhanceControls(isEnhancing = state.isEnhancing, onStart = onReEnhance, onCancel = onCancelReEnhance)
-        HistoryDetailMetadata(entry = entry, app = state.app)
     }
 }
 
 @Composable
-private fun ReEnhanceControls(isEnhancing: Boolean, onStart: () -> Unit, onCancel: () -> Unit) {
+private fun ReEnhanceControls(isEnhancing: Boolean, enabled: Boolean, onStart: () -> Unit, onCancel: () -> Unit) {
     if (isEnhancing) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(Spacing.md),
@@ -240,7 +281,7 @@ private fun ReEnhanceControls(isEnhancing: Boolean, onStart: () -> Unit, onCance
             OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.component_cancel)) }
         }
     } else {
-        Button(onClick = onStart) {
+        Button(onClick = onStart, enabled = enabled) {
             Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
             Text(stringResource(R.string.history_reenhance), modifier = Modifier.padding(start = Spacing.sm))
         }

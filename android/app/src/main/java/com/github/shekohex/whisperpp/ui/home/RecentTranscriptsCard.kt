@@ -26,6 +26,7 @@ import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.history.TranscriptHistoryEntry
 import com.github.shekohex.whisperpp.ui.components.PreviewSurface
 import com.github.shekohex.whisperpp.ui.components.SectionHeader
+import com.github.shekohex.whisperpp.ui.history.HistoryStatusChip
 import com.github.shekohex.whisperpp.ui.components.ThemePreviews
 import com.github.shekohex.whisperpp.ui.theme.AppShapes
 import com.github.shekohex.whisperpp.ui.theme.Spacing
@@ -89,12 +90,21 @@ private fun RecentTranscriptRow(
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            text = entry.finalText,
-            style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (entry.hasText) {
+            Text(
+                text = entry.finalText,
+                style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            Text(
+                text = stringResource(R.string.history_no_transcript),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HistoryStatusChip(entry)
     }
 }
 
