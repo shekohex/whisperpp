@@ -16,20 +16,21 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.MIC_PERMISSION_REQUESTE
 import com.github.shekohex.whisperpp.data.SelectionValidationResult
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.data.SettingsRepository
-import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_CLEANUP
-import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
+import com.github.shekohex.whisperpp.data.history.TranscriptHistoryEntry
 import com.github.shekohex.whisperpp.data.validateSelections
 import com.github.shekohex.whisperpp.di.AppContainer
 import com.github.shekohex.whisperpp.domain.setup.SetupStatus
 import com.github.shekohex.whisperpp.domain.setup.SetupStatusChecker
 import com.github.shekohex.whisperpp.ui.settings.common.PreferencesViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.onEach
 
 /**
- * Aggregates everything the Home overview shows. Invalid provider/model selections found while Home
- * is visible are cleared, as before the split.
+ * Home dashboard (§4.9): analytics hero, setup checklist/issues and recent transcripts. Invalid
+ * provider/model selections found while Home is visible are cleared, as before the split.
  */
 class HomeViewModel(
     private val dataStore: DataStore<Preferences>,
@@ -37,6 +38,7 @@ class HomeViewModel(
     analyticsRepository: AnalyticsRepository,
     backupStatusStore: BackupStatusStore,
     private val setupStatusChecker: SetupStatusChecker,
+    recentTranscripts: Flow<List<TranscriptHistoryEntry>> = flowOf(emptyList()),
 ) : PreferencesViewModel(dataStore) {
 
     constructor(container: AppContainer) : this(
@@ -45,62 +47,18 @@ class HomeViewModel(
         analyticsRepository = container.analyticsRepository,
         backupStatusStore = container.backupStatusStore,
         setupStatusChecker = container.setupStatusChecker,
+        recentTranscripts = container.transcriptHistoryRepository.observeRecent(RECENT_TRANSCRIPTS_LIMIT),
     )
 
     internal data class Summary(
         val prefs: Preferences,
         val providers: List<ServiceProvider>,
         val validation: SelectionValidationResult,
-        val promptProfileCount: Int,
-        val appMappingCount: Int,
-        val languageDefaultCount: Int,
-        val hasBasePrompt: Boolean,
-        val enhancementPresetId: String,
-        val commandPresetId: String,
     )
-
-    private data class Counts(
-        val promptProfiles: Int,
-        val appMappings: Int,
-        val languageDefaults: Int,
-    )
-
-    private val counts = combine(
-        settingsRepository.promptProfiles,
-        settingsRepository.appPromptMappings,
-        settingsRepository.profiles,
-    ) { profiles, mappings, languages -> Counts(profiles.size, mappings.size, languages.size) }
-
-    private val presets = combine(
-        settingsRepository.globalBasePrompt,
-        settingsRepository.enhancementPresetId,
-        settingsRepository.commandPresetId,
-    ) { basePrompt, enhancement, command ->
-        Triple(
-            basePrompt.isNotBlank(),
-            enhancement ?: TRANSFORM_PRESET_ID_CLEANUP,
-            command ?: TRANSFORM_PRESET_ID_TONE_REWRITE,
-        )
-    }
 
     /** `null` until DataStore has emitted once. */
-    internal val summary: StateFlow<Summary?> = combine(
-        dataStore.data,
-        settingsRepository.providers,
-        counts,
-        presets,
-    ) { prefs, providers, counts, presets ->
-        Summary(
-            prefs = prefs,
-            providers = providers,
-            validation = validate(prefs, providers),
-            promptProfileCount = counts.promptProfiles,
-            appMappingCount = counts.appMappings,
-            languageDefaultCount = counts.languageDefaults,
-            hasBasePrompt = presets.first,
-            enhancementPresetId = presets.second,
-            commandPresetId = presets.third,
-        )
+    internal val summary: StateFlow<Summary?> = combine(dataStore.data, settingsRepository.providers) { prefs, providers ->
+        Summary(prefs = prefs, providers = providers, validation = validate(prefs, providers))
     }.onEach { summary ->
         val keys = summary.validation.keysToClear
         if (keys.isNotEmpty()) {
@@ -109,6 +67,8 @@ class HomeViewModel(
     }.stateInScreen(null)
 
     val analytics: StateFlow<AnalyticsSnapshot?> = analyticsRepository.snapshot.stateInScreen(null)
+
+    val recent: StateFlow<List<TranscriptHistoryEntry>> = recentTranscripts.stateInScreen(emptyList())
 
     val backupStatus: StateFlow<BackupStatusStore.Status> = backupStatusStore.status
 

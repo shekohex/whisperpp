@@ -1,61 +1,59 @@
 package com.github.shekohex.whisperpp.ui.home
 
+import android.content.ClipData
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.SettingsSuggest
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalResources
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
-import com.github.shekohex.whisperpp.data.BackupStatusStore
-import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_RECORDING_START
-import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SWITCH_BACK
-import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
-import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.data.PreferenceKeys.HAPTIC_FEEDBACK_ENABLED
-import com.github.shekohex.whisperpp.data.PreferenceKeys.PER_APP_SEND_POLICY_JSON
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
-import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED
-import com.github.shekohex.whisperpp.data.ServiceProvider
-import com.github.shekohex.whisperpp.data.presetById
+import com.github.shekohex.whisperpp.data.history.TranscriptHistoryEntry
+import com.github.shekohex.whisperpp.domain.analytics.MomentumCopy
 import com.github.shekohex.whisperpp.domain.setup.SetupStatus
-import com.github.shekohex.whisperpp.ui.analytics.AnalyticsDashboardCard
 import com.github.shekohex.whisperpp.ui.components.LoadingState
 import com.github.shekohex.whisperpp.ui.components.RefreshOnResume
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
-import org.json.JSONObject
+import com.github.shekohex.whisperpp.ui.theme.Spacing
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val TWO_COLUMN_MAX_WIDTH = 1_200.dp
+
+/** Home = dashboard (§4.9): greeting, hero, setup checklist, recent transcripts. */
+@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 fun HomeScreen(
     onNavigate: (Destination) -> Unit,
@@ -65,276 +63,155 @@ fun HomeScreen(
     val setupStatus by viewModel.setupStatus.collectAsStateWithLifecycle()
     val analytics by viewModel.analytics.collectAsStateWithLifecycle()
     val backupStatus by viewModel.backupStatus.collectAsStateWithLifecycle()
+    val recent by viewModel.recent.collectAsStateWithLifecycle()
     RefreshOnResume(viewModel::refreshSetupStatus)
 
+    val activity = LocalActivity.current
+    val expanded = activity != null && calculateWindowSizeClass(activity).widthSizeClass == WindowWidthSizeClass.Expanded
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboard.current
+    val resources = LocalResources.current
+    val copy: (TranscriptHistoryEntry) -> Unit = { entry ->
+        scope.launch {
+            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(resources.getString(R.string.app_name), entry.finalText)))
+            snackbarHostState.showSnackbar(resources.getString(R.string.home_recent_copied))
+        }
+    }
+
     Scaffold(
-        topBar = {
-            LargeTopAppBar(
-                title = { Text(stringResource(R.string.nav_home)) },
-                actions = { SettingsHelpAction(SettingsHelpTopic.HOME) },
-            )
-        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets.systemBars,
     ) { padding ->
         val current = summary
         if (current == null) {
             LoadingState(modifier = Modifier.fillMaxSize().padding(padding))
-        } else {
-            HomeContent(
-                summary = current,
-                analytics = analytics ?: AnalyticsSnapshot(),
-                backupStatus = backupStatus,
-                setupStatus = setupStatus,
-                onNavigate = onNavigate,
-                onMicRequested = viewModel::setMicRequested,
-                onMicResult = viewModel::refreshSetupStatus,
-                modifier = Modifier.fillMaxSize().padding(padding),
-            )
+            return@Scaffold
         }
-    }
-}
-
-@Composable
-private fun HomeContent(
-    summary: HomeViewModel.Summary,
-    analytics: AnalyticsSnapshot,
-    backupStatus: BackupStatusStore.Status,
-    setupStatus: SetupStatus?,
-    onNavigate: (Destination) -> Unit,
-    onMicRequested: () -> Unit,
-    onMicResult: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val setupIssues = remember(summary, backupStatus.repairCount) {
-        buildSetupIssues(summary, backupStatus.repairCount, onNavigate)
-    }
-
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (setupIssues.isNotEmpty()) {
-            item {
-                HomeSetupBanner(
-                    issues = setupIssues,
-                    onPrimaryAction = { setupIssues.firstOrNull()?.onFix?.invoke() },
-                )
-            }
-        }
-        item {
-            AnalyticsDashboardCard(snapshot = analytics, onClick = { onNavigate(Destination.Insights) })
-        }
-        if (setupStatus != null && !setupStatus.isComplete) {
-            item(key = SETUP_CHECKLIST_TAG) {
-                SetupChecklistCard(
-                    status = setupStatus,
-                    hasProviders = summary.providers.isNotEmpty(),
-                    onNavigate = onNavigate,
-                    onMicRequested = onMicRequested,
-                    onMicResult = onMicResult,
-                )
-            }
-        }
-        item {
-            SetupEssentialsGroup(summary, onNavigate)
-        }
-        personalizationGroup(summary, onNavigate)
-        behaviorGroup(summary, onNavigate)
-        item {
-            SettingsGroup(title = "Backup & restore") {
-                Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                    val repairCount = backupStatus.repairCount
-                    HomeOverviewCard(
-                        icon = Icons.Default.Backup,
-                        title = "Backup & restore",
-                        status = backupStatus.summary.ifBlank {
-                            if (repairCount > 0) "Repair attention needed" else "No backup yet"
-                        },
-                        guidance = if (repairCount > 0) {
-                            "Review the last restore summary, skipped items, and repair checklist before relying on those settings."
-                        } else {
-                            "Create password-encrypted backups, preview imports, and restore safely without leaving settings."
-                        },
-                        modifier = Modifier.testTag("backup_restore_home_card"),
-                        onClick = { onNavigate(Destination.BackupRestore) },
-                    )
+        val issues = rememberSetupIssues(current, backupStatus.repairCount, onNavigate)
+        val sections = HomeSections(
+            snapshot = analytics ?: AnalyticsSnapshot(),
+            issues = issues,
+            setupStatus = setupStatus,
+            hasProviders = current.providers.isNotEmpty(),
+            recent = recent,
+            onNavigate = onNavigate,
+            onCopy = copy,
+            onMicRequested = viewModel::setMicRequested,
+            onMicResult = viewModel::refreshSetupStatus,
+        )
+        Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
+            LazyColumn(
+                modifier = Modifier.widthIn(max = TWO_COLUMN_MAX_WIDTH).fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            ) {
+                item(key = "greeting") { Greeting(sections.snapshot) }
+                if (expanded) {
+                    item(key = "columns") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                                sections.Hero()
+                                sections.Setup()
+                            }
+                            Column(Modifier.weight(1f)) { sections.Recent() }
+                        }
+                    }
+                } else {
+                    item(key = "hero") { sections.Hero() }
+                    item(key = "setup") { sections.Setup() }
+                    item(key = "recent") { sections.Recent() }
                 }
             }
         }
     }
 }
 
-@Composable
-private fun SetupEssentialsGroup(
-    summary: HomeViewModel.Summary,
-    onNavigate: (Destination) -> Unit,
+/** Shared card set so phone (stacked) and expanded (two columns) layouts stay identical. */
+private class HomeSections(
+    val snapshot: AnalyticsSnapshot,
+    private val issues: List<HomeSetupIssue>,
+    private val setupStatus: SetupStatus?,
+    private val hasProviders: Boolean,
+    private val recent: List<TranscriptHistoryEntry>,
+    private val onNavigate: (Destination) -> Unit,
+    private val onCopy: (TranscriptHistoryEntry) -> Unit,
+    private val onMicRequested: () -> Unit,
+    private val onMicResult: () -> Unit,
 ) {
-    val providers = summary.providers
-    val validation = summary.validation
-    val totalModels = providers.sumOf { it.models.size }
-    val sttLabel = resolveSelectionLabel(providers, validation.effective.stt.providerId, validation.effective.stt.modelId)
-    val textLabel = resolveSelectionLabel(providers, validation.effective.text.providerId, validation.effective.text.modelId)
+    @Composable
+    fun Hero() {
+        DashboardHeroCard(
+            lifetimeWords = snapshot.lifetimeWords,
+            timeSavedSeconds = snapshot.lifetimeTimeSavedSeconds,
+            onViewInsights = { onNavigate(Destination.Insights) },
+        )
+    }
 
-    SettingsGroup(title = "Setup essentials") {
-        Column(
-            modifier = Modifier.padding(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            HomeOverviewCard(
-                icon = Icons.Default.SettingsSuggest,
-                title = "Provider selections",
-                status = "Dictation: $sttLabel • Enhancement: $textLabel",
-                guidance = if (validation.isSttValid && validation.isTextValid) {
-                    "Review defaults, command override, and language-specific fallbacks."
-                } else {
-                    "Choose valid STT and text models before relying on dictation or enhancement."
-                },
-                onClick = { onNavigate(Destination.ProviderSelections) },
-            )
-            HomeOverviewCard(
-                icon = Icons.Default.Dns,
-                title = "Providers & models",
-                status = if (providers.isEmpty()) {
-                    "No providers configured"
-                } else {
-                    "${providers.size} ${pluralize(providers.size, "provider", "providers")} • $totalModels ${pluralize(totalModels, "model", "models")}"
-                },
-                guidance = if (providers.isEmpty()) {
-                    "Add your first provider, endpoint, and model list here."
-                } else {
-                    "Manage provider endpoints, credentials, and available model lists."
-                },
-                onClick = { onNavigate(Destination.ProviderList) },
-            )
+    @Composable
+    fun Setup() {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            if (issues.isNotEmpty()) HomeSetupBanner(issues = issues)
+            if (setupStatus != null && !setupStatus.isComplete) {
+                SetupChecklistCard(
+                    status = setupStatus,
+                    hasProviders = hasProviders,
+                    onNavigate = onNavigate,
+                    onMicRequested = onMicRequested,
+                    onMicResult = onMicResult,
+                )
+            }
         }
     }
-}
 
-private fun LazyListScope.personalizationGroup(
-    summary: HomeViewModel.Summary,
-    onNavigate: (Destination) -> Unit,
-) = item {
-    val resources = LocalResources.current
-    val enhancementPresetTitle = presetById(summary.enhancementPresetId)?.let { resources.getString(it.titleRes) }
-        ?: stringResource(R.string.transform_preset_cleanup_title)
-    val commandPresetTitle = presetById(summary.commandPresetId)?.let { resources.getString(it.titleRes) }
-        ?: stringResource(R.string.transform_preset_tone_rewrite_title)
-
-    SettingsGroup(title = "Personalization") {
-        Column(
-            modifier = Modifier.padding(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            HomeOverviewCard(
-                icon = Icons.Default.TextFields,
-                title = "Prompts, profiles & mappings",
-                status = buildString {
-                    append(if (summary.hasBasePrompt) "Base prompt saved" else "Base prompt off")
-                    append(" • ${summary.promptProfileCount} ${pluralize(summary.promptProfileCount, "profile", "profiles")}")
-                    append(" • ${summary.appMappingCount} ${pluralize(summary.appMappingCount, "mapping", "mappings")}")
-                },
-                guidance = if (summary.promptProfileCount == 0) {
-                    "Create reusable prompt profiles, then map them to your most-used apps."
-                } else {
-                    "Adjust the base prompt or drill in to review per-app prompt behavior."
-                },
-                onClick = { onNavigate(Destination.Prompts) },
-            )
-            HomeOverviewCard(
-                icon = Icons.Default.Translate,
-                title = "Per-language defaults",
-                status = if (summary.languageDefaultCount == 0) {
-                    "No language-specific overrides"
-                } else {
-                    "${summary.languageDefaultCount} ${pluralize(summary.languageDefaultCount, "language", "languages")} configured"
-                },
-                guidance = "Use language rules when one global provider setup is not enough.",
-                onClick = { onNavigate(Destination.LanguageDefaults) },
-            )
-            HomeOverviewCard(
-                icon = Icons.Default.AutoFixHigh,
-                title = "Transform presets",
-                status = "Enhancement: $enhancementPresetTitle • Command: $commandPresetTitle",
-                guidance = "Choose the defaults Whisper++ should use before dictation cleanup or command mode transforms.",
-                onClick = { onNavigate(Destination.Presets) },
-            )
-        }
-    }
-}
-
-private fun LazyListScope.behaviorGroup(
-    summary: HomeViewModel.Summary,
-    onNavigate: (Destination) -> Unit,
-) = item {
-    val prefs = summary.prefs
-    val blockedAppCount = remember(prefs[PER_APP_SEND_POLICY_JSON]) { countBlockedApps(prefs[PER_APP_SEND_POLICY_JSON]) }
-
-    SettingsGroup(title = "Behavior & safety") {
-        Column(
-            modifier = Modifier.padding(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            HomeOverviewCard(
-                icon = Icons.Default.Keyboard,
-                title = "Keyboard behavior",
-                status = "Auto start ${onOff(prefs[AUTO_RECORDING_START] ?: true)} • Haptics ${onOff(prefs[HAPTIC_FEEDBACK_ENABLED] ?: true)} • Switch back ${onOff(prefs[AUTO_SWITCH_BACK] ?: false)}",
-                guidance = "Tune recording automation, typing behavior, and IME feedback from one place.",
-                onClick = { onNavigate(Destination.DictationSettings) },
-            )
-            HomeOverviewCard(
-                icon = Icons.Default.Security,
-                title = "Privacy & safety",
-                status = "$blockedAppCount ${pluralize(blockedAppCount, "blocked app", "blocked apps")} • Verbose logs ${onOff(prefs[VERBOSE_NETWORK_LOGS_ENABLED] ?: false)} • Sound ${onOff(prefs[SOUND_EFFECTS_ENABLED] ?: true)}",
-                guidance = "Review disclosures, blocked apps, and diagnostics before sending text or audio externally.",
-                onClick = { onNavigate(Destination.PrivacySafety) },
-            )
-        }
-    }
-}
-
-private fun buildSetupIssues(
-    summary: HomeViewModel.Summary,
-    repairCount: Int,
-    onNavigate: (Destination) -> Unit,
-): List<HomeSetupIssue> = buildList {
-    // Missing provider / dictation model is covered by the setup checklist.
-    val validation = summary.validation
-    if (summary.providers.isNotEmpty() && !validation.isTextValid) {
-        add(HomeSetupIssue("Choose a valid enhancement provider and model.", "Fix enhancement") { onNavigate(Destination.ProviderSelections) })
-    }
-    val commandOverridePresent = summary.prefs[COMMAND_TEXT_PROVIDER_ID].orEmpty().isNotBlank() ||
-        summary.prefs[COMMAND_TEXT_MODEL_ID].orEmpty().isNotBlank()
-    if (commandOverridePresent && !validation.isCommandOverrideValid) {
-        add(HomeSetupIssue("Command override is stale. Clear it or choose a valid model.", "Review override") { onNavigate(Destination.ProviderSelections) })
-    }
-    if (repairCount > 0) {
-        add(
-            HomeSetupIssue(
-                "Last restore still needs $repairCount ${pluralize(repairCount, "repair step", "repair steps")}.",
-                "Review restore",
-            ) { onNavigate(Destination.BackupRestore) },
+    @Composable
+    fun Recent() {
+        if (recent.isEmpty()) return
+        RecentTranscriptsCard(
+            entries = recent,
+            onOpen = { entry -> onNavigate(Destination.HistoryDetail(entry.id)) },
+            onCopy = onCopy,
+            onSeeAll = { onNavigate(Destination.History) },
         )
     }
 }
 
-private fun resolveSelectionLabel(providers: List<ServiceProvider>, providerId: String, modelId: String): String {
-    val provider = providers.firstOrNull { it.id == providerId }
-    val model = provider?.models?.firstOrNull { it.id == modelId }
-    return if (provider == null || model == null) "Needs setup" else "${provider.name} / ${model.name}"
-}
-
-private fun countBlockedApps(rawJson: String?): Int {
-    val json = rawJson?.trim().orEmpty()
-    if (json.isBlank()) return 0
-    return try {
-        val root = JSONObject(json)
-        root.keys().asSequence().count { key -> root.optBoolean(key, false) }
-    } catch (_: Exception) {
-        0
+@Composable
+private fun Greeting(snapshot: AnalyticsSnapshot) {
+    val variant = MomentumCopy.pick(
+        lifetimeSessions = snapshot.lifetimeSessions,
+        last7DaysSessions = snapshot.dailyBuckets.map { it.completedSessionCount },
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.home_greeting),
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = stringResource(variant.textRes()),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        SettingsHelpAction(SettingsHelpTopic.HOME)
     }
 }
 
-private fun pluralize(count: Int, singular: String, plural: String): String = if (count == 1) singular else plural
+private fun MomentumCopy.Variant.textRes(): Int = when (this) {
+    MomentumCopy.Variant.GET_STARTED -> R.string.home_momentum_get_started
+    MomentumCopy.Variant.WELCOME_BACK -> R.string.home_momentum_welcome_back
+    MomentumCopy.Variant.KEEP_GOING -> R.string.home_momentum_keep_going
+    MomentumCopy.Variant.ON_A_ROLL -> R.string.home_momentum_on_a_roll
+}
 
-private fun onOff(enabled: Boolean): String = if (enabled) "on" else "off"
+@Composable
+private fun rememberSetupIssues(
+    summary: HomeViewModel.Summary,
+    repairCount: Int,
+    onNavigate: (Destination) -> Unit,
+): List<HomeSetupIssue> {
+    val resources = LocalResources.current
+    return remember(summary, repairCount, resources) { buildSetupIssues(summary, repairCount, resources, onNavigate) }
+}

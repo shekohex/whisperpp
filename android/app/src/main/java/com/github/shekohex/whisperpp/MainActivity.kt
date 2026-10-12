@@ -57,6 +57,8 @@ class MainActivity : ComponentActivity() {
             startDestination = startDestinationFor(savedInstanceState.getBoolean(STATE_ONBOARDING_START))
         } else {
             lifecycleScope.launch {
+                // The onboarding gate migration (existing installs skip onboarding) runs with the others.
+                container.awaitMigrations(MIGRATIONS_WAIT_MS)
                 val completed = try {
                     container.settingsRepository.onboardingCompleted.first()
                 } catch (e: IOException) {
@@ -105,5 +107,6 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val TAG = "MainActivity"
         const val STATE_ONBOARDING_START = "onboarding_start"
+        const val MIGRATIONS_WAIT_MS = 2_000L
     }
 }

@@ -105,6 +105,15 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it[PreferenceKeys.ONBOARDING_COMPLETED] = true }
     }
 
+    /** Installs from before onboarding existed (a provider saved or the IME enabled) skip it; runs at startup. */
+    suspend fun migrateOnboardingGateIfNeeded(isImeEnabled: () -> Boolean) {
+        if (dataStore.data.first()[PreferenceKeys.ONBOARDING_COMPLETED] != null) return
+        if (providers.first().isEmpty() && !isImeEnabled()) return
+        dataStore.edit { prefs ->
+            if (prefs[PreferenceKeys.ONBOARDING_COMPLETED] == null) prefs[PreferenceKeys.ONBOARDING_COMPLETED] = true
+        }
+    }
+
     val soundEffectsEnabled: Flow<Boolean> = dataStore.data
         .map { prefs -> prefs[PreferenceKeys.SOUND_EFFECTS_ENABLED] ?: true }
         .distinctUntilChanged()

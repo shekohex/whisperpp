@@ -208,34 +208,9 @@
     <string name="settings_close">Close</string>
     <string name="settings_help_action">Show contextual help</string>
 
-    <string name="analytics_home_title">Time saved</string>
-    <string name="analytics_home_subtitle_active">Compared to typing over the last seven days</string>
-    <string name="analytics_home_subtitle_empty">Your next send starts a fresh seven-day streak against typing</string>
-    <string name="analytics_screen_title">Analytics dashboard</string>
-    <string name="analytics_back">Back</string>
-    <string name="analytics_hero_title">You’ve already saved</string>
-    <string name="analytics_trend_title">Last 7 days</string>
-    <string name="analytics_trend_summary">Time saved stays visible here each day so the dashboard keeps feeling alive, even while you are building momentum.</string>
-    <string name="analytics_trend_empty">No bars yet, but the trend is ready to light up with your next Whisper++ session.</string>
-    <string name="analytics_lifetime_totals_title">Lifetime totals</string>
-    <string name="analytics_lifetime_totals_hint">Since your last analytics reset</string>
-    <string name="analytics_metric_minutes">Dictation minutes</string>
-    <string name="analytics_metric_wpm">Words per minute</string>
-    <string name="analytics_metric_keystrokes">Keystrokes saved</string>
-    <string name="analytics_metric_minutes_short">Minutes</string>
-    <string name="analytics_metric_wpm_short">WPM</string>
-    <string name="analytics_metric_keystrokes_short">Keys saved</string>
-    <string name="analytics_session_breakdown_title">Session breakdown</string>
-    <string name="analytics_completed_sessions">Sent sessions</string>
-    <string name="analytics_cancelled_sessions">Cancelled sessions</string>
-    <string name="analytics_word_breakdown_title">Word breakdown</string>
-    <string name="analytics_raw_words">Raw transcript words</string>
-    <string name="analytics_final_words">Final inserted words</string>
-    <string name="analytics_reset_title">Reset local analytics</string>
-    <string name="analytics_reset_summary">Clear lifetime totals and the seven-day trend on this device without leaving the dashboard.</string>
     <string name="analytics_reset_action">Reset analytics</string>
     <string name="analytics_reset_confirm_title">Reset analytics?</string>
-    <string name="analytics_reset_confirm_message">This permanently clears your local totals, breakdowns, and seven-day trend for Whisper++.</string>
+    <string name="analytics_reset_confirm_message">This permanently clears your local totals, activity calendar, and model stats for Whisper++. Transcript history is kept.</string>
     <string name="analytics_reset_confirm_action">Reset</string>
     <string name="analytics_reset_dismiss_action">Keep data</string>
 
@@ -647,7 +622,6 @@
     <string name="provider_list_empty_title">No providers yet</string>
     <string name="provider_list_empty_message">Add a provider to start dictating with your own API key.</string>
     <string name="provider_list_add">Add provider</string>
-    <string name="analytics_loading">Loading insights…</string>
     <string name="about_title">About</string>
     <string name="about_version_label">Version</string>
     <string name="about_group_app">App</string>
@@ -715,4 +689,79 @@
     <string name="setup_action_open_settings">Settings</string>
     <string name="setup_action_add">Add</string>
     <string name="setup_action_choose">Choose</string>
+    <!-- Home dashboard (WP-3.9b) -->
+    <string name="home_greeting">👋 Hi</string>
+    <string name="home_momentum_get_started">Dictate something to unlock insights.</string>
+    <string name="home_momentum_welcome_back">Welcome back.</string>
+    <string name="home_momentum_keep_going">Nice pace. Keep it going this week.</string>
+    <string name="home_momentum_on_a_roll">You’re on a roll this week.</string>
+    <string name="home_hero_saved">You have saved %1$s with Whisper++</string>
+    <string name="home_hero_equivalent">Dictated %1$s words, equivalent to %2$s.</string>
+    <string name="home_hero_progress">Dictated %1$s words. %2$s words to go until %3$s.</string>
+    <string name="home_hero_empty">Continue using Whisper++ to unlock stats and insights.</string>
+    <string name="home_hero_view_insights">View insights</string>
+    <string name="home_duration_hours_minutes">%1$dh %2$dm</string>
+    <string name="home_duration_minutes">%1$dm</string>
+    <string name="home_milestone_times">%1$s ×%2$d</string>
+    <string name="home_book_metamorphosis">The Metamorphosis</string>
+    <string name="home_book_animal_farm">Animal Farm</string>
+    <string name="home_book_great_gatsby">The Great Gatsby</string>
+    <string name="home_book_iliad">Homer’s Iliad</string>
+    <string name="home_book_odyssey">Homer’s Odyssey</string>
+    <string name="home_book_iliad_and_odyssey">Iliad and Odyssey</string>
+    <string name="home_book_war_and_peace">War and Peace</string>
+    <string name="home_recent_title">Recent transcripts</string>
+    <string name="home_recent_see_all">See all</string>
+    <string name="home_recent_open">Open transcript</string>
+    <string name="home_recent_copy">Copy transcript</string>
+    <string name="home_recent_copied">Transcript copied</string>
+    <string name="home_issues_title">Needs attention</string>
+    <string name="home_issue_enhancement">Choose a valid enhancement provider and model.</string>
+    <string name="home_issue_enhancement_action">Fix enhancement</string>
+    <string name="home_issue_command_override">Command override is stale. Clear it or choose a valid model.</string>
+    <string name="home_issue_command_override_action">Review override</string>
+    <plurals name="home_issue_restore_repairs">
+        <item quantity="one">Last restore still needs %1$d repair step.</item>
+        <item quantity="other">Last restore still needs %1$d repair steps.</item>
+    </plurals>
+    <string name="home_issue_restore_action">Review restore</string>
+
+    <!-- Insights (WP-3.9b) -->
+    <string name="insights_title">Insights</string>
+    <string name="insights_period_7d">7d</string>
+    <string name="insights_period_30d">30d</string>
+    <string name="insights_period_90d">90d</string>
+    <string name="insights_period_all">All</string>
+    <string name="insights_stat_words">Words</string>
+    <string name="insights_stat_sessions">Sessions</string>
+    <string name="insights_stat_recording">Recording time</string>
+    <string name="insights_stat_time_saved">Time saved</string>
+    <string name="insights_calendar_title">Activity calendar</string>
+    <string name="insights_calendar_subtitle">Consistency, at a glance</string>
+    <string name="insights_calendar_summary">Active on %1$d of the last %2$d days.</string>
+    <string name="insights_calendar_busiest">Busiest day: %1$s with %2$d sessions.</string>
+    <string name="insights_legend_less">Less</string>
+    <string name="insights_legend_more">More</string>
+    <string name="insights_peak_hours_title">Peak dictation hours</string>
+    <string name="insights_peak_hours_subtitle">Sessions by hour of day</string>
+    <string name="insights_peak_hours_summary">Most active around %1$s (%2$d sessions).</string>
+    <string name="insights_peak_hours_empty">No sessions in this period yet.</string>
+    <string name="insights_model_usage_title">Model usage</string>
+    <string name="insights_model_usage_subtitle">Share of transcriptions and enhancements per model</string>
+    <string name="insights_model_other">Other</string>
+    <string name="insights_percent">%1$d%%</string>
+    <string name="insights_model_performance_title">Model performance</string>
+    <string name="insights_model_performance_subtitle">Average latency per model</string>
+    <string name="insights_latency_transcription">Transcription</string>
+    <string name="insights_latency_enhancement">Enhancement</string>
+    <string name="insights_seconds">%1$s s</string>
+    <string name="insights_chart_empty">Dictate in this period to see model stats.</string>
+
+    <!-- More / About (WP-3.4) -->
+    <string name="more_group_ai_models">AI Models</string>
+    <string name="more_group_audio">Audio &amp; dictation</string>
+    <string name="more_group_settings">Settings</string>
+    <string name="about_licenses_summary">Libraries that make Whisper++ possible</string>
+    <string name="about_licenses_intro">Whisper++ is built with these open-source libraries.</string>
+    <string name="about_licenses_close">Close</string>
 </resources>

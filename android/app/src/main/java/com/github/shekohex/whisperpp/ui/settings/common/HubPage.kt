@@ -43,11 +43,25 @@ fun TopLevelPage(
     }
 }
 
+/** A titled group of [HubEntry] rows. */
+data class HubSection(val title: String, val entries: List<HubEntry>)
+
 /** A tab body listing [entries] in one group titled [groupTitle], with an optional [intro] paragraph. */
 @Composable
 fun HubEntryList(
     groupTitle: String,
     entries: List<HubEntry>,
+    onNavigate: (Destination) -> Unit,
+    modifier: Modifier = Modifier,
+    intro: String? = null,
+) {
+    HubSectionList(listOf(HubSection(groupTitle, entries)), onNavigate, modifier, intro)
+}
+
+/** A tab body with one settings group per [sections] entry, with an optional [intro] paragraph. */
+@Composable
+fun HubSectionList(
+    sections: List<HubSection>,
     onNavigate: (Destination) -> Unit,
     modifier: Modifier = Modifier,
     intro: String? = null,
@@ -66,15 +80,17 @@ fun HubEntryList(
                 )
             }
         }
-        item {
-            SettingsGroup(title = groupTitle) {
-                entries.forEach { entry ->
-                    SettingsItem(
-                        icon = entry.icon,
-                        title = stringResource(entry.titleRes),
-                        subtitle = stringResource(entry.summaryRes),
-                        onClick = { onNavigate(entry.destination) },
-                    )
+        sections.forEach { section ->
+            item(key = section.title) {
+                SettingsGroup(title = section.title) {
+                    section.entries.forEach { entry ->
+                        SettingsItem(
+                            icon = entry.icon,
+                            title = stringResource(entry.titleRes),
+                            subtitle = stringResource(entry.summaryRes),
+                            onClick = { onNavigate(entry.destination) },
+                        )
+                    }
                 }
             }
         }

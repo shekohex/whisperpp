@@ -118,6 +118,7 @@ class AppContainer(context: Context) {
         if (!migrationsStarted.compareAndSet(false, true)) return
         appScope.launch {
             try {
+                settingsRepository.migrateOnboardingGateIfNeeded(AndroidSetupSystemChecks(appContext)::isImeEnabled)
                 settingsRepository.migrateProviderSchemaV2IfNeeded(secretsStore)
                 settingsRepository.migrateProviderSchemaV3IfNeeded()
                 settingsRepository.migrateProviderSelectionsV2IfNeeded()

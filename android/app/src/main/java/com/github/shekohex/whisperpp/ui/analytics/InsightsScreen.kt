@@ -1,25 +1,286 @@
 package com.github.shekohex.whisperpp.ui.analytics
 
+import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.github.shekohex.whisperpp.R
+import com.github.shekohex.whisperpp.analytics.AnalyticsPeriod
+import com.github.shekohex.whisperpp.analytics.AnalyticsPeriodSnapshot
+import com.github.shekohex.whisperpp.ui.components.ConfirmDialog
 import com.github.shekohex.whisperpp.ui.components.LoadingState
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.components.PreviewSurface
+import com.github.shekohex.whisperpp.ui.components.SectionCard
+import com.github.shekohex.whisperpp.ui.components.ThemePreviews
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
+import com.github.shekohex.whisperpp.ui.theme.AppShapes
+import com.github.shekohex.whisperpp.ui.theme.Spacing
 
-/** "Insights" destination: the analytics dashboard backed by [AnalyticsViewModel]. */
+const val INSIGHTS_RESET_TAG = "insights_reset"
+
+/** "Insights" destination (§4.9): period totals, activity calendar, peak hours, model usage/performance. */
 @Composable
 fun InsightsScreen(
     onBack: () -> Unit,
-    viewModel: AnalyticsViewModel = containerViewModel { container, _ -> AnalyticsViewModel(container.analyticsRepository) },
+    viewModel: AnalyticsViewModel = containerViewModel { container, _ ->
+        AnalyticsViewModel(container.analyticsRepository, container.settingsRepository.providers)
+    },
 ) {
-    val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
-    val loaded = snapshot ?: return LoadingState()
-    AnalyticsDashboardScreen(
-        snapshot = loaded,
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    PageScaffold(
+        title = stringResource(R.string.insights_title),
         onBack = onBack,
-        onConfirmReset = viewModel::reset,
         actions = { SettingsHelpAction(SettingsHelpTopic.ANALYTICS) },
+    ) {
+        val loaded = state
+        if (loaded == null) {
+            LoadingState()
+        } else {
+            InsightsContent(
+                state = loaded,
+                onSelectPeriod = viewModel::selectPeriod,
+                onConfirmReset = viewModel::reset,
+            )
+        }
+    }
+}
+
+@Composable
+fun InsightsContent(
+    state: AnalyticsViewModel.State,
+    onSelectPeriod: (AnalyticsPeriod) -> Unit,
+    onConfirmReset: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var confirmReset by rememberSaveable { mutableStateOf(false) }
+    val totals = state.totals
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(Spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(Spacing.lg),
+    ) {
+        item(key = "period") { PeriodSelector(selected = state.period, onSelect = onSelectPeriod) }
+        item(key = "tiles") { StatTiles(totals) }
+        item(key = "calendar") {
+            ChartCard(R.string.insights_calendar_title, R.string.insights_calendar_subtitle) {
+                ActivityCalendarChart(buckets = state.calendar)
+            }
+        }
+        item(key = "hours") {
+            ChartCard(R.string.insights_peak_hours_title, R.string.insights_peak_hours_subtitle) {
+                PeakHoursChart(hourlySessions = totals.hourlySessions)
+            }
+        }
+        item(key = "usage") {
+            ChartCard(R.string.insights_model_usage_title, R.string.insights_model_usage_subtitle) {
+                if (totals.modelUsage.isEmpty()) {
+                    EmptyChartText()
+                } else {
+                    ModelUsageChart(usages = totals.modelUsage, labels = state.modelLabels)
+                }
+            }
+        }
+        item(key = "performance") {
+            ChartCard(R.string.insights_model_performance_title, R.string.insights_model_performance_subtitle) {
+                if (totals.modelUsage.isEmpty()) {
+                    EmptyChartText()
+                } else {
+                    ModelPerformanceChart(usages = totals.modelUsage, labels = state.modelLabels)
+                }
+            }
+        }
+        item(key = "reset") {
+            OutlinedButton(
+                onClick = { confirmReset = true },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.testTag(INSIGHTS_RESET_TAG),
+            ) {
+                Icon(Icons.Filled.RestartAlt, contentDescription = null)
+                Text(stringResource(R.string.analytics_reset_action), modifier = Modifier.padding(start = Spacing.sm))
+            }
+        }
+    }
+
+    if (confirmReset) {
+        ConfirmDialog(
+            title = stringResource(R.string.analytics_reset_confirm_title),
+            text = stringResource(R.string.analytics_reset_confirm_message),
+            confirmLabel = stringResource(R.string.analytics_reset_confirm_action),
+            dismissLabel = stringResource(R.string.analytics_reset_dismiss_action),
+            destructive = true,
+            onConfirm = {
+                confirmReset = false
+                onConfirmReset()
+            },
+            onDismiss = { confirmReset = false },
+        )
+    }
+}
+
+@Composable
+private fun PeriodSelector(selected: AnalyticsPeriod, onSelect: (AnalyticsPeriod) -> Unit) {
+    val periods = AnalyticsPeriod.entries
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        periods.forEachIndexed { index, period ->
+            SegmentedButton(
+                selected = period == selected,
+                onClick = { onSelect(period) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = periods.size),
+            ) {
+                Text(stringResource(period.labelRes()))
+            }
+        }
+    }
+}
+
+@StringRes
+private fun AnalyticsPeriod.labelRes(): Int = when (this) {
+    AnalyticsPeriod.LAST_7_DAYS -> R.string.insights_period_7d
+    AnalyticsPeriod.LAST_30_DAYS -> R.string.insights_period_30d
+    AnalyticsPeriod.LAST_90_DAYS -> R.string.insights_period_90d
+    AnalyticsPeriod.ALL -> R.string.insights_period_all
+}
+
+@Composable
+private fun StatTiles(totals: AnalyticsPeriodSnapshot) {
+    val locale = LocalLocale.current.platformLocale
+    val hm = stringResource(R.string.home_duration_hours_minutes)
+    val m = stringResource(R.string.home_duration_minutes)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            StatTile(R.string.insights_stat_words, StatFormat.formatCompact(totals.words, locale), "insights_stat_words", Modifier.weight(1f))
+            StatTile(R.string.insights_stat_sessions, StatFormat.formatCompact(totals.sessions, locale), "insights_stat_sessions", Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            StatTile(
+                R.string.insights_stat_recording,
+                StatFormat.formatDuration(totals.recordingSeconds, hm, m, locale),
+                "insights_stat_recording",
+                Modifier.weight(1f),
+            )
+            StatTile(
+                R.string.insights_stat_time_saved,
+                StatFormat.formatDuration(totals.timeSavedSeconds, hm, m, locale),
+                "insights_stat_time_saved",
+                Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatTile(@StringRes labelRes: Int, value: String, tag: String, modifier: Modifier = Modifier) {
+    val label = stringResource(labelRes)
+    Card(
+        modifier = modifier.semantics(mergeDescendants = true) {},
+        shape = AppShapes.card,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+    ) {
+        Column(modifier = Modifier.padding(Spacing.lg), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier = Modifier.testTag(tag),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChartCard(
+    @StringRes titleRes: Int,
+    @StringRes subtitleRes: Int,
+    content: @Composable () -> Unit,
+) {
+    SectionCard(title = stringResource(titleRes)) {
+        Column(
+            modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            Text(
+                text = stringResource(subtitleRes),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+private fun EmptyChartText() {
+    Text(
+        text = stringResource(R.string.insights_chart_empty),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+@ThemePreviews
+@Composable
+private fun InsightsContentPreview() {
+    val calendar = sampleCalendar()
+    PreviewSurface {
+        InsightsContent(
+            state = AnalyticsViewModel.State(
+                period = AnalyticsPeriod.LAST_30_DAYS,
+                totals = AnalyticsPeriodSnapshot(
+                    period = AnalyticsPeriod.LAST_30_DAYS,
+                    words = 165_800,
+                    sessions = 940,
+                    recordingSeconds = 18 * 3_600L,
+                    timeSavedSeconds = 41 * 3_600L + 30 * 60L,
+                    hourlySessions = List(24) { hour -> if (hour in 8..22) (hour * 3) % 11 + 1 else 0 },
+                    modelUsage = SAMPLE_MODEL_USAGE,
+                    dailyBuckets = calendar.takeLast(30),
+                ),
+                calendar = calendar,
+                modelLabels = emptyMap(),
+            ),
+            onSelectPeriod = {},
+            onConfirmReset = {},
+        )
+    }
 }

@@ -72,6 +72,8 @@ fun AboutScreen(
         AboutViewModel(container, appContext, appVersionName(appContext))
     }
     val verboseLogs by viewModel.verboseLogs.collectAsStateWithLifecycle()
+    var showLicenses by rememberSaveable { mutableStateOf(false) }
+    if (showLicenses) OpenSourceLicensesDialog(onDismiss = { showLicenses = false })
 
     Scaffold(
         topBar = { DetailTopBar(title = stringResource(R.string.about_title), onBack = onBack) },
@@ -93,8 +95,8 @@ fun AboutScreen(
                     SettingsItem(
                         icon = Icons.Default.Description,
                         title = stringResource(R.string.about_licenses_title),
-                        subtitle = stringResource(R.string.placeholder_coming_soon_title),
-                        onClick = {},
+                        subtitle = stringResource(R.string.about_licenses_summary),
+                        onClick = { showLicenses = true },
                     )
                 }
             }
