@@ -25,6 +25,8 @@ data class AppPromptMapping(
     val appPromptAppend: String? = null,
     val sttOverride: ProviderModelOverride? = null,
     val textOverride: ProviderModelOverride? = null,
+    /** Per-app auto-send override; null follows the global setting. Modes (WP-3.10) will own this. */
+    val autoSend: Boolean? = null,
 )
 
 enum class RuntimeWarningKind {

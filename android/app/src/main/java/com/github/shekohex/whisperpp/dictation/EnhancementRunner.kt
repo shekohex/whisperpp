@@ -7,9 +7,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 
 /**
- * Retry policy for one enhancement: attempts are spaced by at least [Config.minSpacingMs], retried
- * with exponential backoff only for rate limits and 5xx (honouring `Retry-After`), and the whole run
- * (attempts + waits) stays within the total budget. Each attempt is cancellable (G-01).
+ * Retry policy for enhancements: attempts (also across runs on the same instance) start at least
+ * [Config.minSpacingMs] apart, failures are retried with exponential backoff only for rate limits
+ * and 5xx (honouring `Retry-After`), and the whole run (attempts + waits) stays within the total
+ * budget. Each attempt is cancellable (G-01).
  */
 class EnhancementRunner(
     private val config: Config = Config(),
@@ -29,6 +30,10 @@ class EnhancementRunner(
             require(maxAttempts >= 1)
         }
     }
+
+    // Start of the most recent attempt of any run, for the spacing between consecutive requests.
+    @Volatile
+    private var lastAttemptAt: Long? = null
 
     fun interface TransientFailureClassifier {
         fun isTransient(t: Throwable): Boolean
@@ -51,9 +56,11 @@ class EnhancementRunner(
         val deadline = clock() + budgetMs.coerceAtLeast(1)
         var attempts = 0
         while (true) {
+            awaitSpacing(deadline)
             val remaining = deadline - clock()
             if (remaining <= 0) return EnhancementOutcome.Failed(FailureReason.Timeout, attempts)
             attempts += 1
+            lastAttemptAt = clock()
             val failure = when (val result = attempt(enhance, remaining)) {
                 is AttemptResult.Success -> return EnhancementOutcome.Succeeded(result.text, attempts)
                 is AttemptResult.Failure -> result
@@ -66,6 +73,13 @@ class EnhancementRunner(
             if (clock() + wait >= deadline) return EnhancementOutcome.Failed(reason, attempts)
             delay(wait)
         }
+    }
+
+    /** Waits until [Config.minSpacingMs] passed since the previous attempt (never past [deadline]). */
+    private suspend fun awaitSpacing(deadline: Long) {
+        val last = lastAttemptAt ?: return
+        val wait = minOf(last + config.minSpacingMs, deadline) - clock()
+        if (wait > 0) delay(wait)
     }
 
     private sealed interface AttemptResult {

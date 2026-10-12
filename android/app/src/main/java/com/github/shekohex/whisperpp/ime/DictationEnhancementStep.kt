@@ -5,6 +5,7 @@ import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_TEMPERATURE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
+import com.github.shekohex.whisperpp.data.PromptComposer
 import com.github.shekohex.whisperpp.data.RuntimeChannel
 import com.github.shekohex.whisperpp.data.RuntimeConfigLoader
 import com.github.shekohex.whisperpp.data.presetById
@@ -36,6 +37,10 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
         val onWarning: (String) -> Unit,
         val onRequestSent: () -> Unit,
         val defaultPrompt: () -> String,
+        /** General system template placed before the selected prompt (§4.5). */
+        val systemPreamble: () -> String = { "" },
+        /** Dictionary vocabulary, injected as preferred spellings. */
+        val vocabulary: suspend () -> List<String> = { emptyList() },
     )
 
     private val context: Context
@@ -79,7 +84,12 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
 
         val temperature = if (provider.temperature > 0) provider.temperature else snapshot.prefs[ENHANCEMENT_TEMPERATURE] ?: 0.0f
         val presetInstruction = presetById(deps.enhancementPresetId.first().orEmpty())?.promptInstruction
-        val systemPrompt = buildPromptTemplate(snapshot.effective.prompt, presetInstruction)
+        val systemPrompt = PromptComposer.composeEnhancementSystemPrompt(
+            preamble = deps.systemPreamble(),
+            prompt = snapshot.effective.prompt.trim().ifBlank { deps.defaultPrompt() },
+            presetInstruction = presetInstruction,
+            vocabulary = deps.vocabulary(),
+        )
         val thinking = ThinkingConfig.from(provider, model)
 
         deps.onRequestSent()
@@ -97,7 +107,9 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
             ).getOrThrow()
         }
         return when (outcome) {
-            is EnhancementOutcome.Succeeded -> DictationEnhancer.Result.Enhanced(outcome.enhancedText, label)
+            is EnhancementOutcome.Succeeded -> PromptComposer.cleanEnhancementOutput(outcome.enhancedText)
+                ?.let { DictationEnhancer.Result.Enhanced(it, label) }
+                ?: kept(context.getString(R.string.enhancement_empty_output, label))
             is EnhancementOutcome.Skipped -> DictationEnhancer.Result.Kept()
             is EnhancementOutcome.Failed -> when (val reason = outcome.reason) {
                 FailureReason.Timeout -> kept(context.getString(R.string.enhancement_timed_out, label))
@@ -129,20 +141,6 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
         kept(context.getString(R.string.enhancement_failed, label, error.toProviderUserMessage(context)))
 
     private fun kept(notice: String, isError: Boolean = true) = DictationEnhancer.Result.Kept(notice, isError)
-
-    private fun buildPromptTemplate(basePrompt: String, presetInstruction: String?): String {
-        val base = basePrompt.trim().ifBlank { deps.defaultPrompt().trim() }
-        val preset = presetInstruction?.trim().orEmpty()
-        if (preset.isBlank()) return base
-        return buildString {
-            if (base.isNotEmpty()) {
-                append(base)
-                append("\n\n")
-            }
-            append("Preset instruction:\n")
-            append(preset)
-        }.trimEnd()
-    }
 
     private fun isBlankOrPunctuationOnly(text: String): Boolean {
         if (text.isBlank()) return true

@@ -167,4 +167,41 @@ class EnhancementRunnerTest {
         assertTrue(run.isCancelled)
         assertTrue(attemptCancelled)
     }
+
+    @Test
+    fun serverErrors_backOffExponentially() = runTest {
+        val startedAt = mutableListOf<Long>()
+        val outcome = runner(EnhancementRunner.Config(maxAttempts = 4)).run("hello", budgetMs = 30_000) {
+            startedAt += testScheduler.currentTime
+            if (startedAt.size < 4) throw NetworkError.Http(502, "api.example.com", null)
+            "fixed"
+        }
+
+        assertEquals(EnhancementOutcome.Succeeded("fixed", 4), outcome)
+        assertEquals(listOf(0L, 1_000L, 3_000L, 7_000L), startedAt)
+    }
+
+    @Test
+    fun consecutiveRuns_areSpacedByAtLeastOneSecond() = runTest {
+        val runner = runner()
+        val startedAt = mutableListOf<Long>()
+        runner.run("first") { startedAt += testScheduler.currentTime; "1" }
+        runner.run("second") { startedAt += testScheduler.currentTime; "2" }
+        testScheduler.advanceTimeBy(5_000)
+        runner.run("third") { startedAt += testScheduler.currentTime; "3" }
+
+        assertEquals(listOf(0L, 1_000L, 6_000L), startedAt)
+    }
+
+    @Test
+    fun spacingWait_neverExceedsTheBudget() = runTest {
+        val runner = runner()
+        runner.run("first") { "1" }
+        var called = false
+        val outcome = runner.run("second", budgetMs = 500) { called = true; "2" }
+
+        assertEquals(EnhancementOutcome.Failed(FailureReason.Timeout, 0), outcome)
+        assertEquals(false, called)
+        assertEquals(500, testScheduler.currentTime)
+    }
 }

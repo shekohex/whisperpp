@@ -445,6 +445,19 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    /**
+     * Adds the [PromptLibrary] profiles once (WP-2.4). Idempotent: guarded by a flag so profiles the
+     * user deleted are not brought back, and existing ids (user edits) are never overwritten.
+     */
+    suspend fun seedPromptLibraryIfNeeded() {
+        dataStore.edit { prefs ->
+            if (prefs[PreferenceKeys.PROMPT_LIBRARY_SEEDED] == true) return@edit
+            val current = parsePromptProfilesJson(prefs[PROMPT_PROFILES_JSON], gson)
+            prefs[PROMPT_PROFILES_JSON] = gson.toJson(sanitizePromptProfiles(PromptLibrary.seed(current)))
+            prefs[PreferenceKeys.PROMPT_LIBRARY_SEEDED] = true
+        }
+    }
+
     /** Last model listing for [providerId] (WP-2.6), or null when it was never refreshed. */
     fun discoveredModels(providerId: String): Flow<DiscoveredCache?> = dataStore.data
         .map { prefs -> parseDiscoveryCacheJson(prefs[PreferenceKeys.MODEL_DISCOVERY_CACHE], gson)[providerId.trim()] }
@@ -783,6 +796,7 @@ internal fun sanitizeAppPromptMappings(mappings: List<AppPromptMapping>): List<A
             appPromptAppend = appPromptAppend,
             sttOverride = sttOverride,
             textOverride = textOverride,
+            autoSend = mapping.autoSend,
         )
     }
 }

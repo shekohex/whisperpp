@@ -1,12 +1,13 @@
 package com.github.shekohex.whisperpp.domain.providers
 
 import com.github.shekohex.whisperpp.data.ModelConfig
+import com.github.shekohex.whisperpp.data.PromptComposer
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.data.ThinkingType
 
 /**
  * One enhancement (LLM rewrite) call. [systemPrompt] holds the instructions; [userText] is wrapped
- * in `<TRANSCRIPT>` and [contextPrompt] in `<CONTEXT_INFORMATION>` by [composePrompt].
+ * in `<TRANSCRIPT>` and [contextPrompt] in `<CONTEXT>` by [composePrompt].
  */
 data class EnhancementRequest(
     val systemPrompt: String,
@@ -16,19 +17,8 @@ data class EnhancementRequest(
     val thinking: ThinkingConfig = ThinkingConfig.Disabled,
     val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
 ) {
-    /** Single user message as sent today (instructions, optional context, transcript). */
-    fun composePrompt(): String = buildString {
-        append(systemPrompt)
-        append("\n\n")
-        if (!contextPrompt.isNullOrBlank()) {
-            append("<CONTEXT_INFORMATION>\n")
-            append(contextPrompt)
-            append("\n</CONTEXT_INFORMATION>\n\n")
-        }
-        append("<TRANSCRIPT>\n")
-        append(userText)
-        append("\n</TRANSCRIPT>")
-    }
+    /** Single user message (instructions, optional context, transcript); see [PromptComposer]. */
+    fun composePrompt(): String = PromptComposer.composeEnhancementMessage(systemPrompt, userText, contextPrompt)
 
     companion object {
         const val DEFAULT_TIMEOUT_MS = 10_000L

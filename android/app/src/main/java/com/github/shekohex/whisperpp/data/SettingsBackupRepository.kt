@@ -4,6 +4,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import com.github.shekohex.whisperpp.data.dictionary.DictionaryBackup
+import com.github.shekohex.whisperpp.data.dictionary.mergeDictionary
+import com.github.shekohex.whisperpp.data.dictionary.readDictionary
+import com.github.shekohex.whisperpp.data.dictionary.sanitizeDictionary
+import com.github.shekohex.whisperpp.data.dictionary.writeDictionary
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.google.gson.Gson
 import com.google.gson.JsonElement
@@ -128,6 +133,9 @@ class SettingsBackupRepository(
                 addTrailingSpace = prefs[PreferenceKeys.ADD_TRAILING_SPACE] ?: false,
                 hapticFeedbackEnabled = prefs[PreferenceKeys.HAPTIC_FEEDBACK_ENABLED] ?: true,
                 soundEffectsEnabled = prefs[PreferenceKeys.SOUND_EFFECTS_ENABLED] ?: true,
+                filterFillersEnabled = prefs[PreferenceKeys.FILTER_FILLERS_ENABLED] ?: false,
+                formatParagraphsEnabled = prefs[PreferenceKeys.FORMAT_PARAGRAPHS_ENABLED] ?: false,
+                autoSendAfterInsert = prefs[PreferenceKeys.AUTO_SEND_AFTER_INSERT] ?: false,
             ),
             privacySafety = PrivacySafetyBackup(
                 enhancementEnabled = prefs[PreferenceKeys.ENHANCEMENT_ENABLED] ?: false,
@@ -142,6 +150,7 @@ class SettingsBackupRepository(
             advancedPreferences = AdvancedPreferencesBackup(
                 updateChannel = prefs.stringValue(PreferenceKeys.UPDATE_CHANNEL).ifBlank { "stable" },
             ),
+            dictionary = readDictionary(prefs, gson),
         )
     }
 
@@ -211,6 +220,7 @@ class SettingsBackupRepository(
             keyboardBehavior = resolveKeyboardBehavior(current, imported, availableCategoryIds),
             privacySafety = resolvePrivacySafety(current, imported, availableCategoryIds, restoreMode),
             advancedPreferences = resolveAdvancedPreferences(current, imported, availableCategoryIds),
+            dictionary = resolveDictionary(current, imported, availableCategoryIds, restoreMode),
         )
     }
 
@@ -368,6 +378,21 @@ class SettingsBackupRepository(
         return imported.advancedPreferences
     }
 
+    private fun resolveDictionary(
+        current: SettingsBackupPayload,
+        imported: SettingsBackupPayload,
+        availableCategoryIds: Set<String>,
+        restoreMode: RestoreMode,
+    ): DictionaryBackup {
+        if (SETTINGS_BACKUP_CATEGORY_DICTIONARY !in availableCategoryIds) {
+            return current.dictionary
+        }
+        if (restoreMode == RestoreMode.OVERWRITE) {
+            return imported.dictionary
+        }
+        return mergeDictionary(current.dictionary, imported.dictionary)
+    }
+
     private fun buildCategoryPreviews(
         current: SettingsBackupPayload,
         imported: SettingsBackupPayload,
@@ -476,6 +501,9 @@ class SettingsBackupRepository(
                 }
                 if (SETTINGS_BACKUP_CATEGORY_ADVANCED_PREFERENCES in categoriesToApply) {
                     applyAdvancedPreferences(prefs, resolvedPayload.advancedPreferences)
+                }
+                if (SETTINGS_BACKUP_CATEGORY_DICTIONARY in categoriesToApply) {
+                    writeDictionary(prefs, resolvedPayload.dictionary, gson)
                 }
             }
 
@@ -746,6 +774,9 @@ class SettingsBackupRepository(
         prefs[PreferenceKeys.ADD_TRAILING_SPACE] = category.addTrailingSpace
         prefs[PreferenceKeys.HAPTIC_FEEDBACK_ENABLED] = category.hapticFeedbackEnabled
         prefs[PreferenceKeys.SOUND_EFFECTS_ENABLED] = category.soundEffectsEnabled
+        prefs[PreferenceKeys.FILTER_FILLERS_ENABLED] = category.filterFillersEnabled
+        prefs[PreferenceKeys.FORMAT_PARAGRAPHS_ENABLED] = category.formatParagraphsEnabled
+        prefs[PreferenceKeys.AUTO_SEND_AFTER_INSERT] = category.autoSendAfterInsert
     }
 
     private fun applyPrivacySafety(prefs: MutablePreferences, category: PrivacySafetyBackup) {
@@ -789,6 +820,7 @@ class SettingsBackupRepository(
                 keyboardBehavior = parseKeyboardBehaviorCategory(root, availableCategoryIds, skippedItems),
                 privacySafety = parsePrivacySafetyCategory(root, availableCategoryIds, skippedItems),
                 advancedPreferences = parseAdvancedPreferencesCategory(root, availableCategoryIds, skippedItems),
+                dictionary = parseDictionaryCategory(root, availableCategoryIds, skippedItems),
             ),
             availableCategoryIds = availableCategoryIds,
             skippedItems = skippedItems,
@@ -1144,6 +1176,9 @@ class SettingsBackupRepository(
             addTrailingSpace = category.booleanValue("addTrailingSpace") ?: false,
             hapticFeedbackEnabled = category.booleanValue("hapticFeedbackEnabled") ?: false,
             soundEffectsEnabled = category.booleanValue("soundEffectsEnabled") ?: false,
+            filterFillersEnabled = category.booleanValue("filterFillersEnabled") ?: false,
+            formatParagraphsEnabled = category.booleanValue("formatParagraphsEnabled") ?: false,
+            autoSendAfterInsert = category.booleanValue("autoSendAfterInsert") ?: false,
         )
     }
 
@@ -1201,6 +1236,28 @@ class SettingsBackupRepository(
         return AdvancedPreferencesBackup(
             updateChannel = category.stringValue("updateChannel").ifBlank { "stable" },
         )
+    }
+
+    private fun parseDictionaryCategory(
+        root: JsonObject,
+        availableCategoryIds: MutableSet<String>,
+        skippedItems: MutableList<SkippedImportItem>,
+    ): DictionaryBackup {
+        val category = root.readCategoryObject("dictionary", SETTINGS_BACKUP_CATEGORY_DICTIONARY, availableCategoryIds, skippedItems)
+            ?: return DictionaryBackup()
+        val decoded = try {
+            gson.fromJson(category, DictionaryBackup::class.java)
+        } catch (_: Exception) {
+            null
+        }
+        if (decoded == null) {
+            skippedItems += SkippedImportItem(
+                categoryId = SETTINGS_BACKUP_CATEGORY_DICTIONARY,
+                reason = "Dictionary is invalid.",
+            )
+            return DictionaryBackup()
+        }
+        return sanitizeDictionary(decoded)
     }
 
     private fun parseProviders(json: String?): List<ServiceProvider> {
@@ -1299,6 +1356,9 @@ class SettingsBackupRepository(
                 "addTrailingSpace",
                 "hapticFeedbackEnabled",
                 "soundEffectsEnabled",
+                "filterFillersEnabled",
+                "formatParagraphsEnabled",
+                "autoSendAfterInsert",
             )
 
             SETTINGS_BACKUP_CATEGORY_PRIVACY_SAFETY -> buildList {
@@ -1317,6 +1377,10 @@ class SettingsBackupRepository(
             }
 
             SETTINGS_BACKUP_CATEGORY_ADVANCED_PREFERENCES -> listOf("updateChannel")
+            SETTINGS_BACKUP_CATEGORY_DICTIONARY -> buildList {
+                addAll(payload.dictionary.replacements.flatMap { rule -> rule.originals.map { "replacement:${it.lowercase()}" } })
+                addAll(payload.dictionary.vocabulary.map { "vocabulary:${it.lowercase()}" })
+            }
             else -> emptyList()
         }.sorted()
     }

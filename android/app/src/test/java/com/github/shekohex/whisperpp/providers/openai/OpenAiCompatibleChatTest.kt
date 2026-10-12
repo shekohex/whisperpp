@@ -59,7 +59,7 @@ class OpenAiCompatibleChatTest {
         assertFalse(json.has("reasoning_effort"))
         val content = json.getJSONArray("messages").getJSONObject(0).getString("content")
         assertEquals(
-            "Clean up.\n\n<CONTEXT_INFORMATION>\nEarlier\n</CONTEXT_INFORMATION>\n\n<TRANSCRIPT>\nfixed text\n</TRANSCRIPT>",
+            "Clean up.\n\n<CONTEXT>\nEarlier\n</CONTEXT>\n\n<TRANSCRIPT>\nfixed text\n</TRANSCRIPT>",
             content,
         )
     }

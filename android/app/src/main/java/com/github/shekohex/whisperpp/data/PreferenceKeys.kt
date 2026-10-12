@@ -78,6 +78,16 @@ object PreferenceKeys {
     /** Per-provider last model listing (WP-2.6): JSON map providerId → DiscoveredCache. Not backed up. */
     val MODEL_DISCOVERY_CACHE = stringPreferencesKey("model_discovery_cache_json")
 
+    // WP-2.4 pipeline extras.
+    val FILTER_FILLERS_ENABLED = booleanPreferencesKey("filter-fillers-enabled")
+    val FORMAT_PARAGRAPHS_ENABLED = booleanPreferencesKey("format-paragraphs-enabled")
+    val AUTO_SEND_AFTER_INSERT = booleanPreferencesKey("auto-send-after-insert")
+    /** Dictionary (§4.11): JSON list of `Replacement` and of vocabulary terms. */
+    val DICTIONARY_REPLACEMENTS_JSON = stringPreferencesKey("dictionary_replacements_json")
+    val DICTIONARY_VOCABULARY_JSON = stringPreferencesKey("dictionary_vocabulary_json")
+    /** Built-in prompt profiles were seeded once; later deletes by the user stick. */
+    val PROMPT_LIBRARY_SEEDED = booleanPreferencesKey("prompt_library_seeded_v1")
+
     val SETTINGS: List<PreferenceKey<*>> = listOf(
         SPEECH_TO_TEXT_BACKEND,
         ACTIVE_STT_PROVIDER_ID,
@@ -132,6 +142,12 @@ object PreferenceKeys {
         PROVIDER_SELECTIONS_V2_MIGRATION_DONE,
         PROMPTS_PROFILES_SCHEMA_V1_MIGRATION_DONE,
         MODEL_DISCOVERY_CACHE,
+        FILTER_FILLERS_ENABLED,
+        FORMAT_PARAGRAPHS_ENABLED,
+        AUTO_SEND_AFTER_INSERT,
+        DICTIONARY_REPLACEMENTS_JSON,
+        DICTIONARY_VOCABULARY_JSON,
+        PROMPT_LIBRARY_SEEDED,
     )
 
     // Analytics DataStore ("analytics")

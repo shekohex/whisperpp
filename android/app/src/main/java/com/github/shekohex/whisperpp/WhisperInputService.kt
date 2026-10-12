@@ -66,9 +66,14 @@ import com.github.shekohex.whisperpp.core.audio.AudioRecorder
 import com.github.shekohex.whisperpp.core.audio.SoundCues
 import com.github.shekohex.whisperpp.core.audio.SystemAudioFocusGateway
 import com.github.shekohex.whisperpp.core.permissions.MicPermission
+import com.github.shekohex.whisperpp.core.text.TranscriptFilter
+import com.github.shekohex.whisperpp.core.text.WordReplacements
+import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SEND_AFTER_INSERT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SWITCH_BACK
 import com.github.shekohex.whisperpp.data.PreferenceKeys.CANCEL_CONFIRMATION
 import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_DICTATION_AUDIO
+import com.github.shekohex.whisperpp.data.PreferenceKeys.FILTER_FILLERS_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.FORMAT_PARAGRAPHS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.HAPTIC_FEEDBACK_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.LANGUAGE_CODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.POSTPROCESSING
@@ -82,11 +87,13 @@ import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.RuntimeConfigLoader
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
+import com.github.shekohex.whisperpp.data.dictionary.DictionaryRepository
 import com.github.shekohex.whisperpp.data.presetById
 import com.github.shekohex.whisperpp.dictation.EnhancementRunner
 import com.github.shekohex.whisperpp.dictation.FocusIdentity
 import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.domain.dictation.AudioRecorderSource
+import com.github.shekohex.whisperpp.domain.dictation.AutoSend
 import com.github.shekohex.whisperpp.domain.dictation.DictationSession
 import com.github.shekohex.whisperpp.domain.dictation.SessionEvent
 import com.github.shekohex.whisperpp.domain.dictation.SessionState
@@ -131,6 +138,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -164,6 +172,10 @@ class WhisperInputService : InputMethodService() {
     private lateinit var repository: SettingsRepository
     private lateinit var analyticsRepository: AnalyticsRepository
     private lateinit var sendPolicyRepository: SendPolicyRepository
+    private lateinit var dictionaryRepository: DictionaryRepository
+    // Latest dictionary rules and filter switches, read synchronously by the post-processing step.
+    private lateinit var wordReplacements: StateFlow<WordReplacements>
+    private lateinit var transcriptFilterOptions: StateFlow<TranscriptFilter.Options>
 
     // Owners for the current input view only; replaced on every onCreateInputView().
     private var viewLifecycle: ImeViewLifecycle? = null
@@ -243,6 +255,19 @@ class WhisperInputService : InputMethodService() {
         sendPolicyRepository = container.sendPolicyRepository
         sendPolicyRules = sendPolicyRepository.getAllRulesFlow()
             .stateIn(serviceScope, SharingStarted.Eagerly, null)
+        dictionaryRepository = container.dictionaryRepository
+        wordReplacements = dictionaryRepository.replacements
+            .map(WordReplacements::compile)
+            .flowOn(Dispatchers.Default)
+            .stateIn(serviceScope, SharingStarted.Eagerly, WordReplacements.EMPTY)
+        transcriptFilterOptions = dataStore.data
+            .map { prefs ->
+                TranscriptFilter.Options(
+                    removeFillers = prefs[FILTER_FILLERS_ENABLED] ?: false,
+                    formatParagraphs = prefs[FORMAT_PARAGRAPHS_ENABLED] ?: false,
+                )
+            }
+            .stateIn(serviceScope, SharingStarted.Eagerly, TranscriptFilter.Options())
         audioRecorder = AudioRecorder(this, serviceScope, AmplitudeMeter())
         serviceScope.launch(Dispatchers.IO) { deleteStaleRecordings() }
         audioFocus = AudioFocusController(
@@ -270,6 +295,7 @@ class WhisperInputService : InputMethodService() {
                 commandModeActive = { isCommandModeActive.value },
                 clock = SystemClock::elapsedRealtime,
                 scope = serviceScope,
+                postProcess = ::postProcessTranscript,
             )
         )
         observeAudioCore()
@@ -381,6 +407,7 @@ class WhisperInputService : InputMethodService() {
             onSetupRequired = ::showSetupRequiredToast,
             onNotice = { showEnhancementNotice(it, EnhancementNoticeStyle.INFO) },
             onStreamingUnsupported = { showToast(getString(R.string.dictation_streaming_unsupported)) },
+            vocabulary = { dictionaryRepository.vocabulary.first() },
         )
     )
 
@@ -396,6 +423,8 @@ class WhisperInputService : InputMethodService() {
             onWarning = { showEnhancementNotice(it, EnhancementNoticeStyle.INFO) },
             onRequestSent = { performFeedback() },
             defaultPrompt = ::readEnhancementDefaultPromptOrEmpty,
+            systemPreamble = ::readEnhancementSystemPreambleOrEmpty,
+            vocabulary = { dictionaryRepository.vocabulary.first() },
         )
     )
 
@@ -409,6 +438,13 @@ class WhisperInputService : InputMethodService() {
     private fun deleteStaleRecordings() {
         recordingDir().listFiles { file -> file.name.startsWith(RECORDING_FILE_PREFIX) || file.name == "recorded.wav" }
             ?.forEach { it.delete() }
+    }
+
+    /** Filter → word replacements (WP-2.4); keeps the trailing space added by "Add trailing space". */
+    private fun postProcessTranscript(text: String): String {
+        val filtered = TranscriptFilter.apply(text, transcriptFilterOptions.value)
+        val processed = wordReplacements.value.apply(filtered)
+        return if (text.endsWith(' ') && processed.isNotEmpty() && !processed.endsWith(' ')) "$processed " else processed
     }
 
     /** Batch transcription via [ProviderFactory]; failures carry a user-facing message. */
@@ -498,7 +534,7 @@ class WhisperInputService : InputMethodService() {
                     recordFinalInsertedText(event.finalText)
                 }
                 analytics.finalize(event.durationMs)?.let(::persistDictationAnalyticsOutcome)
-                switchBackIfEnabled()
+                afterDictationCompleted()
             }
             is SessionEvent.Discarded -> {
                 DictationAnalyticsSession(sessionId = 0L).cancel(event.durationMs)?.let(::persistDictationAnalyticsOutcome)
@@ -506,12 +542,29 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    private fun switchBackIfEnabled() {
+    /** Auto-send (WP-2.4) for the field that received the text, then the optional switch back. */
+    private fun afterDictationCompleted() {
+        val focus = lastFocusKey
+        val imeOptions = currentInputEditorInfo?.imeOptions ?: 0
         serviceScope.launch {
-            if (dataStore.data.first()[AUTO_SWITCH_BACK] != true) return@launch
-            delay(AUTO_SWITCH_BACK_DELAY_MS)
-            if (!session.isBusy) onSwitchIme()
+            if (focus != null && shouldAutoSend(focus.packageName)) {
+                delay(AutoSend.DELAY_MS)
+                if (lastFocusKey == focus && !session.isBusy) textCommitter.performAutoSend(focus, imeOptions)
+            }
+            switchBackIfEnabled()
         }
+    }
+
+    /** The per-app override wins over the global switch. TODO(WP-3.10): resolve from the app's Mode. */
+    private suspend fun shouldAutoSend(packageName: String): Boolean {
+        val override = repository.appPromptMappings.first().find { it.packageName == packageName }?.autoSend
+        return override ?: (dataStore.data.first()[AUTO_SEND_AFTER_INSERT] ?: false)
+    }
+
+    private suspend fun switchBackIfEnabled() {
+        if (dataStore.data.first()[AUTO_SWITCH_BACK] != true) return
+        delay(AUTO_SWITCH_BACK_DELAY_MS)
+        if (!session.isBusy) onSwitchIme()
     }
 
     private fun showToast(message: String) {
@@ -689,6 +742,12 @@ class WhisperInputService : InputMethodService() {
             enhancementNotice.value = null
             enhancementNoticeJob = null
         }
+    }
+
+    private fun readEnhancementSystemPreambleOrEmpty(): String {
+        return runCatching {
+            resources.openRawResource(R.raw.enhancement_system_preamble).bufferedReader().use { it.readText() }
+        }.getOrDefault("")
     }
 
     private fun readEnhancementDefaultPromptOrEmpty(): String {

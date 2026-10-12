@@ -381,4 +381,9 @@
     <string name="enhancement_unavailable_reason">Enhancement unavailable for %1$s: %2$s</string>
     <string name="enhancement_timed_out">Enhancement timed out for %1$s</string>
     <string name="enhancement_failed">Enhancement failed for %1$s: %2$s</string>
+    <string name="enhancement_empty_output">Enhancement returned no text for %1$s; kept the original</string>
+    <string name="settings_group_dictation">Dictation</string>
+    <string name="settings_filter_fillers">Remove filler words</string>
+    <string name="settings_format_paragraphs">Format paragraphs</string>
+    <string name="settings_auto_send">Auto-send after insert</string>
 </resources>

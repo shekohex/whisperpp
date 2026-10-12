@@ -66,6 +66,9 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ADD_TRAILING_SPACE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SEND_AFTER_INSERT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.FILTER_FILLERS_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.FORMAT_PARAGRAPHS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_RECORDING_START
 import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SWITCH_BACK
 import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_TRANSCRIBE_ON_PAUSE
@@ -3846,6 +3849,27 @@ fun KeyboardSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                     title = "Cancel Confirmation",
                     checked = settingsState?.get(CANCEL_CONFIRMATION) ?: true,
                     onCheckedChange = { scope.launch { dataStore.edit { s -> s[CANCEL_CONFIRMATION] = it } } }
+                )
+            }
+
+            SettingsGroup(title = stringResource(R.string.settings_group_dictation)) {
+                SettingsToggle(
+                    icon = Icons.Default.CleaningServices,
+                    title = stringResource(R.string.settings_filter_fillers),
+                    checked = settingsState?.get(FILTER_FILLERS_ENABLED) ?: false,
+                    onCheckedChange = { scope.launch { dataStore.edit { s -> s[FILTER_FILLERS_ENABLED] = it } } }
+                )
+                SettingsToggle(
+                    icon = Icons.Default.ViewStream,
+                    title = stringResource(R.string.settings_format_paragraphs),
+                    checked = settingsState?.get(FORMAT_PARAGRAPHS_ENABLED) ?: false,
+                    onCheckedChange = { scope.launch { dataStore.edit { s -> s[FORMAT_PARAGRAPHS_ENABLED] = it } } }
+                )
+                SettingsToggle(
+                    icon = Icons.AutoMirrored.Filled.Send,
+                    title = stringResource(R.string.settings_auto_send),
+                    checked = settingsState?.get(AUTO_SEND_AFTER_INSERT) ?: false,
+                    onCheckedChange = { scope.launch { dataStore.edit { s -> s[AUTO_SEND_AFTER_INSERT] = it } } }
                 )
             }
 

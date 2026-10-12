@@ -9,6 +9,7 @@ import com.github.shekohex.whisperpp.analytics.analyticsDataStore
 import com.github.shekohex.whisperpp.core.network.HttpClientFactory
 import com.github.shekohex.whisperpp.core.network.RedactingLoggingInterceptor
 import com.github.shekohex.whisperpp.data.SettingsRepository
+import com.github.shekohex.whisperpp.data.dictionary.DictionaryRepository
 import com.github.shekohex.whisperpp.dataStore
 import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
 import com.github.shekohex.whisperpp.privacy.SecretsStore
@@ -42,6 +43,7 @@ class AppContainer(context: Context) {
     val analyticsRepository: AnalyticsRepository by lazy { AnalyticsRepository(analyticsDataStore) }
     val secretsStore: SecretsStore by lazy { SecretsStore(appContext) }
     val sendPolicyRepository: SendPolicyRepository by lazy { SendPolicyRepository(settingsDataStore) }
+    val dictionaryRepository: DictionaryRepository by lazy { DictionaryRepository(settingsDataStore) }
 
     val httpLoggingInterceptor: RedactingLoggingInterceptor = RedactingLoggingInterceptor()
     val okHttpClient: OkHttpClient by lazy { HttpClientFactory.createOkHttpClient(httpLoggingInterceptor) }
@@ -66,6 +68,7 @@ class AppContainer(context: Context) {
                 settingsRepository.migrateProviderSchemaV3IfNeeded()
                 settingsRepository.migrateProviderSelectionsV2IfNeeded()
                 settingsRepository.migratePromptsProfilesSchemaV1IfNeeded()
+                settingsRepository.seedPromptLibraryIfNeeded()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

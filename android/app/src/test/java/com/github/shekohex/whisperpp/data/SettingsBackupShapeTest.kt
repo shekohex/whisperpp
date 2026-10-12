@@ -21,7 +21,7 @@ class SettingsBackupShapeTest {
     private val gson = Gson()
 
     @Test
-    fun exportedPayload_keepsEveryPreviousKey_andOnlyAddsCapabilities() = runBlocking {
+    fun exportedPayload_keepsEveryPreviousKey_andOnlyAddsCapabilitiesAndPipelineExtras() = runBlocking {
         val paths = exportedKeyPaths()
 
         val added = paths - PRE_V3_KEY_PATHS
@@ -30,7 +30,7 @@ class SettingsBackupShapeTest {
         assertEquals(
             setOf("stt", "text", "realtime", "thinking", "vocabulary")
                 .map { "providersModels.providers[].models[].capabilities.$it" }
-                .toSet(),
+                .toSet() + WP_2_4_KEY_PATHS,
             added,
         )
     }
@@ -113,6 +113,14 @@ class SettingsBackupShapeTest {
     )
 
     private companion object {
+        /** WP-2.4: dictionary category (empty lists export no paths) and dictation switches. */
+        val WP_2_4_KEY_PATHS = setOf(
+            "dictionary.schemaVersion",
+            "keyboardBehavior.filterFillersEnabled",
+            "keyboardBehavior.formatParagraphsEnabled",
+            "keyboardBehavior.autoSendAfterInsert",
+        )
+
         /** Key paths of the payload exported before WP-2.1 (same seed). */
         val PRE_V3_KEY_PATHS = setOf(
             "activeSelections.activeSttModelId",

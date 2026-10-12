@@ -51,6 +51,8 @@ class DictationSession(private val deps: Deps) {
         val streamingDispatcher: CoroutineDispatcher = Dispatchers.Default,
         val minRecordingMs: Long = MIN_RECORDING_MS,
         val partialThrottleMs: Long = PARTIAL_THROTTLE_MS,
+        /** Transcript clean-up (filter, word replacements) applied once, before commit and enhancement. */
+        val postProcess: (String) -> String = { it },
     )
 
     private class Run(val focus: FocusKey) {
@@ -441,7 +443,8 @@ class DictationSession(private val deps: Deps) {
             ?: Outcome.Empty
     }
 
-    private suspend fun commit(r: Run, raw: String) {
+    private suspend fun commit(r: Run, transcript: String) {
+        val raw = deps.postProcess(transcript).ifBlank { transcript }
         _state.value = SessionState.Committing(r.focus, raw)
         deps.cues(SoundCues.Cue.DONE)
         // A hidden keyboard holds the commit until the user is back (A-05).

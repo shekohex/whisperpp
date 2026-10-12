@@ -1,5 +1,6 @@
 package com.github.shekohex.whisperpp.domain.dictation
 
+import android.view.KeyEvent
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import com.github.shekohex.whisperpp.dictation.DictationUndoEntry
@@ -157,6 +158,26 @@ class TextCommitter(
             rawText = segment.rawText,
         )
         return true
+    }
+
+    /**
+     * Presses the editor's send action for [focus] (auto-send after insert); falls back to an Enter
+     * key press when the editor rejects the action. Returns false when nothing was sent.
+     */
+    fun performAutoSend(focus: FocusKey, imeOptions: Int): Boolean {
+        val action = AutoSend.forEditor(imeOptions, focus.inputType) as? AutoSend.EditorAction ?: return false
+        val ic = inputConnection() ?: return false
+        return try {
+            ic.performEditorAction(action.actionId) || sendEnter(ic)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun sendEnter(ic: InputConnection): Boolean {
+        val down = ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER))
+        val up = ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
+        return down && up
     }
 
     fun isUndoAvailable(focus: FocusKey?): Boolean {

@@ -1,6 +1,7 @@
 package com.github.shekohex.whisperpp.ime
 
 import androidx.datastore.preferences.core.Preferences
+import com.github.shekohex.whisperpp.core.text.Vocabulary
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ADD_TRAILING_SPACE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.LANGUAGE_CODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.POSTPROCESSING
@@ -38,6 +39,8 @@ class DictationStartPlanner(private val deps: Deps) {
         val onSetupRequired: () -> Unit,
         val onNotice: (String) -> Unit,
         val onStreamingUnsupported: () -> Unit,
+        /** Dictionary vocabulary; sent only to models with `capabilities.vocabulary`. */
+        val vocabulary: suspend () -> List<String> = { emptyList() },
     )
 
     class SttSelection(
@@ -83,11 +86,13 @@ class DictationStartPlanner(private val deps: Deps) {
 
         val prefs = selection.prefs
         val provider = selection.provider
+        val basePrompt = provider.prompt.ifEmpty { prefs[PROMPT] ?: "" }
+        val acceptsVocabulary = provider.models.find { it.id == selection.modelId }?.capabilities?.vocabulary == true
         val request = TranscriptionRequest(
             provider = provider,
             modelId = selection.modelId,
             languageCode = prefs[LANGUAGE_CODE] ?: "auto",
-            prompt = provider.prompt.ifEmpty { prefs[PROMPT] ?: "" },
+            prompt = if (acceptsVocabulary) Vocabulary.appendToPrompt(basePrompt, deps.vocabulary()) else basePrompt,
             temperature = provider.temperature,
             timeoutMs = provider.timeout.toLong(),
             mediaType = deps.audioMediaType,

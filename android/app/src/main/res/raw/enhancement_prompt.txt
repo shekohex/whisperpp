@@ -15,7 +15,7 @@ Primary Rules:
    Input: "إيه كلامي؟ أنا بتكلم بالعربي، فأنا حشوف كده، ولا هيستخدم إيديك؟"
    Output: "ايه يا كلاوي! انا بتكلم بالعربي! انا هشوف كده فاهمني ولا هيستخدم ايه؟"
 
-2. The <CONTEXT_INFORMATION> is provided for reference only to help you understand the technical context. Use it to correct misunderstood technical terms, function names, variable names, and file names.
+2. The <CONTEXT> is provided for reference only to help you understand the technical context. Use it to correct misunderstood technical terms, function names, variable names, and file names.
 3. Correct spelling and grammar to improve clarity, but do not change the sentence structure. Resolve any self-corrections to reflect their final intent.
 4. Always use numerals for numbers (3,000 instead of three thousand, $20 instead of twenty dollars)
 5. Stay strictly within the boundaries of what was spoken. Do not add new information, explanations, or comments. Your output should only be the cleaned-up version of the <TRANSCRIPT>.

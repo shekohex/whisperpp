@@ -1,5 +1,6 @@
 package com.github.shekohex.whisperpp.data
 
+import com.github.shekohex.whisperpp.data.dictionary.DictionaryBackup
 import com.google.gson.annotations.SerializedName
 
 const val SETTINGS_BACKUP_SCHEMA_VERSION = 1
@@ -13,6 +14,7 @@ const val SETTINGS_BACKUP_CATEGORY_TRANSFORM_PRESETS = "transform_presets"
 const val SETTINGS_BACKUP_CATEGORY_KEYBOARD_BEHAVIOR = "keyboard_behavior"
 const val SETTINGS_BACKUP_CATEGORY_PRIVACY_SAFETY = "privacy_safety"
 const val SETTINGS_BACKUP_CATEGORY_ADVANCED_PREFERENCES = "advanced_preferences"
+const val SETTINGS_BACKUP_CATEGORY_DICTIONARY = "dictionary"
 
 data class SettingsBackupCategoryManifestEntry(
     val id: String,
@@ -55,6 +57,8 @@ data class SettingsBackupPayload(
     val keyboardBehavior: KeyboardBehaviorBackup = KeyboardBehaviorBackup(),
     val privacySafety: PrivacySafetyBackup = PrivacySafetyBackup(),
     val advancedPreferences: AdvancedPreferencesBackup = AdvancedPreferencesBackup(),
+    /** Absent in backups made before WP-2.4; such backups leave the dictionary untouched. */
+    val dictionary: DictionaryBackup = DictionaryBackup(),
 )
 
 data class ProvidersModelsBackup(
@@ -106,6 +110,9 @@ data class KeyboardBehaviorBackup(
     val addTrailingSpace: Boolean = false,
     val hapticFeedbackEnabled: Boolean = false,
     val soundEffectsEnabled: Boolean = false,
+    val filterFillersEnabled: Boolean = false,
+    val formatParagraphsEnabled: Boolean = false,
+    val autoSendAfterInsert: Boolean = false,
 )
 
 data class PrivacySafetyBackup(
@@ -257,6 +264,11 @@ val SETTINGS_BACKUP_CATEGORY_MANIFEST: List<SettingsBackupCategoryManifestEntry>
     SettingsBackupCategoryManifestEntry(
         id = SETTINGS_BACKUP_CATEGORY_ADVANCED_PREFERENCES,
         label = "Advanced preferences",
+        containsSensitiveContent = false,
+    ),
+    SettingsBackupCategoryManifestEntry(
+        id = SETTINGS_BACKUP_CATEGORY_DICTIONARY,
+        label = "Dictionary",
         containsSensitiveContent = false,
     ),
 )
