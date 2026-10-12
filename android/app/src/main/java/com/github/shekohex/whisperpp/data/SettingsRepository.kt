@@ -29,6 +29,7 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_MODEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SPEECH_TO_TEXT_BACKEND
 import com.github.shekohex.whisperpp.domain.providers.DiscoveredCache
 import com.github.shekohex.whisperpp.domain.providers.DiscoveredModel
+import com.github.shekohex.whisperpp.domain.providers.DiscoveryIdentity
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
@@ -36,6 +37,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -458,22 +460,36 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    /** Last model listing for [providerId] (WP-2.6), or null when it was never refreshed. */
-    fun discoveredModels(providerId: String): Flow<DiscoveredCache?> = dataStore.data
-        .map { prefs -> parseDiscoveryCacheJson(prefs[PreferenceKeys.MODEL_DISCOVERY_CACHE], gson)[providerId.trim()] }
-        .distinctUntilChanged()
+    /**
+     * Last model listing for [providerId] (WP-2.6), or null when it was never refreshed or was listed
+     * for another endpoint/type than [identity] (default: the saved provider's current one).
+     */
+    fun discoveredModels(providerId: String, identity: DiscoveryIdentity? = null): Flow<DiscoveredCache?> {
+        val id = providerId.trim()
+        val caches = dataStore.data.map { prefs -> parseDiscoveryCacheJson(prefs[PreferenceKeys.MODEL_DISCOVERY_CACHE], gson)[id] }
+        return combine(providers, caches) { list, cache ->
+            val expected = identity ?: list.find { it.id == id }?.let(DiscoveryIdentity::of)
+            // An unsaved provider without an explicit identity cannot be checked.
+            cache?.takeIf { expected == null || it.identity == expected }
+        }.distinctUntilChanged()
+    }
 
-    /** Replaces the cached listing for [providerId]; provider models are never touched. */
+    /**
+     * Replaces the cached listing for [providerId]; provider models are never touched. [identity]
+     * defaults to the saved provider's current endpoint and type.
+     */
     suspend fun saveDiscovered(
         providerId: String,
         models: List<DiscoveredModel>,
         fetchedAtMillis: Long = System.currentTimeMillis(),
+        identity: DiscoveryIdentity? = null,
     ) {
         val id = providerId.trim()
         if (id.isBlank()) return
+        val listed = identity ?: providers.first().find { it.id == id }?.let(DiscoveryIdentity::of)
         dataStore.edit { prefs ->
             val current = parseDiscoveryCacheJson(prefs[PreferenceKeys.MODEL_DISCOVERY_CACHE], gson)
-            val updated = current + (id to DiscoveredCache(fetchedAtMillis, models))
+            val updated = current + (id to DiscoveredCache(fetchedAtMillis, models, listed))
             prefs[PreferenceKeys.MODEL_DISCOVERY_CACHE] = gson.toJson(updated)
         }
     }
@@ -709,7 +725,13 @@ internal fun parseDiscoveryCacheJson(json: String?, gson: Gson): Map<String, Dis
                 raw = model.raw ?: emptyMap(),
             )
         }
-        providerId to DiscoveredCache(cache.fetchedAtMillis, models)
+        // Gson leaves missing or unknown fields null; such an identity is treated as absent.
+        val identity = cache.identity?.let { raw ->
+            val type = raw.providerType as ProviderType?
+            val endpoint = raw.endpoint as String?
+            if (type != null && endpoint != null) DiscoveryIdentity(type, endpoint) else null
+        }
+        providerId to DiscoveredCache(cache.fetchedAtMillis, models, identity)
     }.toMap()
 }
 

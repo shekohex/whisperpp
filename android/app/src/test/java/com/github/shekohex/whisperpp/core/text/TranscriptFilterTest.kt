@@ -46,8 +46,17 @@ class TranscriptFilterTest {
     }
 
     @Test
-    fun fillers_arabicAreRemoved() {
-        assertEquals("انا رايح", TranscriptFilter.apply("يعني انا امم رايح", fillers))
+    fun fillers_arabicHesitationSoundsAreRemoved() {
+        assertEquals("انا رايح", TranscriptFilter.apply("امم انا ااه رايح", fillers))
+        assertEquals("طيب نبدأ", TranscriptFilter.apply("طيب، اه اه، نبدأ", fillers))
+        assertEquals("إذن نكمل", TranscriptFilter.apply("آآ إذن إمم نكمل", fillers))
+    }
+
+    @Test
+    fun fillers_meaningfulArabicWordsAreKept() {
+        assertEquals("يعني ايه الكلام ده؟", TranscriptFilter.apply("يعني ايه الكلام ده؟", fillers))
+        assertEquals("اه، موافق", TranscriptFilter.apply("اه، موافق", fillers))
+        assertEquals("آه يا راسي", TranscriptFilter.apply("آه يا راسي", fillers))
     }
 
     @Test

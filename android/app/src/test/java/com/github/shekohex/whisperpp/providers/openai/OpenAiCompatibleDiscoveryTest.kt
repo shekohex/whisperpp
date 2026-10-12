@@ -55,11 +55,12 @@ class OpenAiCompatibleDiscoveryTest {
         assertEquals("GET", request.method)
         assertEquals("/v1/models", request.path)
         assertEquals("Bearer sk-test", request.getHeader("Authorization"))
-        assertEquals(listOf("whisper-1", "gpt-4o-transcribe", "gpt-4o-realtime-preview", "gpt-4o"), models.map { it.id })
+        // The realtime conversation model is not a transcription model and is not listed.
+        assertEquals(listOf("whisper-1", "gpt-4o-transcribe", "gpt-4o"), models.map { it.id })
         assertTrue(models[0].capabilities.stt)
         assertEquals("openai-internal", models[0].raw["owned_by"])
-        assertTrue(models[2].capabilities.realtime)
-        assertTrue(models[3].capabilities.text)
+        assertTrue(models[1].capabilities.realtime)
+        assertTrue(models[2].capabilities.text)
     }
 
     @Test

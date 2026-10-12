@@ -19,6 +19,7 @@ import com.github.shekohex.whisperpp.providers.VERIFY_TIMEOUT_MS
 import com.github.shekohex.whisperpp.providers.apiKeyOrThrow
 import com.github.shekohex.whisperpp.providers.baseUrlOrThrow
 import com.github.shekohex.whisperpp.providers.providerCall
+import com.github.shekohex.whisperpp.providers.transcriptionResponseFormat
 import com.github.shekohex.whisperpp.providers.realtime.OpenAiRealtimeSession
 import com.github.shekohex.whisperpp.providers.withPathSuffix
 import okhttp3.HttpUrl
@@ -103,7 +104,7 @@ class OpenAiCompatibleTranscription(
         } else {
             body.addFormDataPart("file", formFilename, fileBody)
             body.addFormDataPart("model", model.id)
-            body.addFormDataPart("response_format", "text")
+            body.addFormDataPart("response_format", transcriptionResponseFormat(model.id))
             if (language.isNotEmpty() && language != "auto") {
                 body.addFormDataPart("language", language)
             }

@@ -157,6 +157,41 @@ class SettingsBackupImportAnalysisTest {
         assertFalse(analysis.categoryPreviews.first { it.categoryId == SETTINGS_BACKUP_CATEGORY_APP_MAPPINGS }.isAvailable)
     }
 
+    @Test
+    fun analyzeEncryptedBackup_mapsLegacyMultimodalLikeTheMigration() = runBlocking {
+        val repository = SettingsBackupRepository(
+            dataStore = MutablePreferencesDataStore(seedPreferences()),
+            credentialSource = FakeProviderCredentialSource(),
+            gson = gson,
+        )
+        val payloadJson = """
+            {
+              "schemaVersion": 1,
+              "providersModels": {
+                "providers": [
+                  {
+                    "id": "provider-legacy",
+                    "name": "Legacy",
+                    "type": "CUSTOM",
+                    "endpoint": "https://example.com/v1",
+                    "authMode": "API_KEY",
+                    "models": [
+                      { "id": "omni", "name": "Omni", "kind": "MULTIMODAL", "streamingPartialsSupported": true }
+                    ]
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val analysis = repository.analyzeEncryptedBackup(envelopeForJson(payloadJson), PASSWORD, RestoreMode.MERGE)
+
+        val model = analysis.resolvedPayload.providersModels.providers.single().models.single()
+        val expected = ModelCapabilities.fromLegacy(ModelKind.MULTIMODAL, false, true, ProviderType.CUSTOM, "omni")
+        assertEquals(ModelCapabilities(stt = true, text = true, realtime = true, vocabulary = true), expected)
+        assertEquals(expected, model.capabilities)
+    }
+
     private fun envelopeForPayload(
         payload: SettingsBackupPayload,
         appVersionName: String = "1.0.0",

@@ -38,6 +38,7 @@ class OpenAiRealtimeSessionTest {
     private class FakeSocket(private val request: Request, val listener: WebSocketListener) : WebSocket {
         val sent = mutableListOf<JSONObject>()
         var closeCode: Int? = null
+        var cancelled = false
 
         override fun request(): Request = request
 
@@ -55,7 +56,9 @@ class OpenAiRealtimeSessionTest {
             return true
         }
 
-        override fun cancel() = Unit
+        override fun cancel() {
+            cancelled = true
+        }
 
         fun open() = listener.onOpen(this, response(101))
 
@@ -115,6 +118,9 @@ class OpenAiRealtimeSessionTest {
     private fun speechStarted(itemId: String) = """{"type":"input_audio_buffer.speech_started","item_id":"$itemId"}"""
 
     private fun speechStopped(itemId: String) = """{"type":"input_audio_buffer.speech_stopped","item_id":"$itemId"}"""
+
+    private fun speechStopped(itemId: String, audioEndMs: Long) =
+        """{"type":"input_audio_buffer.speech_stopped","item_id":"$itemId","audio_end_ms":$audioEndMs}"""
 
     private val emptyCommitError =
         """{"type":"error","error":{"type":"invalid_request_error","code":"input_audio_buffer_commit_empty","message":"buffer too small"}}"""
@@ -254,6 +260,7 @@ class OpenAiRealtimeSessionTest {
         assertTrue(events.contains(StreamEvent.Final("hello")))
         assertEquals(StreamEvent.Closed, events.last())
         assertEquals(1000, socket.closeCode)
+        assertFalse(socket.cancelled)
     }
 
     @Test
@@ -340,22 +347,103 @@ class OpenAiRealtimeSessionTest {
     }
 
     @Test
-    fun serverVad_silenceAfterSpeechStopped_isCleared_notCommitted() = runTest {
+    fun serverVad_unacknowledgedTrailingAudio_isCommittedAfterGrace_emptyAnswerIsConfirmedSilence() = runTest {
         val session = session()
         session.start()
         val socket = factory.sockets.single()
         socket.open()
         session.sendAudio(byteArrayOf(1, 2))
         socket.utterance("item_1", "Hello.")
-        // Seconds of silence after the server auto-committed the utterance.
+        // Audio after the auto-commit that no VAD event ever covered.
         session.sendAudio(ByteArray(SPEECH_BYTES * 20))
 
         val result = async { session.commit() }
         runCurrent()
+        assertFalse("waits for VAD events first", socket.types().contains("input_audio_buffer.commit"))
+        advanceTimeBy(OpenAiRealtimeSession.VAD_GRACE_MS + 1)
+        runCurrent()
 
-        assertEquals("input_audio_buffer.clear", socket.types().last())
-        assertFalse(socket.types().contains("input_audio_buffer.commit"))
+        assertEquals("input_audio_buffer.commit", socket.types().last())
+        assertFalse(socket.types().contains("input_audio_buffer.clear"))
+        socket.receive(emptyCommitError)
+        runCurrent()
         assertEquals("Hello.", result.await().getOrThrow().text)
+    }
+
+    @Test
+    fun serverVad_lateSpeechStarted_trailingSpeechIsCommitted() = runTest {
+        val session = session()
+        session.start()
+        val socket = factory.sockets.single()
+        socket.open()
+        session.sendAudio(ByteArray(SPEECH_BYTES))
+        socket.receive(speechStarted("item_a"))
+        socket.receive(speechStopped("item_a", audioEndMs = 200))
+        socket.receive(committed("item_a"))
+        socket.receive(completed("item_a", "First."))
+        // Speech B is appended, but its speech_started only arrives after stop.
+        session.sendAudio(ByteArray(SPEECH_BYTES))
+
+        val result = async { session.commit() }
+        runCurrent()
+        assertFalse(socket.types().contains("input_audio_buffer.commit"))
+        socket.receive(speechStarted("item_b"))
+        runCurrent()
+
+        assertEquals("input_audio_buffer.commit", socket.types().last())
+        socket.receive(committed("item_b"))
+        socket.receive(completed("item_b", "Second."))
+        runCurrent()
+        assertEquals("First. Second.", result.await().getOrThrow().text)
+    }
+
+    @Test
+    fun serverVad_lateCommitted_doesNotAcknowledgeNewerAudio() = runTest {
+        val session = session()
+        session.start()
+        val socket = factory.sockets.single()
+        socket.open()
+        session.sendAudio(ByteArray(SPEECH_BYTES))
+        socket.receive(speechStarted("item_a"))
+        socket.receive(speechStopped("item_a", audioEndMs = 200))
+        // Speech B is appended before A's committed arrives; A's commit must not cover it.
+        session.sendAudio(ByteArray(SPEECH_BYTES))
+        socket.receive(committed("item_a"))
+        socket.receive(completed("item_a", "First."))
+
+        val result = async { session.commit() }
+        advanceTimeBy(OpenAiRealtimeSession.VAD_GRACE_MS + 1)
+        runCurrent()
+
+        assertEquals("input_audio_buffer.commit", socket.types().last())
+        assertFalse(socket.types().contains("input_audio_buffer.clear"))
+        socket.receive(committed("item_b"))
+        socket.receive(completed("item_b", "Second."))
+        runCurrent()
+        assertEquals("First. Second.", result.await().getOrThrow().text)
+    }
+
+    @Test
+    fun serverVad_trailingAudioAcknowledgedDuringGrace_needsNoManualCommit() = runTest {
+        val session = session()
+        session.start()
+        val socket = factory.sockets.single()
+        socket.open()
+        socket.receive(speechStarted("item_a"))
+        session.sendAudio(ByteArray(SPEECH_BYTES * 2))
+        socket.receive(speechStopped("item_a", audioEndMs = 100))
+
+        val result = async { session.commit() }
+        runCurrent()
+        socket.receive(speechStopped("item_b", audioEndMs = 400))
+        socket.receive(committed("item_a"))
+        socket.receive(committed("item_b"))
+        socket.receive(completed("item_a", "One"))
+        socket.receive(completed("item_b", "two"))
+        runCurrent()
+
+        assertFalse(socket.types().contains("input_audio_buffer.commit"))
+        assertEquals("One two", result.await().getOrThrow().text)
     }
 
     @Test
@@ -449,7 +537,8 @@ class OpenAiRealtimeSessionTest {
         runCurrent()
 
         assertTrue(result.await().exceptionOrNull() is NetworkError.Timeout)
-        assertEquals(1000, socket.closeCode)
+        assertTrue("a timed-out stream drops queued audio", socket.cancelled)
+        assertEquals(null, socket.closeCode)
     }
 
     @Test
@@ -532,7 +621,8 @@ class OpenAiRealtimeSessionTest {
         session.cancel()
 
         assertEquals(listOf("transcription_session.update"), socket.types())
-        assertEquals(1000, socket.closeCode)
+        assertTrue(socket.cancelled)
+        assertEquals(null, socket.closeCode)
         assertTrue(session.commit().isFailure)
     }
 

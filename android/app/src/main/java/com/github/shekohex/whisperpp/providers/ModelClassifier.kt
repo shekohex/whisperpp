@@ -31,8 +31,11 @@ object ModelClassifier {
         val name = id.trim().substringAfterLast('/').lowercase()
         if (name.isEmpty()) return null
         if (IGNORED_MARKERS.any { name.contains(it) }) return null
-        if (name.contains("realtime")) return ModelCapabilities.stt(providerType, realtime = true)
-        if (STT_MARKERS.any { name.contains(it) }) return ModelCapabilities.stt(providerType)
+        // `*-realtime-*` ids are voice-conversation models, not transcription models.
+        if (name.contains("realtime")) return null
+        if (STT_MARKERS.any { name.contains(it) }) {
+            return ModelCapabilities.stt(providerType, realtime = isRealtimeTranscription(name, providerType))
+        }
         if (TEXT_PREFIXES.any { name.startsWith(it) }) {
             return ModelCapabilities(text = true, thinking = isReasoning(name))
         }
@@ -42,26 +45,33 @@ object ModelClassifier {
     }
 
     /**
-     * Gemini `models.list` entries: `generateContent` → text, plus STT for `gemini-*` (inline audio);
-     * `bidiGenerateContent` → realtime STT.
+     * Gemini `models.list` entries: `generateContent` → text, plus STT for `gemini-*` (inline audio).
+     * There is no Live (`bidiGenerateContent`) implementation yet, so nothing is realtime and
+     * bidi-only models are ignored.
      */
     fun classifyGemini(id: String, methods: Collection<String>, thinking: Boolean? = null): ModelCapabilities? {
         val name = id.trim().removePrefix("models/").lowercase()
         if (name.isEmpty()) return null
         if (GEMINI_IGNORED_PREFIXES.any { name.startsWith(it) }) return null
         if (GEMINI_IGNORED_MARKERS.any { name.contains(it) }) return null
-        val generate = "generateContent" in methods
-        val bidi = "bidiGenerateContent" in methods
-        if (!generate && !bidi) return null
-        val isGemini = name.startsWith("gemini")
-        val stt = bidi || (generate && isGemini)
+        if ("generateContent" !in methods) return null
+        val stt = name.startsWith("gemini")
         return ModelCapabilities(
             stt = stt,
-            text = generate,
-            realtime = bidi,
+            text = true,
+            realtime = false,
             thinking = thinking ?: (name.contains("thinking") || isGeminiThinkingFamily(name)),
             vocabulary = stt && ProviderType.GEMINI.acceptsTranscriptionPrompt,
         )
+    }
+
+    /**
+     * Models accepted by the Realtime API's `input_audio_transcription.model` (OpenAI only):
+     * `whisper-1` and the `*-transcribe*` family (`gpt-4o-transcribe`, `gpt-4o-mini-transcribe`, …).
+     */
+    private fun isRealtimeTranscription(name: String, providerType: ProviderType): Boolean {
+        if (providerType != ProviderType.OPENAI) return false
+        return name == "whisper-1" || name.contains("-transcribe")
     }
 
     private fun isReasoning(name: String): Boolean {

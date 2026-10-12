@@ -70,6 +70,19 @@ class OpenAiCompatibleTranscriptionTest {
     }
 
     @Test
+    fun gpt4oTranscribeModels_requestJson_andParseText() = runBlocking {
+        for (id in listOf("gpt-4o-transcribe", "gpt-4o-mini-transcribe")) {
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("""{"text":" hi "}"""))
+
+            val result = transcriber(ProviderType.OPENAI, modelId = id).transcribe(tempAudioFile(), request())
+
+            assertEquals("hi", result.getOrThrow().text)
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(id, body.formField("response_format", "json"))
+        }
+    }
+
+    @Test
     fun openAi_autoLanguage_isNotSent() = runBlocking {
         server.enqueue(MockResponse().setBody("hi"))
 
@@ -237,10 +250,11 @@ class OpenAiCompatibleTranscriptionTest {
         path: String = "/v1",
         authMode: ProviderAuthMode = ProviderAuthMode.API_KEY,
         key: String? = "sk-test-key",
+        modelId: String = "whisper-1",
     ) = OpenAiCompatibleTranscription(
         client = recording.client,
         provider = provider(type, path).copy(authMode = authMode),
-        model = model(),
+        model = model().copy(id = modelId),
         credentials = Credentials(key),
     )
 

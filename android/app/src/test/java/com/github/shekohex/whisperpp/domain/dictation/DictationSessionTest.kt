@@ -147,6 +147,8 @@ class DictationSessionTest {
         var sendAllowed = true
         var enhancer: DictationEnhancer? = null
         var useContext = false
+        var addTrailingSpace = false
+        var postProcess: (String) -> String = { it }
         val committer = TextCommitter { ic }
         var nextAudioFile: (() -> File)? = null
         val requests = mutableListOf<TranscriptionRequest>()
@@ -175,13 +177,16 @@ class DictationSessionTest {
                         plannerCalls += 1
                         plannerGate?.await()
                         val file = nextAudioFile?.invoke() ?: audioFile
-                        StartDecision.Proceed(StartPlan(file, request().copy(useContext = useContext), streaming))
+                        StartDecision.Proceed(
+                            StartPlan(file, request().copy(useContext = useContext, addTrailingSpace = addTrailingSpace), streaming),
+                        )
                     },
                     sendAllowed = { sendAllowed },
                     commandModeActive = { commandMode },
                     clock = { test.testScheduler.currentTime },
                     scope = scope,
                     streamingDispatcher = dispatcher,
+                    postProcess = { postProcess(it) },
                 ),
             ).also { session ->
                 session.onFocusChanged(focus)
@@ -279,11 +284,61 @@ class DictationSessionTest {
         assertTrue(states.any { it is SessionState.Transcribing })
         assertEquals("prefix hello", h.ic.getText())
         assertTrue(h.events.contains(SessionEvent.Committed("hello")))
-        assertTrue(h.events.contains(SessionEvent.Completed("hello", "hello", 1_000L)))
+        assertTrue(h.events.contains(SessionEvent.Completed("hello", "hello", 1_000L, h.focus, 1L)))
         assertFalse(h.audioFile.exists())
         assertEquals(1, h.recorder.stops)
         assertEquals(0, h.recorder.cancels)
         assertEquals(1, h.gateway.abandons)
+    }
+
+    @Test
+    fun blankAfterPostProcess_isEmptyTranscription_notTheRawText() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = "um")
+        h.streaming = streaming
+        h.postProcess = { "" }
+        h.recordFor(1_000)
+        streaming.events.emit(StreamEvent.Partial("um"))
+        runCurrent()
+        assertEquals("prefix um", h.ic.getText())
+
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        assertEquals(SessionState.Idle, h.session.state.value)
+        assertEquals("prefix ", h.ic.getText())
+        assertTrue(h.events.contains(SessionEvent.TranscriptionEmpty))
+        assertFalse(h.events.any { it is SessionEvent.Committed || it is SessionEvent.Completed })
+    }
+
+    @Test
+    fun trailingSpace_isAddedOnce_forStreamedAndBatchTranscripts() = sessionTest { h ->
+        h.addTrailingSpace = true
+        h.recordFor(1_000)
+        h.session.onPressRelease()
+        advanceUntilIdle()
+        assertEquals("prefix hello ", h.ic.getText())
+
+        h.ic.setText("prefix ")
+        h.streaming = FakeStreaming(committed = "streamed ")
+        h.recordFor(1_000)
+        h.session.onPressRelease()
+        advanceUntilIdle()
+        assertEquals("prefix streamed ", h.ic.getText())
+    }
+
+    @Test
+    fun completed_carriesTheRunsFocusAndId() = sessionTest { h ->
+        h.recordFor(1_000)
+        h.session.onPressRelease()
+        advanceUntilIdle()
+        h.recordFor(1_000)
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        val completed = h.events.filterIsInstance<SessionEvent.Completed>()
+        assertEquals(listOf(1L, 2L), completed.map { it.runId })
+        assertTrue(completed.all { it.focus == h.focus })
+        assertEquals(2L, h.session.latestRunId)
     }
 
     @Test
@@ -552,7 +607,7 @@ class DictationSessionTest {
 
         assertEquals(SessionState.Idle, h.session.state.value)
         assertEquals("prefix hello", h.ic.getText())
-        assertTrue(h.events.contains(SessionEvent.Completed("hello", "hello", 1_000L)))
+        assertTrue(h.events.contains(SessionEvent.Completed("hello", "hello", 1_000L, h.focus, 1L)))
         assertEquals(1, h.gateway.abandons)
     }
 

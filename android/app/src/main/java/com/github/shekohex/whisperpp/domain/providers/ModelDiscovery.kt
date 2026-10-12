@@ -7,6 +7,10 @@ package com.github.shekohex.whisperpp.domain.providers
  */
 interface ModelDiscovery {
     suspend fun listModels(): Result<List<DiscoveredModel>>
+
+    /** Provider type + endpoint this discovery lists; stored with the cache to detect stale listings. */
+    val identity: DiscoveryIdentity?
+        get() = null
 }
 
 /** The provider has no listing endpoint; the editor keeps manual model entry. */

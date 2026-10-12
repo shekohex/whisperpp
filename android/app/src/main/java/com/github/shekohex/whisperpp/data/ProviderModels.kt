@@ -72,8 +72,10 @@ data class ModelCapabilities(
         )
 
         /**
-         * Maps the pre-v3 flags. `gemini-*` models of a Gemini provider are always STT + text: STT
-         * used to be Whisper multipart only, so `MULTIMODAL` was first migrated to text-only.
+         * Maps the pre-v3 flags; the one mapping shared by the v3 migration, provider sanitizing and
+         * backup import. `MULTIMODAL` is STT + text (realtime from `streamingPartialsSupported`).
+         * `gemini-*` models of a Gemini provider are always STT + text; other Gemini models keep text
+         * only, since every Gemini model used to be inferred as `MULTIMODAL`. Gemini has no realtime path.
          */
         fun fromLegacy(
             kind: ModelKind?,
@@ -82,12 +84,13 @@ data class ModelCapabilities(
             providerType: ProviderType,
             modelId: String = "",
         ): ModelCapabilities {
+            val gemini = providerType == ProviderType.GEMINI
             val geminiAudio = providerType.isGeminiAudioModel(modelId)
-            val stt = kind == ModelKind.STT || geminiAudio
+            val stt = kind == ModelKind.STT || (kind == ModelKind.MULTIMODAL && !gemini) || geminiAudio
             return ModelCapabilities(
                 stt = stt,
                 text = kind != ModelKind.STT || geminiAudio,
-                realtime = kind == ModelKind.STT && streamingPartialsSupported,
+                realtime = stt && !gemini && streamingPartialsSupported,
                 thinking = isThinking,
                 vocabulary = stt && providerType.acceptsTranscriptionPrompt,
             )

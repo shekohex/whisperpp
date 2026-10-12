@@ -16,16 +16,18 @@ class ModelClassifierTest {
     @Test
     fun openAiCompatibleIds() {
         val table: List<Pair<String, ModelCapabilities?>> = listOf(
-            "whisper-1" to stt,
+            "whisper-1" to realtime,
             "whisper-large-v3-turbo" to stt,
             "distil-whisper-large-v3-en" to stt,
-            "gpt-4o-transcribe" to stt,
-            "gpt-4o-mini-transcribe" to stt,
+            "gpt-4o-transcribe" to realtime,
+            "gpt-4o-mini-transcribe" to realtime,
+            "gpt-4o-transcribe-diarize" to realtime,
             "nvidia/parakeet-asr" to stt,
             "voxtral-mini-latest" to stt,
-            "gpt-4o-realtime-preview" to realtime,
-            "gpt-4o-mini-realtime-preview-2024-12-17" to realtime,
-            "gpt-realtime" to realtime,
+            // Voice-conversation models; transcription sessions do not accept them.
+            "gpt-4o-realtime-preview" to null,
+            "gpt-4o-mini-realtime-preview-2024-12-17" to null,
+            "gpt-realtime" to null,
             "gpt-4o" to text,
             "gpt-4.1-mini" to text,
             "chatgpt-4o-latest" to text,
@@ -64,6 +66,15 @@ class ModelClassifierTest {
     }
 
     @Test
+    fun realtimeTranscription_isOpenAiOnly() {
+        val groq = ModelClassifier.classifyOpenAiCompatible("whisper-1", ProviderType.CUSTOM)
+        val asr = ModelClassifier.classifyOpenAiCompatible("gpt-4o-transcribe", ProviderType.WHISPER_ASR)
+
+        assertEquals(false, groq?.realtime)
+        assertEquals(false, asr?.realtime)
+    }
+
+    @Test
     fun vocabularyFollowsProviderType() {
         val custom = ModelClassifier.classifyOpenAiCompatible("whisper-1", ProviderType.CUSTOM)
         val asr = ModelClassifier.classifyOpenAiCompatible("whisper-1", ProviderType.WHISPER_ASR)
@@ -83,11 +94,9 @@ class ModelClassifierTest {
             Triple("models/gemini-2.5-pro", generate, geminiStt.copy(thinking = true)),
             Triple("models/gemini-2.0-flash-thinking-exp", generate, geminiStt.copy(thinking = true)),
             Triple("models/gemma-3-27b-it", generate, ModelCapabilities(text = true)),
-            Triple(
-                "models/gemini-2.0-flash-live-001",
-                listOf("bidiGenerateContent"),
-                ModelCapabilities(stt = true, realtime = true, vocabulary = vocabulary),
-            ),
+            // No Live implementation: bidi-only models have no execution path, and nothing is realtime.
+            Triple("models/gemini-2.0-flash-live-001", listOf("bidiGenerateContent"), null),
+            Triple("models/gemini-2.5-flash-live", listOf("generateContent", "bidiGenerateContent"), geminiStt.copy(thinking = true)),
             Triple("models/embedding-001", listOf("embedContent"), null),
             Triple("models/text-embedding-004", listOf("embedContent"), null),
             Triple("models/gemini-embedding-001", listOf("embedContent"), null),

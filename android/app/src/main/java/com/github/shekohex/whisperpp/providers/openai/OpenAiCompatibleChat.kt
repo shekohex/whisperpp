@@ -8,6 +8,7 @@ import com.github.shekohex.whisperpp.domain.providers.Credentials
 import com.github.shekohex.whisperpp.domain.providers.EnhancementProvider
 import com.github.shekohex.whisperpp.domain.providers.EnhancementRequest
 import com.github.shekohex.whisperpp.domain.providers.ThinkingConfig
+import com.github.shekohex.whisperpp.domain.providers.isOpenAiReasoningModel
 import com.github.shekohex.whisperpp.providers.VERIFY_TIMEOUT_MS
 import com.github.shekohex.whisperpp.providers.apiKeyOrThrow
 import com.github.shekohex.whisperpp.providers.baseUrlOrThrow
@@ -21,7 +22,10 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
-/** `POST {base}/chat/completions` (OpenAI, Groq, OpenRouter, vLLM, custom). */
+/**
+ * `POST {base}/chat/completions` (OpenAI, Groq, OpenRouter, vLLM, custom). Reasoning models get no
+ * `temperature` and `max_completion_tokens` instead of `max_tokens` ([isOpenAiReasoningModel]).
+ */
 class OpenAiCompatibleChat(
     private val client: OkHttpClient,
     private val provider: ServiceProvider,
@@ -29,6 +33,7 @@ class OpenAiCompatibleChat(
     private val credentials: Credentials,
 ) : EnhancementProvider {
     override val id: String = provider.id
+    private val reasoningModel = isOpenAiReasoningModel(model.id)
 
     override suspend fun enhance(req: EnhancementRequest): Result<String> = providerCall {
         val apiKey = provider.apiKeyOrThrow(credentials)
@@ -37,7 +42,7 @@ class OpenAiCompatibleChat(
             put("messages", userMessage(req.composePrompt()))
             when (val thinking = req.thinking) {
                 is ThinkingConfig.Enabled -> put("reasoning_effort", thinking.level.lowercase())
-                ThinkingConfig.Disabled -> put("temperature", req.temperature.toDouble())
+                ThinkingConfig.Disabled -> if (!reasoningModel) put("temperature", req.temperature.toDouble())
             }
         }
         val response = client.executeForBody(buildRequest(body, apiKey), req.timeoutMs, apiKey)
@@ -49,8 +54,12 @@ class OpenAiCompatibleChat(
         val body = JSONObject().apply {
             put("model", model.id)
             put("messages", userMessage("Reply with OK"))
-            put("temperature", 0)
-            put("max_tokens", 16)
+            if (reasoningModel) {
+                put("max_completion_tokens", VERIFY_MAX_TOKENS)
+            } else {
+                put("temperature", 0)
+                put("max_tokens", VERIFY_MAX_TOKENS)
+            }
         }
         client.executeForBody(buildRequest(body, apiKey), VERIFY_TIMEOUT_MS, apiKey)
     }
@@ -70,6 +79,7 @@ class OpenAiCompatibleChat(
 
     internal companion object {
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+        private const val VERIFY_MAX_TOKENS = 16
 
         fun parseContent(body: String): String {
             val content = try {

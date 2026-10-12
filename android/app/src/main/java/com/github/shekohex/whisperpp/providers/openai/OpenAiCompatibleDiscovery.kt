@@ -6,6 +6,7 @@ import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.domain.providers.Credentials
 import com.github.shekohex.whisperpp.domain.providers.DiscoveredModel
+import com.github.shekohex.whisperpp.domain.providers.DiscoveryIdentity
 import com.github.shekohex.whisperpp.domain.providers.ModelDiscovery
 import com.github.shekohex.whisperpp.providers.ModelClassifier
 import com.github.shekohex.whisperpp.providers.VERIFY_TIMEOUT_MS
@@ -30,6 +31,8 @@ class OpenAiCompatibleDiscovery(
     private val provider: ServiceProvider,
     private val credentials: Credentials,
 ) : ModelDiscovery {
+    override val identity: DiscoveryIdentity = DiscoveryIdentity.of(provider)
+
     override suspend fun listModels(): Result<List<DiscoveredModel>> = providerCall {
         val apiKey = provider.apiKeyOrThrow(credentials)
         val request = Request.Builder()

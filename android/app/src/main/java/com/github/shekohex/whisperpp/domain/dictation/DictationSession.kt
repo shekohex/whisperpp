@@ -55,7 +55,7 @@ class DictationSession(private val deps: Deps) {
         val postProcess: (String) -> String = { it },
     )
 
-    private class Run(val focus: FocusKey) {
+    private class Run(val id: Long, val focus: FocusKey) {
         var plan: StartPlan? = null
         var job: Job? = null
         val auxJobs = mutableListOf<Job>()
@@ -107,6 +107,10 @@ class DictationSession(private val deps: Deps) {
     private var currentFocus: FocusKey? = null
     private var run: Run? = null
 
+    /** Id of the most recently started run; a [SessionEvent.Completed] with an older id is stale. */
+    var latestRunId: Long = 0L
+        private set
+
     init {
         deps.scope.launch { deps.recorder.errors.collect { onRecorderError(it) } }
         deps.scope.launch { deps.focus.focusLoss.collect { onAudioFocusLost() } }
@@ -129,7 +133,7 @@ class DictationSession(private val deps: Deps) {
             emit(SessionEvent.Notice(R.string.dictation_pending_commit_blocks_start))
             return
         }
-        val r = Run(focus)
+        val r = Run(++latestRunId, focus)
         run = r
         _state.value = SessionState.Starting(focus, locked)
         r.job = deps.scope.launch { start(r) }
@@ -444,7 +448,15 @@ class DictationSession(private val deps: Deps) {
     }
 
     private suspend fun commit(r: Run, transcript: String) {
-        val raw = deps.postProcess(transcript).ifBlank { transcript }
+        val processed = deps.postProcess(transcript)
+        if (processed.isBlank()) {
+            // Filtering removed everything: nothing to insert, enhance or send.
+            emit(SessionEvent.TranscriptionEmpty)
+            return finish(r, SessionState.Idle)
+        }
+        // Applied once here, for streamed and batch transcripts alike.
+        val addSpace = r.plan?.request?.addTrailingSpace == true && !processed.endsWith(' ')
+        val raw = if (addSpace) "$processed " else processed
         _state.value = SessionState.Committing(r.focus, raw)
         deps.cues(SoundCues.Cue.DONE)
         // A hidden keyboard holds the commit until the user is back (A-05).
@@ -480,7 +492,7 @@ class DictationSession(private val deps: Deps) {
 
         val finalText = if (segment != null) enhance(r, raw, segment) else raw
         if (run !== r) return
-        emit(SessionEvent.Completed(raw, finalText, r.durationMs))
+        emit(SessionEvent.Completed(raw, finalText, r.durationMs, r.focus, r.id))
         finish(r, SessionState.Idle)
     }
 
@@ -541,7 +553,7 @@ class DictationSession(private val deps: Deps) {
         val r = run ?: return
         when (val s = _state.value) {
             // The raw text is already in the field; only the enhancement is abandoned.
-            is SessionState.Enhancing -> emit(SessionEvent.Completed(s.raw, s.raw, r.durationMs))
+            is SessionState.Enhancing -> emit(SessionEvent.Completed(s.raw, s.raw, r.durationMs, r.focus, r.id))
             is SessionState.Recording -> if (recordDiscard) emit(SessionEvent.Discarded(s.elapsedMs(deps.clock())))
             is SessionState.Transcribing,
             is SessionState.Committing,

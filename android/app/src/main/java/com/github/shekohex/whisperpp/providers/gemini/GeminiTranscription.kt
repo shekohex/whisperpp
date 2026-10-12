@@ -46,7 +46,8 @@ class GeminiTranscription(
 
     override suspend fun transcribe(audio: File, req: TranscriptionRequest): Result<Transcript> = providerCall {
         val apiKey = provider.apiKeyOrThrow(credentials)
-        if (audio.length() > MAX_INLINE_AUDIO_BYTES) {
+        // The 20 MB limit applies to the request, so check what base64 makes of the audio.
+        if (audio.length() > MAX_INLINE_AUDIO_BYTES || base64Length(audio.length()) > MAX_INLINE_DATA_CHARS) {
             throw NetworkError.InvalidResponse(
                 detail = "audio too large for inline Gemini transcription",
                 userMessageRes = R.string.gemini_error_audio_too_large,
@@ -90,8 +91,14 @@ class GeminiTranscription(
     }
 
     internal companion object {
-        /** Gemini's inline request limit is 20 MB; base64 and the JSON envelope need headroom. */
-        const val MAX_INLINE_AUDIO_BYTES = 18L * 1024 * 1024
+        /**
+         * Gemini's inline request limit is 20 MB. 14 MB of audio is ≈ 18.7 MB of base64, leaving room
+         * for the instruction and JSON envelope.
+         */
+        const val MAX_INLINE_AUDIO_BYTES = 14L * 1024 * 1024
+        private const val MAX_INLINE_DATA_CHARS = 19L * 1024 * 1024
+
+        fun base64Length(rawBytes: Long): Long = (rawBytes + 2) / 3 * 4
 
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
         private const val BASE_INSTRUCTION = "Transcribe this audio verbatim. Output only the transcript text, no commentary."
@@ -109,14 +116,23 @@ class GeminiTranscription(
             return Locale.forLanguageTag(trimmed).getDisplayLanguage(Locale.ENGLISH).takeIf { it.isNotBlank() } ?: trimmed
         }
 
-        /** Joins the answer parts (thought summaries excluded); no candidate or no text means silence. */
+        /**
+         * Joins the answer parts (thought summaries excluded); no candidate or no text means silence.
+         * A blocked prompt or candidate is a typed failure, not silence.
+         */
         fun parseTranscript(body: String): String {
-            val candidates = try {
-                JSONObject(body).optJSONArray("candidates")
+            val root = try {
+                JSONObject(body)
             } catch (e: JSONException) {
                 throw NetworkError.InvalidResponse("generateContent JSON", e)
             }
-            val parts = candidates?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: return ""
+            root.optJSONObject("promptFeedback")?.optString("blockReason")?.takeIf { it.isNotEmpty() }?.let { reason ->
+                throw blocked("prompt blocked: $reason")
+            }
+            val candidate = root.optJSONArray("candidates")?.optJSONObject(0) ?: return ""
+            val finishReason = candidate.optString("finishReason")
+            if (finishReason in BLOCKED_FINISH_REASONS) throw blocked("candidate blocked: $finishReason")
+            val parts = candidate.optJSONObject("content")?.optJSONArray("parts") ?: return ""
             val text = buildString {
                 for (i in 0 until parts.length()) {
                     val part = parts.optJSONObject(i) ?: continue
@@ -125,5 +141,9 @@ class GeminiTranscription(
             }
             return text.trim().trim('"', '“', '”').trim()
         }
+
+        private val BLOCKED_FINISH_REASONS = setOf("SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII")
+
+        private fun blocked(detail: String) = NetworkError.InvalidResponse(detail, userMessageRes = R.string.gemini_error_blocked)
     }
 }

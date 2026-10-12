@@ -2,6 +2,7 @@ package com.github.shekohex.whisperpp.domain.dictation
 
 import androidx.annotation.StringRes
 import com.github.shekohex.whisperpp.core.audio.AudioRecorder
+import com.github.shekohex.whisperpp.dictation.FocusKey
 
 /** One-shot outputs of [DictationSession] for toasts, notices, undo affordances and analytics. */
 sealed interface SessionEvent {
@@ -44,8 +45,17 @@ sealed interface SessionEvent {
     /** Enhancement finished but the field lost focus, so the raw text stays. [label] names provider/model. */
     data class EnhancementKeptRaw(val label: String) : SessionEvent
 
-    /** Terminal analytics: text was inserted. */
-    data class Completed(val rawText: String, val finalText: String, val durationMs: Long) : SessionEvent
+    /**
+     * Terminal analytics: text was inserted into [focus] by run [runId]. Follow-ups such as auto-send
+     * target [focus] only, never whatever field is focused when the event is handled.
+     */
+    data class Completed(
+        val rawText: String,
+        val finalText: String,
+        val durationMs: Long,
+        val focus: FocusKey,
+        val runId: Long,
+    ) : SessionEvent
 
     /** Terminal analytics: a started recording was discarded. */
     data class Discarded(val durationMs: Long) : SessionEvent

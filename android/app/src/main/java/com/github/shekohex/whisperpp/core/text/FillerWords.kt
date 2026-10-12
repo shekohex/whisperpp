@@ -10,8 +10,12 @@ object FillerWords {
         "like,", "you know,",
     )
 
+    /**
+     * Hesitation sounds only. Words such as "يعني" ("I mean") and "اه"/"آه" ("yes"/"oh") carry meaning
+     * and are never removed; a doubled "اه اه" is a hesitation.
+     */
     val ARABIC: List<String> = listOf(
-        "يعني", "اه", "آه", "امم", "اممم", "إمم", "ممم",
+        "امم", "اممم", "إمم", "ممم", "ااه", "آآ", "اه اه",
     )
 
     val ALL: List<String> = ENGLISH + ARABIC

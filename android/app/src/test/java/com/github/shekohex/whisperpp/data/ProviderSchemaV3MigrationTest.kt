@@ -84,6 +84,29 @@ class ProviderSchemaV3MigrationTest {
     }
 
     @Test
+    fun legacyMultimodal_nonGemini_isSttAndText_keepingTheStreamingFlag() {
+        val json = """
+            [
+              {"id": "c", "name": "C", "type": "CUSTOM", "endpoint": "https://y/v1", "models": [
+                {"id": "omni-stream", "name": "Omni", "kind": "MULTIMODAL", "streamingPartialsSupported": true},
+                {"id": "omni", "name": "Omni", "kind": "MULTIMODAL", "streamingPartialsSupported": false}
+              ]},
+              {"id": "g", "name": "G", "type": "GEMINI", "endpoint": "https://x/v1beta", "models": [
+                {"id": "gemini-2.0-flash", "name": "Flash", "kind": "MULTIMODAL", "streamingPartialsSupported": true}
+              ]}
+            ]
+        """.trimIndent()
+
+        val migrated = JsonParser.parseString(migrateProvidersJsonToSchemaV3(json)).asJsonArray
+
+        assertEquals(capabilities(stt = true, text = true, realtime = true, vocabulary = true), migrated[0].model(0).capabilities())
+        assertEquals(capabilities(stt = true, text = true, vocabulary = true), migrated[0].model(1).capabilities())
+        assertEquals(true, migrated[0].model(0).get("streamingPartialsSupported").asBoolean)
+        // Gemini has no realtime path.
+        assertEquals(capabilities(stt = true, text = true, vocabulary = true), migrated[1].model(0).capabilities())
+    }
+
+    @Test
     fun alreadyMigrated_isLeftUntouched() {
         val once = migrateProvidersJsonToSchemaV3(v2Json)!!
 

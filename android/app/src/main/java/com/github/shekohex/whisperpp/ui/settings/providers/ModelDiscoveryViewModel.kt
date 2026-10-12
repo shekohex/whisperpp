@@ -50,12 +50,16 @@ class ModelDiscoveryViewModel(
     private var discovery: ModelDiscovery? = null
     private var job: Job? = null
 
-    /** Shows the cached listing for [discovery]'s provider, or fetches when there is none. */
+    /**
+     * Shows the cached listing for [discovery]'s provider, or fetches when there is none or it was
+     * listed for another endpoint/type.
+     */
     fun open(discovery: ModelDiscovery?) {
         this.discovery = discovery
         job?.cancel()
         job = viewModelScope.launch {
-            val cached = loadCache()
+            val expected = discovery?.identity
+            val cached = loadCache()?.takeIf { expected == null || it.identity == expected }
             if (cached != null && cached.models.isNotEmpty()) {
                 _uiState.value = UiState.Loaded(cached.models, fetchedAtMillis = cached.fetchedAtMillis)
             } else {
@@ -98,7 +102,7 @@ class ModelDiscoveryViewModel(
         _uiState.value = UiState.Loading
         source.listModels().fold(
             onSuccess = { models ->
-                val cache = DiscoveredCache(clock(), models)
+                val cache = DiscoveredCache(clock(), models, source.identity)
                 saveCache(cache)
                 val ids = models.mapTo(HashSet()) { it.id }
                 _uiState.value = UiState.Loaded(

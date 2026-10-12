@@ -58,13 +58,13 @@ class GeminiDiscoveryTest {
         assertEquals("/v1beta/models?pageSize=200", first.path)
         assertEquals("AIza-test", first.getHeader("x-goog-api-key"))
         assertEquals("/v1beta/models?pageSize=200&pageToken=page-2", server.takeRequest().path)
-        assertEquals(listOf("gemini-2.5-flash", "gemini-2.0-flash-live-001"), models.map { it.id })
+        // The bidi-only Live model has no execution path and is not listed.
+        assertEquals(listOf("gemini-2.5-flash"), models.map { it.id })
         val flash = models[0]
         assertEquals("Gemini 2.5 Flash", flash.displayName)
         assertTrue(flash.capabilities.text && flash.capabilities.stt && flash.capabilities.thinking)
         assertFalse(flash.capabilities.realtime)
         assertEquals("1048576", flash.raw["inputTokenLimit"])
-        assertTrue(models[1].capabilities.realtime)
     }
 
     @Test

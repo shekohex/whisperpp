@@ -25,6 +25,19 @@ data class EnhancementRequest(
     }
 }
 
+/**
+ * OpenAI reasoning models (`o1`/`o3`/`o4*`, `gpt-5*` except the `-chat` variants) reject `temperature`
+ * and `max_tokens` (they take `max_completion_tokens`), whether or not thinking is enabled.
+ * Vendor prefixes (`openai/o3-mini`) are ignored.
+ */
+fun isOpenAiReasoningModel(modelId: String): Boolean {
+    val name = modelId.trim().substringAfterLast('/').lowercase()
+    if (REASONING_ID_PATTERN.matches(name)) return true
+    return name.startsWith("gpt-5") && !name.contains("chat")
+}
+
+private val REASONING_ID_PATTERN = Regex("^o[134](-.*)?$")
+
 /** Reasoning settings; only sent for models whose capabilities include thinking. */
 sealed interface ThinkingConfig {
     data object Disabled : ThinkingConfig

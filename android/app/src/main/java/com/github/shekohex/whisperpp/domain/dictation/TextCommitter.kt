@@ -162,13 +162,14 @@ class TextCommitter(
 
     /**
      * Presses the editor's send action for [focus] (auto-send after insert); falls back to an Enter
-     * key press when the editor rejects the action. Returns false when nothing was sent.
+     * key press when the editor rejects the action and [AutoSend.EditorAction.enterFallback] allows it.
+     * Returns false when nothing was sent.
      */
     fun performAutoSend(focus: FocusKey, imeOptions: Int): Boolean {
         val action = AutoSend.forEditor(imeOptions, focus.inputType) as? AutoSend.EditorAction ?: return false
         val ic = inputConnection() ?: return false
         return try {
-            ic.performEditorAction(action.actionId) || sendEnter(ic)
+            ic.performEditorAction(action.actionId) || (action.enterFallback && sendEnter(ic))
         } catch (_: Exception) {
             false
         }

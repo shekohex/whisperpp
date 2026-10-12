@@ -36,6 +36,15 @@ internal fun ServiceProvider.apiKeyOrThrow(credentials: Credentials): String? {
         ?: throw ProviderConfigException(ProviderConfigException.Problem.MISSING_API_KEY)
 }
 
+/**
+ * `response_format` for `/audio/transcriptions`: the GPT-4o transcription family (`gpt-4o-transcribe`,
+ * `gpt-4o-mini-transcribe`, …) only accepts `json`; Whisper and compatible servers keep `text`.
+ */
+internal fun transcriptionResponseFormat(modelId: String): String {
+    val name = modelId.trim().substringAfterLast('/').lowercase()
+    return if (name.startsWith("gpt-") && name.contains("-transcribe")) "json" else "text"
+}
+
 /** Appends [suffix] unless the base URL already ends with it (users may paste full endpoints). */
 internal fun HttpUrl.withPathSuffix(vararg suffix: String): HttpUrl {
     val segments = pathSegments.filter { it.isNotBlank() }

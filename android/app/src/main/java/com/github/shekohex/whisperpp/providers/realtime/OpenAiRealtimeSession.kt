@@ -17,6 +17,7 @@ import com.github.shekohex.whisperpp.providers.apiKeyOrThrow
 import com.github.shekohex.whisperpp.providers.baseUrlOrThrow
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -39,6 +40,11 @@ import java.io.IOException
  * items once each is completed. Audio is resampled to the 24 kHz the API expects and kept in memory
  * so one reconnect before [commit] can replay it; after the commit a broken stream fails instead,
  * and the caller falls back to batch.
+ *
+ * Trailing-audio safety: every byte appended to the server buffer must be acknowledged (by
+ * `speech_stopped`/`committed`, our own commit, or an empty-buffer answer) before [commit] returns
+ * text; audio the server never acknowledged is committed rather than cleared, so a late
+ * `speech_started` or `committed` can never drop the end of the take.
  *
  * [sockets] is the shared client derived with a ping interval (OkHttp upgrades the http(s) URL).
  */
@@ -90,8 +96,18 @@ class OpenAiRealtimeSession(
     // Our manual commit was sent and neither its `committed` event nor an empty-buffer error came back.
     private var manualCommitPending = false
 
-    // Bytes (24 kHz PCM16) appended since the last `input_audio_buffer.committed`: what the server buffer holds.
-    private var bytesSinceCommit = 0L
+    // Bytes (24 kHz PCM16) appended on this connection, and the prefix of them the server acknowledged.
+    private var appendedBytes = 0L
+    private var ackedBytes = 0L
+
+    // [appendedBytes] at each manual commit still waiting for its `committed` (or empty-buffer) answer, in order.
+    private val manualCommitBoundaries = ArrayDeque<Long>()
+
+    // The trailing-audio decision ran after [commit]'s VAD grace window.
+    private var trailingSettled = false
+
+    // Wakes [awaitVadGrace] on every server event.
+    private val serverActivity = Channel<Unit>(Channel.CONFLATED)
 
     // Server VAD: `speech_stopped` events whose auto-commit has not arrived yet.
     private var autoCommitsPending = 0
@@ -117,7 +133,7 @@ class OpenAiRealtimeSession(
             rememberLocked(audio)
             if (open) {
                 socket?.send(appendMessage(audio))
-                bytesSinceCommit += audio.size
+                appendedBytes += audio.size
             }
         }
     }
@@ -127,8 +143,14 @@ class OpenAiRealtimeSession(
             failure?.let { return Result.failure(it) }
             if (closed || upgrade == null) return Result.failure(NetworkError.InvalidResponse("realtime session not open"))
             commitRequested = true
+        }
+        // The caller drains its audio right before committing, so the grace window follows the last append.
+        if (vad is Vad.ServerVad) awaitVadGrace()
+        synchronized(lock) {
+            trailingSettled = true
             if (open) commitTrailingAudioLocked()
         }
+        var succeeded = false
         try {
             val raw = withTimeoutOrNull(commitTimeoutMs) { final.await() }
             if (raw == null) {
@@ -139,14 +161,38 @@ class OpenAiRealtimeSession(
             val text = raw.getOrElse { return Result.failure(it) }
             val processed = postProcess(text, request.scriptConversion)
             emit(StreamEvent.Final(processed))
+            succeeded = true
             return Result.success(Transcript(processed))
         } finally {
-            synchronized(lock) { closeLocked() }
+            synchronized(lock) { closeLocked(graceful = succeeded) }
         }
     }
 
     override suspend fun cancel() {
-        synchronized(lock) { closeLocked() }
+        synchronized(lock) { closeLocked(graceful = false) }
+    }
+
+    /**
+     * Server VAD: gives `speech_started`/`speech_stopped`/`committed` for the last appended audio up to
+     * [VAD_GRACE_MS] to arrive, returning early once speech is known to be in progress or every byte
+     * is acknowledged.
+     */
+    private suspend fun awaitVadGrace() {
+        withTimeoutOrNull(VAD_GRACE_MS) {
+            while (true) {
+                val settled = synchronized(lock) {
+                    closed || (open && (speechActive || unackedBytesLocked() < MIN_COMMIT_BYTES))
+                }
+                if (settled) break
+                serverActivity.receive()
+            }
+        }
+    }
+
+    private fun unackedBytesLocked(): Long = (appendedBytes - ackedBytes).coerceAtLeast(0)
+
+    private fun acknowledgeLocked(boundary: Long) {
+        ackedBytes = maxOf(ackedBytes, boundary.coerceAtMost(appendedBytes))
     }
 
     internal fun buildUpgradeRequest(): Request {
@@ -168,7 +214,9 @@ class OpenAiRealtimeSession(
         // A new connection transcribes the replayed take from scratch.
         items.clear()
         manualCommitPending = false
-        bytesSinceCommit = 0
+        manualCommitBoundaries.clear()
+        appendedBytes = 0
+        ackedBytes = 0
         autoCommitsPending = 0
         speechActive = false
         socket = sockets.newWebSocket(upgradeRequest, Listener())
@@ -178,10 +226,11 @@ class OpenAiRealtimeSession(
         ws.send(sessionUpdateMessage())
         // A reconnect starts with an empty server buffer: replay the take so far.
         for (chunk in sentAudio) ws.send(appendMessage(chunk))
-        bytesSinceCommit = sentAudio.sumOf { it.size.toLong() }
+        appendedBytes = sentAudio.sumOf { it.size.toLong() }
         open = true
         emit(StreamEvent.Connected)
-        if (commitRequested) commitTrailingAudioLocked()
+        serverActivity.trySend(Unit)
+        if (trailingSettled) commitTrailingAudioLocked()
     }
 
     private fun onMessageLocked(text: String) {
@@ -190,6 +239,7 @@ class OpenAiRealtimeSession(
         } catch (_: JSONException) {
             return
         }
+        serverActivity.trySend(Unit)
         val itemId = event.optString("item_id")
         when (event.optString("type")) {
             "input_audio_buffer.speech_started" -> {
@@ -199,6 +249,9 @@ class OpenAiRealtimeSession(
             "input_audio_buffer.speech_stopped" -> {
                 speechActive = false
                 autoCommitsPending += 1
+                // `audio_end_ms` includes the VAD silence; without it, what was appended so far.
+                val end = if (event.has("audio_end_ms")) event.optLong("audio_end_ms") * API_BYTES_PER_MS else appendedBytes
+                acknowledgeLocked(end)
                 itemLocked(itemId)
             }
             "input_audio_buffer.committed" -> onCommittedLocked(itemId)
@@ -221,8 +274,9 @@ class OpenAiRealtimeSession(
                 failLocked(NetworkError.InvalidResponse("realtime transcription failed"))
             "error" -> {
                 if (isEmptyCommitError(event)) {
-                    // Nothing was pending (the server had already committed everything).
-                    manualCommitPending = false
+                    // Confirmed silence: the server had already committed everything up to our commit.
+                    manualCommitBoundaries.removeFirstOrNull()?.let(::acknowledgeLocked)
+                    manualCommitPending = manualCommitBoundaries.isNotEmpty()
                     discardUncommittedLocked()
                     checkDoneLocked()
                 } else {
@@ -234,13 +288,14 @@ class OpenAiRealtimeSession(
 
     private fun onCommittedLocked(itemId: String) {
         itemLocked(itemId).committed = true
-        bytesSinceCommit = 0
         speechActive = false
-        // Server VAD commits follow `speech_stopped`; any other commit answers ours.
+        // Server VAD commits follow `speech_stopped` (already acknowledged); any other commit answers ours.
+        // Never assume the whole buffer: audio appended after the committed range stays unacknowledged.
         if (autoCommitsPending > 0) {
             autoCommitsPending -= 1
         } else {
-            manualCommitPending = false
+            manualCommitBoundaries.removeFirstOrNull()?.let(::acknowledgeLocked)
+            manualCommitPending = manualCommitBoundaries.isNotEmpty()
         }
         checkDoneLocked()
     }
@@ -266,11 +321,18 @@ class OpenAiRealtimeSession(
         if (text.isNotEmpty()) emit(StreamEvent.Partial(text))
     }
 
-    /** After [commit]: done when our commit is answered and every known item has completed. */
+    /**
+     * After [commit]: done when our commit is answered and every known item has completed. Text that
+     * would leave appended audio unacknowledged is never returned; batch takes over instead.
+     */
     private fun checkDoneLocked() {
-        if (!commitRequested || !open) return
+        if (!commitRequested || !trailingSettled || !open) return
         if (manualCommitPending || autoCommitsPending > 0) return
         if (items.values.any { it.final == null }) return
+        if (unackedBytesLocked() > 0) {
+            failLocked(NetworkError.InvalidResponse("stream incomplete"))
+            return
+        }
         final.complete(Result.success(joinedTextLocked()))
     }
 
@@ -289,37 +351,45 @@ class OpenAiRealtimeSession(
         failure = error
         final.complete(Result.failure(error))
         emit(StreamEvent.Error(error))
-        closeLocked()
+        closeLocked(graceful = false)
     }
 
-    private fun closeLocked() {
+    /**
+     * [graceful] only after a successful final: `close()` still flushes queued audio, so cancel,
+     * timeout and failure use `cancel()`, which drops it.
+     */
+    private fun closeLocked(graceful: Boolean) {
         if (closed) return
         closed = true
         open = false
-        socket?.close(NORMAL_CLOSURE, null)
+        if (graceful) socket?.close(NORMAL_CLOSURE, null) else socket?.cancel()
         socket = null
+        serverActivity.trySend(Unit)
         sentAudio.clear()
         final.complete(Result.failure(NetworkError.InvalidResponse("realtime session closed")))
         emit(StreamEvent.Closed)
     }
 
     /**
-     * Commits audio the server has not committed yet, then waits for every item (see [checkDoneLocked]).
-     * With server VAD only speech still in progress is committed: audio after `speech_stopped` (or under
-     * [MIN_COMMIT_BYTES]) is silence, and transcribing silence yields phantom text, so it is cleared.
+     * Commits audio the server has not acknowledged, then waits for every item (see [checkDoneLocked]).
+     * Unacknowledged audio is committed even without a VAD event (speech may just not be reported
+     * yet); an empty-buffer answer confirms silence. Only a remainder under [MIN_COMMIT_BYTES], which
+     * the API rejects and which cannot hold a word, is cleared.
      */
     private fun commitTrailingAudioLocked() {
         val ws = socket ?: return
-        val pending = bytesSinceCommit > 0 || speechActive
+        val unacked = unackedBytesLocked()
         val commit = when (vad) {
-            Vad.None -> pending
-            is Vad.ServerVad -> speechActive && bytesSinceCommit >= MIN_COMMIT_BYTES
+            Vad.None -> unacked > 0
+            is Vad.ServerVad -> unacked >= MIN_COMMIT_BYTES
         }
         if (commit) {
             ws.send(JSONObject().put("type", "input_audio_buffer.commit").toString())
+            manualCommitBoundaries.addLast(appendedBytes)
             manualCommitPending = true
-        } else if (vad is Vad.ServerVad && pending) {
+        } else if (vad is Vad.ServerVad && (unacked > 0 || speechActive)) {
             ws.send(JSONObject().put("type", "input_audio_buffer.clear").toString())
+            acknowledgeLocked(appendedBytes)
             discardUncommittedLocked()
         }
         checkDoneLocked()
@@ -327,7 +397,6 @@ class OpenAiRealtimeSession(
 
     // The server buffer is gone (cleared or empty): an utterance that was never committed has no audio.
     private fun discardUncommittedLocked() {
-        bytesSinceCommit = 0
         speechActive = false
         items.entries.removeAll { !it.value.committed && it.value.final == null }
     }
@@ -441,6 +510,10 @@ class OpenAiRealtimeSession(
         const val PING_INTERVAL_SECONDS = 15L
         const val MIN_COMMIT_TIMEOUT_MS = 5_000L
         private const val API_SAMPLE_RATE = 24_000
+        private const val API_BYTES_PER_MS = API_SAMPLE_RATE * 2L / 1000
+
+        // How long [commit] waits for VAD events about the last appended audio.
+        internal const val VAD_GRACE_MS = 300L
         private const val NORMAL_CLOSURE = 1000
         private const val SWITCHING_PROTOCOLS = 101
         private const val ANONYMOUS_ITEM = "_"

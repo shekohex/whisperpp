@@ -8,6 +8,7 @@ import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.domain.providers.Credentials
 import com.github.shekohex.whisperpp.domain.providers.EnhancementRequest
 import com.github.shekohex.whisperpp.domain.providers.ThinkingConfig
+import com.github.shekohex.whisperpp.domain.providers.isOpenAiReasoningModel
 import com.github.shekohex.whisperpp.providers.RecordingClient
 import com.github.shekohex.whisperpp.providers.baseUrl
 import com.github.shekohex.whisperpp.providers.startLoopbackServer
@@ -100,7 +101,37 @@ class OpenAiCompatibleChatTest {
         assertEquals(16, json.getInt("max_tokens"))
     }
 
-    private fun chat() = OpenAiCompatibleChat(
+    @Test
+    fun reasoningModels_omitTemperature_andUseMaxCompletionTokens() = runBlocking {
+        for (id in listOf("o1", "o3-mini", "o4-mini", "gpt-5", "gpt-5-mini", "openai/o3")) {
+            server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"ok"}}]}"""))
+            server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"OK"}}]}"""))
+            val chat = chat(modelId = id)
+
+            chat.enhance(EnhancementRequest(systemPrompt = "p", userText = "t", temperature = 0.4f)).getOrThrow()
+            assertTrue(chat.verify().isSuccess)
+
+            val enhance = JSONObject(server.takeRequest().body.readUtf8())
+            assertFalse(id, enhance.has("temperature"))
+            assertFalse(id, enhance.has("max_tokens"))
+            val verify = JSONObject(server.takeRequest().body.readUtf8())
+            assertFalse(id, verify.has("temperature"))
+            assertFalse(id, verify.has("max_tokens"))
+            assertEquals(id, 16, verify.getInt("max_completion_tokens"))
+        }
+    }
+
+    @Test
+    fun reasoningRule_matchesOnlyReasoningIds() {
+        listOf("o1", "o1-preview", "o3", "o3-mini", "o4-mini", "gpt-5", "gpt-5-nano").forEach {
+            assertTrue(it, isOpenAiReasoningModel(it))
+        }
+        listOf("gpt-4o", "gpt-4.1-mini", "gpt-5-chat-latest", "omni-moderation-latest", "llama-3.3-70b").forEach {
+            assertFalse(it, isOpenAiReasoningModel(it))
+        }
+    }
+
+    private fun chat(modelId: String = "gpt-4o-mini") = OpenAiCompatibleChat(
         client = recording.client,
         provider = ServiceProvider(
             id = "p1",
@@ -109,7 +140,7 @@ class OpenAiCompatibleChatTest {
             endpoint = server.baseUrl("/v1"),
             models = emptyList(),
         ),
-        model = ModelConfig(id = "gpt-4o-mini", name = "GPT", capabilities = ModelCapabilities.TEXT),
+        model = ModelConfig(id = modelId, name = "GPT", capabilities = ModelCapabilities.TEXT),
         credentials = Credentials("sk-chat"),
     )
 }

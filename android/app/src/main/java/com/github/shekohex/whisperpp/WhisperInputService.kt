@@ -440,17 +440,16 @@ class WhisperInputService : InputMethodService() {
             ?.forEach { it.delete() }
     }
 
-    /** Filter → word replacements (WP-2.4); keeps the trailing space added by "Add trailing space". */
+    /** Filter → word replacements (WP-2.4); the session adds the "Add trailing space" space afterwards. */
     private fun postProcessTranscript(text: String): String {
         val filtered = TranscriptFilter.apply(text, transcriptFilterOptions.value)
-        val processed = wordReplacements.value.apply(filtered)
-        return if (text.endsWith(' ') && processed.isNotEmpty() && !processed.endsWith(' ')) "$processed " else processed
+        return wordReplacements.value.apply(filtered)
     }
 
     /** Batch transcription via [ProviderFactory]; failures carry a user-facing message. */
     private suspend fun transcribe(file: File, request: TranscriptionRequest): Result<String> {
         return providerFactory.transcribe(file, request).fold(
-            onSuccess = { Result.success(it.text + if (request.addTrailingSpace) " " else "") },
+            onSuccess = { Result.success(it.text) },
             onFailure = { Result.failure(IOException(it.toProviderUserMessage(this), it)) },
         )
     }
@@ -534,7 +533,7 @@ class WhisperInputService : InputMethodService() {
                     recordFinalInsertedText(event.finalText)
                 }
                 analytics.finalize(event.durationMs)?.let(::persistDictationAnalyticsOutcome)
-                afterDictationCompleted()
+                afterDictationCompleted(event)
             }
             is SessionEvent.Discarded -> {
                 DictationAnalyticsSession(sessionId = 0L).cancel(event.durationMs)?.let(::persistDictationAnalyticsOutcome)
@@ -542,14 +541,19 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    /** Auto-send (WP-2.4) for the field that received the text, then the optional switch back. */
-    private fun afterDictationCompleted() {
-        val focus = lastFocusKey
-        val imeOptions = currentInputEditorInfo?.imeOptions ?: 0
+    /**
+     * Auto-send (WP-2.4) for the field the run inserted into, then the optional switch back. Sends only
+     * if that field is still focused, sending is still allowed and no newer run started meanwhile.
+     */
+    private fun afterDictationCompleted(event: SessionEvent.Completed) {
+        val focus = event.focus
         serviceScope.launch {
-            if (focus != null && shouldAutoSend(focus.packageName)) {
+            if (lastFocusKey == focus && shouldAutoSend(focus.packageName)) {
                 delay(AutoSend.DELAY_MS)
-                if (lastFocusKey == focus && !session.isBusy) textCommitter.performAutoSend(focus, imeOptions)
+                val stillTarget = lastFocusKey == focus && session.latestRunId == event.runId && !session.isBusy
+                if (stillTarget && !shouldBlockExternalSend()) {
+                    textCommitter.performAutoSend(focus, currentInputEditorInfo?.imeOptions ?: 0)
+                }
             }
             switchBackIfEnabled()
         }

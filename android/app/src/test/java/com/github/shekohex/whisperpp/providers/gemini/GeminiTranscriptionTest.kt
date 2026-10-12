@@ -98,11 +98,23 @@ class GeminiTranscriptionTest {
     @Test
     fun emptyOrMissingCandidates_returnEmptyTranscript() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"candidates":[]}"""))
-        server.enqueue(MockResponse().setBody("""{"promptFeedback":{"blockReason":"OTHER"}}"""))
         server.enqueue(MockResponse().setBody(candidate("  ")))
         val provider = transcriber()
 
-        repeat(3) { assertEquals("", provider.transcribe(tempAudioFile(), request()).getOrThrow().text) }
+        repeat(2) { assertEquals("", provider.transcribe(tempAudioFile(), request()).getOrThrow().text) }
+    }
+
+    @Test
+    fun blockedPromptOrCandidate_isTypedFailure_notSilence() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"promptFeedback":{"blockReason":"OTHER"}}"""))
+        server.enqueue(MockResponse().setBody("""{"candidates":[{"finishReason":"SAFETY"}]}"""))
+        val provider = transcriber()
+
+        repeat(2) {
+            val error = provider.transcribe(tempAudioFile(), request()).exceptionOrNull()
+            assertTrue(error is NetworkError.InvalidResponse)
+            assertEquals(R.string.gemini_error_blocked, (error as NetworkError.InvalidResponse).userMessageRes)
+        }
     }
 
     @Test
@@ -144,6 +156,14 @@ class GeminiTranscriptionTest {
 
         assertEquals(500, (error as NetworkError.Http).status)
         assertFalse(error.bodySnippet.orEmpty().contains("AIza-test"))
+    }
+
+    @Test
+    fun inlineLimit_accountsForBase64Expansion() {
+        // 14 MB raw ≈ 18.7 MB encoded: under the 20 MB request limit with room for the envelope.
+        val encoded = GeminiTranscription.base64Length(GeminiTranscription.MAX_INLINE_AUDIO_BYTES)
+        assertTrue(encoded < 19L * 1024 * 1024)
+        assertEquals(8L, GeminiTranscription.base64Length(4))
     }
 
     @Test
