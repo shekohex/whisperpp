@@ -4,17 +4,29 @@ import android.content.Context
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.analyticsDataStore
 import com.github.shekohex.whisperpp.core.network.HttpClientFactory
 import com.github.shekohex.whisperpp.core.network.RedactingLoggingInterceptor
 import com.github.shekohex.whisperpp.data.BackupStatusStore
 import com.github.shekohex.whisperpp.data.SettingsRepository
+import com.github.shekohex.whisperpp.data.autolearn.AutoLearnDictionaryEditor
+import com.github.shekohex.whisperpp.data.autolearn.AutoLearnModelResolver
+import com.github.shekohex.whisperpp.data.autolearn.AutoLearnPendingQueue
+import com.github.shekohex.whisperpp.data.autolearn.AutoLearnProposalStore
+import com.github.shekohex.whisperpp.data.autolearn.autoLearnDataStore
 import com.github.shekohex.whisperpp.data.dictionary.DictionaryRepository
+import com.github.shekohex.whisperpp.data.dictionary.readDictionary
+import com.github.shekohex.whisperpp.data.dictionary.writeDictionary
 import com.github.shekohex.whisperpp.dataStore
+import com.github.shekohex.whisperpp.domain.autolearn.AutoLearnAiReviewer
+import com.github.shekohex.whisperpp.domain.autolearn.AutoLearnCoordinator
 import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
+import com.google.gson.Gson
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +42,7 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "AppContainer"
+private const val AUTO_LEARN_TAG = "AutoLearn"
 
 /**
  * Manual DI: owns process-wide singletons. Created once by [com.github.shekohex.whisperpp.app.WhisperApp].
@@ -100,5 +113,45 @@ class AppContainer(context: Context) {
     /** Waits up to [timeoutMs] for [migrationsDone]; returns whether they finished. */
     suspend fun awaitMigrations(timeoutMs: Long): Boolean {
         return withTimeoutOrNull(timeoutMs) { migrationsDone.first { it } } != null
+    }
+
+    // Auto-Learn (§4.11), off by default; the IME capture and review UI call [autoLearnCoordinator].
+    val autoLearnDataStore: DataStore<Preferences> = appContext.autoLearnDataStore
+    val autoLearnQueue: AutoLearnPendingQueue by lazy { AutoLearnPendingQueue(autoLearnDataStore) }
+    val autoLearnProposalStore: AutoLearnProposalStore by lazy {
+        val gson = Gson()
+        AutoLearnProposalStore(
+            autoLearnDataStore,
+            AutoLearnDictionaryEditor { transform ->
+                settingsDataStore.edit { prefs -> writeDictionary(prefs, transform(readDictionary(prefs, gson)), gson) }
+            },
+        )
+    }
+    private val autoLearnPrompt: String by lazy {
+        appContext.resources.openRawResource(R.raw.autolearn_review_prompt).bufferedReader().use { it.readText() }
+    }
+    val autoLearnReviewer: AutoLearnAiReviewer by lazy {
+        AutoLearnAiReviewer(
+            prompt = { autoLearnPrompt },
+            resolveModel = {
+                AutoLearnModelResolver.resolve(
+                    settingsRepository.autoLearnSettings.first(),
+                    settingsRepository.providers.first(),
+                    providerFactory,
+                )
+            },
+            log = { Log.i(AUTO_LEARN_TAG, it) },
+        )
+    }
+    val autoLearnCoordinator: AutoLearnCoordinator by lazy {
+        AutoLearnCoordinator(
+            settings = settingsRepository.autoLearnSettings,
+            markReviewed = settingsRepository::setAutoLearnLastReviewAt,
+            queue = autoLearnQueue,
+            reviewer = autoLearnReviewer,
+            proposalStore = autoLearnProposalStore,
+            scope = appScope,
+            log = { Log.i(AUTO_LEARN_TAG, it) },
+        )
     }
 }

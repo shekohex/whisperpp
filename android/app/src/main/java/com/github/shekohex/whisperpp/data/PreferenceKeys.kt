@@ -61,6 +61,12 @@ object PreferenceKeys {
     val DISCLOSURE_SHOWN_COMMAND_TEXT = booleanPreferencesKey("disclosure-shown-command-text")
     val PER_APP_SEND_POLICY_JSON = stringPreferencesKey("per-app-send-policy-json")
     val MIC_PERMISSION_REQUESTED = booleanPreferencesKey("mic-permission-requested")
+    /** Auto-Learn (§4.11): off by default; review model (blank = enhancement selection), schedule, last run. */
+    val AUTO_LEARN_ENABLED = booleanPreferencesKey("auto-learn-enabled")
+    val AUTO_LEARN_PROVIDER_ID = stringPreferencesKey("auto-learn-provider-id")
+    val AUTO_LEARN_MODEL_ID = stringPreferencesKey("auto-learn-model-id")
+    val AUTO_LEARN_REVIEW_SCHEDULE = stringPreferencesKey("auto-learn-review-schedule")
+    val AUTO_LEARN_LAST_REVIEW_AT = longPreferencesKey("auto-learn-last-review-at")
 
     val UPDATE_CHANNEL = stringPreferencesKey("update-channel")
 
@@ -130,6 +136,11 @@ object PreferenceKeys {
         DISCLOSURE_SHOWN_COMMAND_TEXT,
         PER_APP_SEND_POLICY_JSON,
         MIC_PERMISSION_REQUESTED,
+        AUTO_LEARN_ENABLED,
+        AUTO_LEARN_PROVIDER_ID,
+        AUTO_LEARN_MODEL_ID,
+        AUTO_LEARN_REVIEW_SCHEDULE,
+        AUTO_LEARN_LAST_REVIEW_AT,
         UPDATE_CHANNEL,
         PROVIDERS_JSON,
         PROFILES_JSON,
@@ -185,6 +196,19 @@ object PreferenceKeys {
             TARGET_VERSION,
             DESTINATION_PATH,
             LAST_CHECK_ERROR,
+        )
+    }
+
+    // Auto-Learn DataStore ("autolearn_queue")
+    object AutoLearn {
+        /** JSON list of pending `AutoLearnCandidate`s. */
+        val QUEUE_JSON = stringPreferencesKey("autolearn_queue_json")
+        /** JSON list of `AutoLearnReviewProposal`s waiting for the user. */
+        val PROPOSALS_JSON = stringPreferencesKey("autolearn_proposals_json")
+
+        val ALL: List<PreferenceKey<*>> = listOf(
+            QUEUE_JSON,
+            PROPOSALS_JSON,
         )
     }
 }

@@ -27,6 +27,8 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDER_SELECTIONS_V2_
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_BACKEND
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_MODEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SPEECH_TO_TEXT_BACKEND
+import com.github.shekohex.whisperpp.data.autolearn.AutoLearnSettings
+import com.github.shekohex.whisperpp.domain.autolearn.AutoLearnReviewSchedule
 import com.github.shekohex.whisperpp.domain.providers.DiscoveredCache
 import com.github.shekohex.whisperpp.domain.providers.DiscoveredModel
 import com.github.shekohex.whisperpp.domain.providers.DiscoveryIdentity
@@ -184,6 +186,50 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                 prefs[COMMAND_PRESET_ID] = normalized
             }
         }
+    }
+
+    /** Auto-Learn (§4.11); the review model falls back to the active text (enhancement) selection. */
+    val autoLearnSettings: Flow<AutoLearnSettings> = dataStore.data
+        .map { prefs ->
+            AutoLearnSettings(
+                enabled = prefs[PreferenceKeys.AUTO_LEARN_ENABLED] ?: false,
+                providerId = prefs[PreferenceKeys.AUTO_LEARN_PROVIDER_ID].orEmpty(),
+                modelId = prefs[PreferenceKeys.AUTO_LEARN_MODEL_ID].orEmpty(),
+                fallbackProviderId = prefs[ACTIVE_TEXT_PROVIDER_ID].orEmpty(),
+                fallbackModelId = prefs[ACTIVE_TEXT_MODEL_ID].orEmpty(),
+                reviewSchedule = AutoLearnReviewSchedule.entries
+                    .firstOrNull { it.name == prefs[PreferenceKeys.AUTO_LEARN_REVIEW_SCHEDULE] }
+                    ?: AutoLearnReviewSchedule.IMMEDIATELY,
+                lastReviewAt = prefs[PreferenceKeys.AUTO_LEARN_LAST_REVIEW_AT] ?: 0L,
+            )
+        }
+        .distinctUntilChanged()
+
+    suspend fun setAutoLearnEnabled(enabled: Boolean) {
+        dataStore.edit { it[PreferenceKeys.AUTO_LEARN_ENABLED] = enabled }
+    }
+
+    /** Blank ids clear the override so the enhancement selection is used. */
+    suspend fun setAutoLearnModel(providerId: String?, modelId: String?) {
+        val provider = providerId?.trim().orEmpty()
+        val model = modelId?.trim().orEmpty()
+        dataStore.edit { prefs ->
+            if (provider.isEmpty() || model.isEmpty()) {
+                prefs.remove(PreferenceKeys.AUTO_LEARN_PROVIDER_ID)
+                prefs.remove(PreferenceKeys.AUTO_LEARN_MODEL_ID)
+            } else {
+                prefs[PreferenceKeys.AUTO_LEARN_PROVIDER_ID] = provider
+                prefs[PreferenceKeys.AUTO_LEARN_MODEL_ID] = model
+            }
+        }
+    }
+
+    suspend fun setAutoLearnReviewSchedule(schedule: AutoLearnReviewSchedule) {
+        dataStore.edit { it[PreferenceKeys.AUTO_LEARN_REVIEW_SCHEDULE] = schedule.name }
+    }
+
+    suspend fun setAutoLearnLastReviewAt(epochMillis: Long) {
+        dataStore.edit { it[PreferenceKeys.AUTO_LEARN_LAST_REVIEW_AT] = epochMillis }
     }
     
     suspend fun saveProviders(providers: List<ServiceProvider>) {
