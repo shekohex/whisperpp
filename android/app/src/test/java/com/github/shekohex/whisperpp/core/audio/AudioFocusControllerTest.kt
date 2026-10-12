@@ -115,8 +115,48 @@ class AudioFocusControllerTest {
         controller.acquire()
 
         assertEquals(1, losses)
-        assertEquals(listOf("request", "request"), gateway.calls)
+        // The still-owned request is abandoned before asking again, so owners never stack.
+        assertEquals(listOf("request", "abandon", "request"), gateway.calls)
         job.cancel()
+    }
+
+    @Test
+    fun reacquireAfterLoss_reusesOneListener_andStopAbandonsTheOwnedRequestOnce() {
+        val gateway = FakeGateway()
+        val controller = AudioFocusController(gateway, MutableStateFlow(true))
+        val listeners = mutableListOf<(Int) -> Unit>()
+
+        controller.acquire()
+        listeners += gateway.listener!!
+        gateway.listener?.invoke(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
+        controller.acquire()
+        listeners += gateway.listener!!
+        gateway.listener?.invoke(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
+        controller.acquire()
+        listeners += gateway.listener!!
+        controller.release()
+
+        assertTrue(listeners.all { it === listeners.first() })
+        assertEquals(
+            listOf("request", "abandon", "request", "abandon", "request", "abandon"),
+            gateway.calls,
+        )
+        assertFalse(controller.isHeld)
+    }
+
+    @Test
+    fun deniedReacquireAfterLoss_isNotTrackedAsHeld() {
+        val gateway = FakeGateway()
+        val controller = AudioFocusController(gateway, MutableStateFlow(true))
+        controller.acquire()
+        gateway.listener?.invoke(AudioManager.AUDIOFOCUS_LOSS)
+
+        gateway.grant = false
+        assertFalse(controller.acquire())
+        controller.release()
+
+        assertEquals(listOf("request", "abandon", "request"), gateway.calls)
+        assertFalse(controller.isHeld)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

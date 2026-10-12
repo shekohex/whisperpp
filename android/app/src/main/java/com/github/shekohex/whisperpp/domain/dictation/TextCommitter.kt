@@ -27,41 +27,70 @@ class TextCommitter(
         data class Inserted(val segment: CapturedSegment?) : CommitResult
 
         data object NoField : CommitResult
+
+        /** The editor rejected the insert (returned false or threw); the text is not in the field. */
+        data class Failed(val reason: String) : CommitResult
     }
 
     private val undoStacks = mutableMapOf<FocusKey, ArrayDeque<DictationUndoEntry>>()
     private var enhancementUndoEntry: EnhancementUndoEntry? = null
 
-    // Start of our own composing region (partials); null when nothing is composing.
+    // Field that holds our composing partial; null when nothing is composing. Tracked independently of
+    // [composingStart]: an editor without an extracted-text snapshot still gets its partial replaced.
+    private var composingOwner: FocusKey? = null
+
+    // Where our composing region started, when the editor reported it (enables undo / enhancement).
     private var composingStart: Int? = null
 
-    fun setComposing(text: String): Boolean {
+    /** Shows [text] as the composing partial of [focus], replacing our previous partial there. */
+    fun setComposing(focus: FocusKey, text: String): Boolean {
         val ic = inputConnection() ?: return false
-        if (composingStart == null) {
+        val starting = composingOwner != focus
+        if (starting) {
+            // Never continue a composition that belongs to another field; it is no longer ours to edit.
+            dropComposing()
             ic.finishComposingText()
-            composingStart = ic.selectionSnapshot()?.let { minOf(it.start, it.end) }
         }
+        val start = if (starting) ic.selectionSnapshot()?.let { minOf(it.start, it.end) } else composingStart
         ic.beginBatchEdit()
-        return try {
+        val composed = try {
             ic.setComposingText(text, 1)
         } catch (_: Exception) {
             false
         } finally {
             ic.endBatchEdit()
         }
+        if (composed && starting) {
+            composingOwner = focus
+            composingStart = start
+        }
+        return composed
     }
 
-    fun clearComposing() {
-        if (composingStart == null) return
-        composingStart = null
+    /**
+     * Removes our composing partial, but only from the field that owns it: with [currentFocus] on
+     * another field the editor connection belongs to that field, so only local state is dropped.
+     */
+    fun clearComposing(currentFocus: FocusKey?) {
+        val owner = composingOwner ?: return
+        dropComposing()
+        if (currentFocus != owner) return
         val ic = inputConnection() ?: return
         ic.beginBatchEdit()
         try {
             ic.setComposingText("", 1)
             ic.finishComposingText()
+        } catch (_: Exception) {
+            // Best effort; the editor may already be gone.
         } finally {
             ic.endBatchEdit()
         }
+    }
+
+    /** Forgets our composing partial without touching any editor. */
+    fun dropComposing() {
+        composingOwner = null
+        composingStart = null
     }
 
     fun textBeforeCursor(maxChars: Int): String? = inputConnection()?.getTextBeforeCursor(maxChars, 0)?.toString()
@@ -70,24 +99,31 @@ class TextCommitter(
     fun commit(focus: FocusKey, text: String): CommitResult {
         val ic = inputConnection()
         if (ic == null || focus.inputType == 0) {
-            composingStart = null
+            dropComposing()
             return CommitResult.NoField
         }
 
-        val selectionBefore = captureSelectionBeforeInsert(ic)
+        val ownsComposing = composingOwner == focus
+        if (!ownsComposing) dropComposing()
+        val selectionBefore = captureSelectionBeforeInsert(ic, ownsComposing)
         val insertionStart = composingStart ?: selectionBefore?.let { minOf(it.start, it.end) }
-        composingStart = null
+        dropComposing()
         enhancementUndoEntry = null
 
         ic.beginBatchEdit()
-        val committed = try {
-            ic.setComposingText(text, 1) && ic.finishComposingText()
-        } catch (_: Exception) {
-            false
+        val failure = try {
+            when {
+                !ic.setComposingText(text, 1) -> "setComposingText rejected"
+                !ic.finishComposingText() -> "finishComposingText rejected"
+                else -> null
+            }
+        } catch (e: Exception) {
+            e.message ?: e::class.java.simpleName
         } finally {
             ic.endBatchEdit()
         }
-        if (!committed || insertionStart == null) return CommitResult.Inserted(null)
+        if (failure != null) return CommitResult.Failed(failure)
+        if (insertionStart == null) return CommitResult.Inserted(null)
 
         val selectionAfter = ic.selectionSnapshot()
         val before = selectionBefore ?: DictationUndoEntry.SelectionSnapshot(insertionStart, insertionStart)
@@ -158,8 +194,8 @@ class TextCommitter(
     }
 
     // Our composing partial is about to be replaced, so only a foreign composing region is finished.
-    private fun captureSelectionBeforeInsert(ic: InputConnection): DictationUndoEntry.SelectionSnapshot? {
-        if (composingStart == null) ic.finishComposingText()
+    private fun captureSelectionBeforeInsert(ic: InputConnection, ownsComposing: Boolean): DictationUndoEntry.SelectionSnapshot? {
+        if (!ownsComposing) ic.finishComposingText()
         return ic.selectionSnapshot()
     }
 

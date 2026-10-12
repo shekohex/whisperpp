@@ -3,6 +3,9 @@ package com.github.shekohex.whisperpp.ime
 /**
  * Keyboard-side mic permission state: whether the "Microphone access needed" banner is shown and
  * which user action to retry once access is granted. Pure logic, no Android dependencies.
+ *
+ * The gate is the single owner of the pending action: it survives denials (the banner can be tapped
+ * again) and is only dropped by a grant or by the user starting another action.
  */
 class MicPermissionGate(
     private val isGranted: () -> Boolean,
@@ -23,6 +26,9 @@ class MicPermissionGate(
      */
     fun check(action: String, retry: (() -> Unit)?): Boolean {
         if (isGranted()) {
+            // The user started an action with access in place; an older pending retry is obsolete.
+            clearPending()
+            readyRetry = null
             setMissing(false)
             return true
         }
@@ -33,7 +39,7 @@ class MicPermissionGate(
         return false
     }
 
-    /** Handles a result from [PermissionRequestActivity]. A denial keeps the banner. */
+    /** Handles a result from [PermissionRequestActivity]. A denial keeps the banner and the pending retry. */
     fun onResult(granted: Boolean, retryAction: String?) {
         if (!granted) return
         val retry = pendingRetry.takeIf { retryAction != null && retryAction == pendingAction }

@@ -121,12 +121,8 @@ class RecordGestureStateMachine(
         val ax = abs(dx)
         val ay = abs(dy)
         if (maxOf(ax, ay) <= touchSlopPx) return GestureAxis.None
-        val lead = 1f + GestureTokens.HYSTERESIS
-        return when {
-            ax > ay * lead -> GestureAxis.Horizontal
-            ay > ax * lead -> GestureAxis.Vertical
-            else -> GestureAxis.None
-        }
+        // No dead band: a sustained diagonal drag must still pick an axis; ties go horizontal (cancel).
+        return if (ax >= ay) GestureAxis.Horizontal else GestureAxis.Vertical
     }
 
     private fun onUp(input: GestureInput.Up, intents: MutableList<RecordIntent>) {

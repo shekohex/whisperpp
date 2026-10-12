@@ -325,6 +325,8 @@
     <string name="dictation_pending_commit_copy">Copy</string>
     <string name="dictation_pending_commit_discard">Discard</string>
     <string name="dictation_pending_copied">Transcript copied</string>
+    <string name="dictation_pending_commit_blocks_start">Insert, copy or discard the pending transcript first</string>
+    <string name="dictation_insert_failed">Couldn\'t insert the transcript; use Insert here or Copy</string>
     <string name="command_error_transcription_failed">Couldn\'t transcribe the instruction: %1$s</string>
 
 </resources>

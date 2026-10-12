@@ -99,4 +99,36 @@ class MicPermissionGateTest {
 
         assertTrue(gate.isMissing)
     }
+
+    @Test
+    fun denyThenRetapBannerThenGrant_retriesTheOriginalStart() {
+        var retries = 0
+        gate.check(MicPermissionGate.ACTION_DICTATION) { retries++ }
+
+        gate.onResult(granted = false, retryAction = MicPermissionGate.ACTION_DICTATION)
+        gate.onInputViewStarted()
+        // Banner tapped again: the activity is launched for the still-pending action.
+        val relaunchedFor = gate.pendingAction
+        granted = true
+        gate.onResult(granted = true, retryAction = relaunchedFor)
+        gate.onInputViewStarted()
+
+        assertEquals(MicPermissionGate.ACTION_DICTATION, relaunchedFor)
+        assertEquals(1, retries)
+        assertFalse(gate.isMissing)
+    }
+
+    @Test
+    fun startingAnotherActionWithAccess_dropsTheOlderPendingRetry() {
+        var retries = 0
+        gate.check(MicPermissionGate.ACTION_DICTATION) { retries++ }
+        granted = true
+
+        assertTrue(gate.check(MicPermissionGate.ACTION_COMMAND, retry = null))
+        gate.onResult(granted = true, retryAction = MicPermissionGate.ACTION_DICTATION)
+        gate.onInputViewStarted()
+
+        assertNull(gate.pendingAction)
+        assertEquals(0, retries)
+    }
 }

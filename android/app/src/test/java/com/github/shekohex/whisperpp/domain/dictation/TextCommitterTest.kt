@@ -4,6 +4,7 @@ import com.github.shekohex.whisperpp.dictation.FakeInputConnection
 import com.github.shekohex.whisperpp.dictation.FocusKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -78,5 +79,59 @@ class TextCommitterTest {
         val detached = TextCommitter { null }
         assertEquals(TextCommitter.CommitResult.NoField, detached.commit(focus, "RAW"))
         assertEquals(TextCommitter.CommitResult.NoField, committer.commit(focus.copy(inputType = 0), "RAW"))
+    }
+
+    @Test
+    fun partials_withoutSelectionSnapshot_replaceTheirComposition_andCommitReplacesIt() {
+        ic.extractedTextAvailable = false
+
+        assertTrue(committer.setComposing(focus, "he"))
+        assertTrue(committer.setComposing(focus, "hello"))
+        assertEquals("prefix hellosuffix", ic.getText())
+
+        val result = committer.commit(focus, "hello world")
+
+        assertEquals(TextCommitter.CommitResult.Inserted(null), result)
+        assertEquals("prefix hello worldsuffix", ic.getText())
+        assertNull(ic.composingRegion())
+        assertFalse(committer.isUndoAvailable(focus))
+    }
+
+    @Test
+    fun clearComposing_withoutSelectionSnapshot_stillRemovesPartial() {
+        ic.extractedTextAvailable = false
+        committer.setComposing(focus, "partial")
+
+        committer.clearComposing(focus)
+
+        assertEquals("prefix suffix", ic.getText())
+        assertNull(ic.composingRegion())
+    }
+
+    @Test
+    fun clearComposing_afterFocusMovedToAnotherField_leavesThatFieldAlone() {
+        committer.setComposing(focus, "partial")
+        // The connection now belongs to field B, which has its own composing text.
+        ic.setText("field B")
+        ic.setComposingText("ime", 1)
+
+        committer.clearComposing(otherFocus)
+
+        assertEquals("field Bime", ic.getText())
+        assertEquals(7 to 10, ic.composingRegion())
+        // Local state is gone: a later clear for A's focus does not touch B either.
+        committer.clearComposing(focus)
+        assertEquals("field Bime", ic.getText())
+    }
+
+    @Test
+    fun commit_rejectedByEditor_reportsFailed_withoutUndo() {
+        ic.rejectInserts = true
+
+        val result = committer.commit(focus, "RAW")
+
+        assertTrue(result is TextCommitter.CommitResult.Failed)
+        assertEquals("prefix suffix", ic.getText())
+        assertFalse(committer.isUndoAvailable(focus))
     }
 }

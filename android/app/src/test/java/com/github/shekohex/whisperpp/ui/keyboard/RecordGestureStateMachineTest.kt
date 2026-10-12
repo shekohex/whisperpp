@@ -209,17 +209,49 @@ class RecordGestureStateMachineTest {
     }
 
     @Test
-    fun axisLock_waitsWhileNeitherAxisLeadsByHysteresis() {
-        val m = machine()
-        m.reduce(Down(0), RecordSession.Idle)
-        m.reduce(HoldTimerFired, RecordSession.Idle)
+    fun axisLock_picksLargerAxisPastSlop_tieGoesHorizontal() {
+        val nearTie = machine()
+        nearTie.reduce(Down(0), RecordSession.Idle)
+        nearTie.reduce(HoldTimerFired, RecordSession.Idle)
+        val vertical = nearTie.reduce(Move(-29f, -30f, 300), RecordSession.Idle)
 
-        val tie = m.reduce(Move(-30f, -29f, 300), RecordSession.Idle)
-        val decided = m.reduce(Move(-30f, -60f, 350), RecordSession.Idle)
+        val exactTie = machine()
+        exactTie.reduce(Down(0), RecordSession.Idle)
+        exactTie.reduce(HoldTimerFired, RecordSession.Idle)
+        val horizontal = exactTie.reduce(Move(-30f, -30f, 300), RecordSession.Idle)
 
-        assertEquals(GestureAxis.None, tie.ui.axis)
-        assertEquals(GestureAxis.Vertical, decided.ui.axis)
-        assertEquals(0.375f, decided.ui.lockProgress, 1e-4f)
+        assertEquals(GestureAxis.Vertical, vertical.ui.axis)
+        assertEquals(0.1875f, vertical.ui.lockProgress, 1e-4f)
+        assertEquals(GestureAxis.Horizontal, horizontal.ui.axis)
+        assertEquals(0.125f, horizontal.ui.cancelProgress, 1e-4f)
+    }
+
+    @Test
+    fun sustainedNearDiagonalDrag_cancelsInsteadOfSending() {
+        // dx = -120 dp, dy = -115 dp at density 2: |dx| leads by < 10 % the whole way.
+        val inputs = listOf(
+            Down(0), HoldTimerFired,
+            Move(-24f, -23f, 300), Move(-120f, -115f, 400), Move(-240f, -230f, 500),
+            Up(700),
+        )
+
+        val intents = machine().run(RecordSession.Idle, inputs).intents()
+
+        assertEquals(listOf(PressStart(locked = false), lp, Cancel, reject), intents)
+    }
+
+    @Test
+    fun startingSession_swallowsPressWithoutStartOrHaptic() {
+        val session = KeyboardState.Ready.toRecordSession(isStarting = true)
+
+        val tap = machine().run(session, Gesture.TAP.inputs)
+        val hold = machine().run(session, Gesture.HOLD_RELEASE.inputs)
+
+        assertEquals(RecordSession.Starting, session)
+        assertEquals(GesturePhase.Ignored, tap.first().ui.phase)
+        assertTrue(tap.intents().isEmpty())
+        assertTrue(hold.intents().isEmpty())
+        assertEquals(RecordSession.Idle, KeyboardState.Ready.toRecordSession())
     }
 
     @Test

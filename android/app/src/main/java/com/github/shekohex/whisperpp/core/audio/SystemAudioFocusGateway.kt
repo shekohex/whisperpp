@@ -4,33 +4,33 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
+import androidx.annotation.RequiresApi
 
-/** [AudioFocusGateway] backed by [AudioManager]; uses [AudioFocusRequest] on API 26+. */
+/**
+ * [AudioFocusGateway] backed by [AudioManager]; uses [AudioFocusRequest] on API 26+. The listener and
+ * request are built once per callback and reused, so re-requesting never registers a second owner and
+ * [abandon] always drops the one the system holds.
+ */
 class SystemAudioFocusGateway(private val audioManager: AudioManager) : AudioFocusGateway {
+    private var boundCallback: ((Int) -> Unit)? = null
+    private var listener: AudioManager.OnAudioFocusChangeListener? = null
     private var focusRequest: AudioFocusRequest? = null
-    private var legacyListener: AudioManager.OnAudioFocusChangeListener? = null
 
     override fun request(onFocusChange: (Int) -> Unit): Boolean {
-        val listener = AudioManager.OnAudioFocusChangeListener { change -> onFocusChange(change) }
+        if (boundCallback !== onFocusChange) {
+            // A different owner: abandon whatever the previous listener held before replacing it.
+            abandon()
+            boundCallback = onFocusChange
+            listener = AudioManager.OnAudioFocusChangeListener { change -> onFocusChange(change) }
+            focusRequest = null
+        }
+        val activeListener = requireNotNull(listener)
         val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build()
-                )
-                .setAcceptsDelayedFocusGain(false)
-                .setWillPauseWhenDucked(true)
-                .setOnAudioFocusChangeListener(listener)
-                .build()
-            focusRequest = request
-            audioManager.requestAudioFocus(request)
+            audioManager.requestAudioFocus(focusRequest ?: buildRequest(activeListener).also { focusRequest = it })
         } else {
-            legacyListener = listener
             @Suppress("DEPRECATION")
             audioManager.requestAudioFocus(
-                listener,
+                activeListener,
                 AudioManager.STREAM_VOICE_CALL,
                 AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE,
             )
@@ -41,11 +41,23 @@ class SystemAudioFocusGateway(private val audioManager: AudioManager) : AudioFoc
     override fun abandon() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
-            focusRequest = null
         } else {
             @Suppress("DEPRECATION")
-            legacyListener?.let { audioManager.abandonAudioFocus(it) }
-            legacyListener = null
+            listener?.let { audioManager.abandonAudioFocus(it) }
         }
     }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun buildRequest(listener: AudioManager.OnAudioFocusChangeListener): AudioFocusRequest =
+        AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            .setAcceptsDelayedFocusGain(false)
+            .setWillPauseWhenDucked(true)
+            .setOnAudioFocusChangeListener(listener)
+            .build()
 }

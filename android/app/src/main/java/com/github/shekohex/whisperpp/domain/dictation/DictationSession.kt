@@ -87,7 +87,10 @@ class DictationSession(private val deps: Deps) {
 
     private val _pendingCommit = MutableStateFlow<String?>(null)
 
-    /** Transcript held back because focus moved away from its field (G-07). */
+    /**
+     * Transcript held back because focus moved away from its field (G-07) or the editor rejected the
+     * insert. Kept until Insert/Copy/Discard; a new run cannot start while it is set (no silent loss).
+     */
     val pendingCommit: StateFlow<String?> = _pendingCommit.asStateFlow()
 
     val isBusy: Boolean
@@ -99,7 +102,6 @@ class DictationSession(private val deps: Deps) {
     private val windowVisible = MutableStateFlow(true)
     private var currentFocus: FocusKey? = null
     private var run: Run? = null
-    private var pendingPermissionStart = false
 
     init {
         deps.scope.launch { deps.recorder.errors.collect { onRecorderError(it) } }
@@ -119,8 +121,10 @@ class DictationSession(private val deps: Deps) {
             emit(SessionEvent.SendBlocked)
             return
         }
-        pendingPermissionStart = false
-        _pendingCommit.value = null
+        if (_pendingCommit.value != null) {
+            emit(SessionEvent.Notice(R.string.dictation_pending_commit_blocks_start))
+            return
+        }
         val r = Run(focus)
         run = r
         _state.value = SessionState.Starting(focus, locked)
@@ -179,6 +183,12 @@ class DictationSession(private val deps: Deps) {
             return
         }
         r.durationMs = s.elapsedMs(deps.clock())
+        // Read now, before stopping the recorder suspends: later the editor may be another field's.
+        r.contextPrompt = if (plan.request.useContext && currentFocus == r.focus) {
+            deps.committer.textBeforeCursor(CONTEXT_CHARS)
+        } else {
+            null
+        }
         _state.value = SessionState.Transcribing(r.focus, plan.audioFile, r.lastPartial)
         r.job = deps.scope.launch { transcribeAndCommit(r, plan) }
     }
@@ -217,13 +227,6 @@ class DictationSession(private val deps: Deps) {
         windowVisible.value = true
     }
 
-    fun onPermissionResult(granted: Boolean) {
-        val retry = granted && pendingPermissionStart
-        pendingPermissionStart = false
-        // The finger is no longer on the button after the permission screen: record hands-free.
-        if (retry) onPressStart(locked = true)
-    }
-
     /** The current editor just became blocked for sending; stop anything that would send from it. */
     fun onExternalSendBlocked() {
         val r = run ?: return
@@ -257,6 +260,10 @@ class DictationSession(private val deps: Deps) {
         _pendingCommit.value = null
         when (deps.committer.commit(focus, text)) {
             TextCommitter.CommitResult.NoField -> emit(SessionEvent.CommitFailed(text, SessionEvent.CommitFailed.Reason.NO_FIELD))
+            is TextCommitter.CommitResult.Failed -> {
+                _pendingCommit.value = text
+                emit(SessionEvent.CommitFailed(text, SessionEvent.CommitFailed.Reason.INSERT_FAILED))
+            }
             is TextCommitter.CommitResult.Inserted -> emit(SessionEvent.Committed(text))
         }
     }
@@ -278,10 +285,8 @@ class DictationSession(private val deps: Deps) {
         val plan = when (decision) {
             is StartDecision.Proceed -> decision.plan
             StartDecision.Abort -> return finish(r, SessionState.Idle)
-            StartDecision.PermissionRequired -> {
-                pendingPermissionStart = true
-                return finish(r, SessionState.Idle)
-            }
+            // The permission gate owns the retry and restarts through the service once access is granted.
+            StartDecision.PermissionRequired -> return finish(r, SessionState.Idle)
         }
         r.plan = plan
         deps.focus.acquire()
@@ -342,7 +347,7 @@ class DictationSession(private val deps: Deps) {
         val last = r.lastPartialAt
         if (last != null && now - last < deps.partialThrottleMs) return
         r.lastPartialAt = now
-        if (deps.committer.setComposing(text)) r.composing = true
+        if (deps.committer.setComposing(r.focus, text)) r.composing = true
         if (s is SessionState.Transcribing) _state.value = s.copy(partial = text)
     }
 
@@ -356,6 +361,11 @@ class DictationSession(private val deps: Deps) {
         }
         deps.cues(SoundCues.Cue.STOP)
         r.pcm?.close()
+        // The editor may have become blocked while the recorder was stopping; nothing leaves the device then.
+        if (!deps.sendAllowed()) {
+            emit(SessionEvent.SendBlocked)
+            return cancelRun(recordDiscard = true)
+        }
 
         // F-05: dropped PCM means the stream diverged from the file; ignore every realtime result.
         val streaming = r.streaming?.takeIf { recording.droppedChunks == 0 }
@@ -367,7 +377,6 @@ class DictationSession(private val deps: Deps) {
         val outcome = try {
             coroutineScope {
                 val streamed = streaming?.let { async { it.commit() } }
-                r.contextPrompt = if (plan.request.useContext) deps.committer.textBeforeCursor(CONTEXT_CHARS) else null
                 val batch = transcribe(recording.file, plan.request.copy(contextPrompt = r.contextPrompt))
                 resolveOutcome(r, batch, streamed)
             }
@@ -434,6 +443,12 @@ class DictationSession(private val deps: Deps) {
         val segment = when (result) {
             TextCommitter.CommitResult.NoField -> {
                 emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.NO_FIELD))
+                return finish(r, SessionState.Idle)
+            }
+            is TextCommitter.CommitResult.Failed -> {
+                // Not in the field: keep it for Insert here / Copy instead of reporting success.
+                _pendingCommit.value = raw
+                emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.INSERT_FAILED))
                 return finish(r, SessionState.Idle)
             }
             is TextCommitter.CommitResult.Inserted -> result.segment
@@ -531,7 +546,8 @@ class DictationSession(private val deps: Deps) {
         }
         deps.focus.release()
         r.streaming?.let(::cancelStreaming)
-        if (r.composing && next !is SessionState.Idle) deps.committer.clearComposing()
+        // Every terminal path, Idle included; only the field that owns the partial is edited.
+        if (r.composing) deps.committer.clearComposing(currentFocus)
         r.plan?.audioFile?.delete()
         _state.value = next
         if (next == SessionState.Cancelled) _state.value = SessionState.Idle

@@ -89,6 +89,8 @@ fun KeyboardScreen(
     recordingTimeMs: () -> Long,
     showLongPressHint: Boolean,
     tapToRecord: Boolean = true,
+    /** The session is opening the recorder: the button swallows presses (no second start / haptic). */
+    isStarting: Boolean = false,
     undoAvailable: Boolean = false,
     undoQuickActionVisible: Boolean = false,
     enhancementNotice: EnhancementNoticeUiState? = null,
@@ -838,6 +840,7 @@ fun KeyboardScreen(
                         externalSendingBlocked = externalSendingBlocked,
                         showLongPressHint = showLongPressHint,
                         tapToRecord = tapToRecord,
+                        isStarting = isStarting,
                         onIntent = onRecordIntent,
                         onUi = { gestureUi = it },
                         onDismissHint = onDismissHint,
@@ -1211,6 +1214,7 @@ fun MainActionButton(
     externalSendingBlocked: Boolean,
     showLongPressHint: Boolean,
     tapToRecord: Boolean,
+    isStarting: Boolean,
     onIntent: (RecordIntent) -> Unit,
     onUi: (GestureUi) -> Unit,
     onDismissHint: () -> Unit,
@@ -1221,6 +1225,7 @@ fun MainActionButton(
     val currentState by rememberUpdatedState(state)
     val currentBlocked by rememberUpdatedState(externalSendingBlocked)
     val currentTapToRecord by rememberUpdatedState(tapToRecord)
+    val currentIsStarting by rememberUpdatedState(isStarting)
     val currentOnIntent by rememberUpdatedState(onIntent)
     val currentOnUi by rememberUpdatedState(onUi)
     val currentOnBlockedAction by rememberUpdatedState(onBlockedAction)
@@ -1340,7 +1345,7 @@ fun MainActionButton(
             startIsLeft = !isRtl,
         )
         val dispatch: (GestureInput) -> Unit = { input ->
-            val output = machine.reduce(input, currentState.toRecordSession())
+            val output = machine.reduce(input, currentState.toRecordSession(currentIsStarting))
             output.intents.forEach { intent ->
                 if (intent is RecordIntent.Haptic) {
                     haptic.performHapticFeedback(intent.kind.toFeedbackType())

@@ -33,6 +33,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.RandomAccessFile
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -40,6 +41,9 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * 16 kHz mono PCM16 WAV recorder. All [AudioRecord] work runs on a dedicated capture thread;
  * the public API is meant to be called from the main thread and never blocks it.
+ *
+ * Callers pass a distinct file per recording: a cancelled capture deletes its own file when its
+ * teardown finishes, which may be after the next recording already started.
  */
 class AudioRecorder(
     context: Context,
@@ -93,12 +97,16 @@ class AudioRecorder(
     }
 
     private val appContext = context.applicationContext
-    private val captureExecutor = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "AudioRecorder").apply { priority = Thread.MAX_PRIORITY }
-    }
-    private val captureDispatcher: ExecutorCoroutineDispatcher = captureExecutor.asCoroutineDispatcher()
+
+    // Replaced when a capture thread is stuck in a native read that even AudioRecord.stop() did not
+    // unblock; the stuck thread is abandoned (shut down, exits whenever read returns) — see [abandonCaptureThread].
+    private var captureExecutor: ExecutorService = newCaptureExecutor()
+    private var captureDispatcher: ExecutorCoroutineDispatcher = captureExecutor.asCoroutineDispatcher()
     private val session = AtomicReference<Session?>(null)
     private val generation = AtomicInteger(0)
+
+    /** Capture job of the most recent session, including one that is still tearing down after stop/cancel. */
+    @Volatile private var lastCapture: Job? = null
 
     private val _events = MutableSharedFlow<Event>(
         extraBufferCapacity = 16,
@@ -121,6 +129,11 @@ class AudioRecorder(
         }
 
         val startGeneration = generation.incrementAndGet()
+        // The previous capture must have released the device before this one opens it.
+        awaitPreviousCapture()
+        if (generation.get() != startGeneration) {
+            return Result.failure(RecorderException(ErrorKind.CANCELLED, "Recording cancelled while starting"))
+        }
         // Non-cancellable so an opened AudioRecord is always either registered or released.
         return withContext(NonCancellable) {
             val opened = withContext(captureDispatcher) { runCatching { open(file, options.sampleRate, options) } }
@@ -148,6 +161,7 @@ class AudioRecorder(
             launchForwarder(newSession, callback)
         }
         newSession.captureJob = scope.launch(captureDispatcher) { capture(newSession) }
+        lastCapture = newSession.captureJob
         _isRecording.value = true
         _events.tryEmit(Event.Started(newSession.sampleRate))
     }
@@ -162,6 +176,8 @@ class AudioRecorder(
         current.stopRequested = true
         _isRecording.value = false
         meter.reset()
+        // Coroutine cancellation cannot interrupt a blocked native read(); stopping the record can.
+        withContext(Dispatchers.IO) { unblockCapture(current) }
 
         val finished = withTimeoutOrNull(STOP_TIMEOUT_MS) {
             current.captureJob?.join()
@@ -172,6 +188,8 @@ class AudioRecorder(
         if (finished == null) {
             current.captureJob?.cancel()
             current.forwardJob?.cancel()
+            runCatching { current.record.release() }
+            abandonCaptureThread()
             return fail(RecorderException(ErrorKind.STOP_TIMEOUT, "Recorder did not stop within ${STOP_TIMEOUT_MS} ms"))
         }
         current.failure?.let { return Result.failure(it) }
@@ -206,12 +224,41 @@ class AudioRecorder(
         current.stopRequested = true
         _isRecording.value = false
         meter.reset()
+        scope.launch(Dispatchers.IO) { unblockCapture(current) }
     }
 
     /** Cancels any recording and shuts down the capture thread. The instance is unusable afterwards. */
     fun release() {
         cancel()
         captureDispatcher.close()
+    }
+
+    /** Makes a pending or future read() of [target] return; the capture loop then sees [Session.stopRequested]. */
+    private fun unblockCapture(target: Session) {
+        runCatching { target.record.stop() }
+    }
+
+    private suspend fun awaitPreviousCapture() {
+        val previous = lastCapture ?: return
+        if (previous.isCompleted) return
+        val finished = withTimeoutOrNull(STOP_TIMEOUT_MS) { previous.join() }
+        if (finished == null) {
+            Log.w(TAG, "Previous capture did not tear down in time; abandoning its thread")
+            previous.cancel()
+            abandonCaptureThread()
+        }
+    }
+
+    /**
+     * The single capture thread is blocked in native code: leave it to finish on its own (shutdown lets
+     * the running task end, no new work is queued there) and route every later capture to a fresh thread.
+     */
+    private fun abandonCaptureThread() {
+        val stuck = captureExecutor
+        captureExecutor = newCaptureExecutor()
+        captureDispatcher = captureExecutor.asCoroutineDispatcher()
+        lastCapture = null
+        stuck.shutdown()
     }
 
     @SuppressLint("MissingPermission")
@@ -301,6 +348,8 @@ class AudioRecorder(
                 }
                 val read = target.record.read(buffer, 0, buffer.size)
                 if (read < 0) {
+                    // A read unblocked by the stop path may report an error; that is a normal stop.
+                    if (target.stopRequested) break
                     throw RecorderException(ErrorKind.CAPTURE_FAILED, "AudioRecord.read failed ($read)")
                 }
                 if (read == 0) continue
@@ -366,6 +415,10 @@ class AudioRecorder(
         private const val CHUNK_MS = 20
         private const val PAUSE_POLL_MS = 20L
         private const val WAV_HEADER_SIZE = 44
+
+        private fun newCaptureExecutor(): ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "AudioRecorder").apply { priority = Thread.MAX_PRIORITY }
+        }
 
         fun hasPermission(context: Context): Boolean {
             return ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==

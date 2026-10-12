@@ -7,6 +7,6 @@ sealed interface StartDecision {
     /** Start refused; the planner already told the user why. */
     data object Abort : StartDecision
 
-    /** Mic permission missing; the session retries after [DictationSession.onPermissionResult]. */
+    /** Mic permission missing; the permission gate retries the start once access is granted. */
     data object PermissionRequired : StartDecision
 }

@@ -132,7 +132,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.withContext
 
-private const val RECORDED_AUDIO_FILENAME_WAV = "recorded.wav"
+private const val RECORDING_FILE_PREFIX = "rec_"
 private const val AUDIO_MEDIA_TYPE_WAV = "audio/wav"
 private const val IME_SWITCH_OPTION_AVAILABILITY_API_LEVEL = 28
 private const val TAG = "WhisperInputService"
@@ -195,6 +195,8 @@ class WhisperInputService : InputMethodService() {
     private lateinit var configLoader: RuntimeConfigLoader
     private lateinit var startPlanner: DictationStartPlanner
     private val pendingCommitText = mutableStateOf<String?>(null)
+    private val sessionStarting = mutableStateOf(false)
+    private var recordingCounter = 0
 
     private val commandController = CommandController()
     private val selectionResolver = SelectionResolver()
@@ -219,6 +221,12 @@ class WhisperInputService : InputMethodService() {
     private var commandJob: Job? = null
     private var commandUndoJob: Job? = null
 
+    /** Bumped on every command capture start/cancel; a start that returns stale must not touch shared state. */
+    private var commandCaptureGeneration = 0
+
+    /** The exact file the current command capture records into. */
+    private var commandAudioFile: File? = null
+
     private val focusIdentity = FocusIdentity()
     private var lastFocusKey: FocusKey? = null
 
@@ -233,6 +241,7 @@ class WhisperInputService : InputMethodService() {
         sendPolicyRules = sendPolicyRepository.getAllRulesFlow()
             .stateIn(serviceScope, SharingStarted.Eagerly, null)
         audioRecorder = AudioRecorder(this, serviceScope, AmplitudeMeter())
+        serviceScope.launch(Dispatchers.IO) { deleteStaleRecordings() }
         audioFocus = AudioFocusController(
             SystemAudioFocusGateway(getSystemService(Context.AUDIO_SERVICE) as AudioManager),
             repository.pauseMediaWhileRecording.stateIn(serviceScope, SharingStarted.Eagerly, true),
@@ -269,7 +278,6 @@ class WhisperInputService : InputMethodService() {
             // The retry runs from onStartInputView once the host app regains focus.
             MicPermissionBus.results.collect {
                 micPermissionGate.onResult(it.granted, it.retryAction)
-                if (!it.granted) session.onPermissionResult(false)
             }
         }
         serviceScope.launch {
@@ -361,7 +369,9 @@ class WhisperInputService : InputMethodService() {
             awaitSendPolicy = { sendPolicyRules.first { it != null } },
             isSendBlocked = ::shouldBlockExternalSend,
             checkMicPermission = {
-                micPermissionGate.check(MicPermissionGate.ACTION_DICTATION) { session.onPermissionResult(true) }
+                // The finger is no longer on the button after the permission screen: record hands-free,
+                // through the normal start path so policy and disclosure are checked again.
+                micPermissionGate.check(MicPermissionGate.ACTION_DICTATION) { onPressStart(locked = true) }
             },
             recordingFile = ::recordingFile,
             defaultPostprocessing = { getString(R.string.settings_option_no_conversion) },
@@ -388,12 +398,23 @@ class WhisperInputService : InputMethodService() {
         )
     )
 
-    private fun recordingFile(): File = File(externalCacheDir ?: cacheDir, RECORDED_AUDIO_FILENAME_WAV)
+    private fun recordingDir(): File = externalCacheDir ?: cacheDir
+
+    /** A distinct file per take, so the late teardown of a previous capture can never delete this one. */
+    private fun recordingFile(): File =
+        File(recordingDir(), "$RECORDING_FILE_PREFIX${SystemClock.elapsedRealtime()}_${++recordingCounter}.wav")
+
+    /** Takes left behind by a killed process; nothing records yet when this runs. */
+    private fun deleteStaleRecordings() {
+        recordingDir().listFiles { file -> file.name.startsWith(RECORDING_FILE_PREFIX) || file.name == "recorded.wav" }
+            ?.forEach { it.delete() }
+    }
 
     private fun observeSession() {
         serviceScope.launch {
             session.state.collectLatest { state ->
                 keyboardState.value = state.toKeyboardState()
+                sessionStarting.value = state is SessionState.Starting
                 when (state) {
                     is SessionState.Recording -> {
                         showLongPressHint.value = false
@@ -437,11 +458,13 @@ class WhisperInputService : InputMethodService() {
             }
             is SessionEvent.CommitBlockedByFocus -> performFeedback()
             is SessionEvent.CommitFailed -> {
-                copyToClipboard(event.text)
                 val message = when (event.reason) {
                     SessionEvent.CommitFailed.Reason.NO_FIELD -> R.string.dictation_copied_no_field
                     SessionEvent.CommitFailed.Reason.BLOCKED -> R.string.dictation_copied_blocked
+                    SessionEvent.CommitFailed.Reason.INSERT_FAILED -> R.string.dictation_insert_failed
                 }
+                // A rejected insert stays in the pending-commit bar (Insert here / Copy) instead.
+                if (event.reason != SessionEvent.CommitFailed.Reason.INSERT_FAILED) copyToClipboard(event.text)
                 showToast(getString(message))
             }
             is SessionEvent.EnhancementNotice -> showEnhancementNotice(
@@ -520,6 +543,7 @@ class WhisperInputService : InputMethodService() {
                         recordingTimeMs = { recordingTimeMs.value },
                         showLongPressHint = showLongPressHint.value,
                         tapToRecord = tapToRecord.value,
+                        isStarting = sessionStarting.value,
                         undoAvailable = undoAvailable.value,
                         undoQuickActionVisible = undoQuickActionVisible.value,
                         enhancementNotice = enhancementNotice.value,
@@ -702,11 +726,22 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    /** Command-mode capture. Focus order on start: acquire focus → start cue → capture. Releases focus on failure. */
+    /**
+     * Command-mode capture. Focus order on start: acquire focus → start cue → capture. Releases focus on
+     * failure. A start cancelled while the recorder was opening returns stale and leaves the shared focus
+     * and recorder alone: by then they may belong to a dictation run (F-08).
+     */
     private suspend fun startCapture(): Result<Unit> {
+        val generation = ++commandCaptureGeneration
         audioFocus.acquire()
         performFeedback(cue = SoundCues.Cue.START)
-        val result = audioRecorder.start(recordingFile())
+        val file = recordingFile()
+        commandAudioFile = file
+        val result = audioRecorder.start(file)
+        if (generation != commandCaptureGeneration) {
+            if (result.isSuccess && !session.isBusy) audioRecorder.cancel()
+            return Result.failure(AudioRecorder.RecorderException(AudioRecorder.ErrorKind.CANCELLED, "Command capture cancelled"))
+        }
         result.onFailure { error ->
             audioFocus.release()
             val kind = (error as? AudioRecorder.RecorderException)?.kind
@@ -718,12 +753,14 @@ class WhisperInputService : InputMethodService() {
     }
 
     private suspend fun stopCapture(): Result<File> {
+        val generation = commandCaptureGeneration
         val result = audioRecorder.stop()
-        audioFocus.release()
+        if (generation == commandCaptureGeneration) audioFocus.release()
         return result
     }
 
     private fun cancelCapture() {
+        commandCaptureGeneration++
         audioRecorder.cancel()
         audioFocus.release()
     }
@@ -923,6 +960,9 @@ class WhisperInputService : InputMethodService() {
     private fun resetCommandRunState() {
         commandJob?.cancel()
         commandJob = null
+        // Any command capture still starting is stale from here on, even when the recorder is left alone.
+        commandCaptureGeneration++
+        commandAudioFile = null
         // The recorder and clients are shared with dictation; never tear down a dictation run (F-08).
         if (!session.isBusy) {
             cancelCapture()
@@ -1196,7 +1236,8 @@ class WhisperInputService : InputMethodService() {
             temperature = provider.temperature,
             useContext = false,
         )
-        val file = recordingFile()
+        val file = commandAudioFile ?: throw CommandTranscriptionException("No recording")
+        commandAudioFile = null
         val result = try {
             whisperTranscriber.transcribe(this, file, request)
         } finally {

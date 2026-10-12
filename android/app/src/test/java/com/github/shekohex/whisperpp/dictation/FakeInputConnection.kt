@@ -14,6 +14,20 @@ class FakeInputConnection : InputConnection {
     private val buffer = StringBuilder()
     private var selectionStart: Int = 0
     private var selectionEnd: Int = 0
+    private var composingStart: Int = -1
+    private var composingEnd: Int = -1
+
+    /** False simulates editors that return null from [getExtractedText]. */
+    var extractedTextAvailable = true
+
+    /** True simulates an editor that rejects composing/committing text. */
+    var rejectInserts = false
+
+    /** Number of [setComposingText] calls with non-empty text (partials and commits). */
+    var composingWrites = 0
+        private set
+
+    fun composingRegion(): Pair<Int, Int>? = if (composingStart >= 0) composingStart to composingEnd else null
 
     fun setText(text: String) {
         buffer.clear()
@@ -21,6 +35,8 @@ class FakeInputConnection : InputConnection {
         val end = buffer.length
         selectionStart = end
         selectionEnd = end
+        composingStart = -1
+        composingEnd = -1
     }
 
     fun getText(): String = buffer.toString()
@@ -38,7 +54,8 @@ class FakeInputConnection : InputConnection {
         selectionEnd = cursor
     }
 
-    override fun getExtractedText(request: ExtractedTextRequest?, flags: Int): ExtractedText {
+    override fun getExtractedText(request: ExtractedTextRequest?, flags: Int): ExtractedText? {
+        if (!extractedTextAvailable) return null
         val extracted = ExtractedText()
         extracted.text = buffer.toString()
         extracted.startOffset = 0
@@ -67,6 +84,9 @@ class FakeInputConnection : InputConnection {
     }
 
     override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
+        if (rejectInserts) return false
+        composingStart = -1
+        composingEnd = -1
         val replacement = text?.toString().orEmpty()
         val a = minOf(selectionStart, selectionEnd)
         val b = maxOf(selectionStart, selectionEnd)
@@ -79,11 +99,32 @@ class FakeInputConnection : InputConnection {
         return true
     }
 
+    /** Replaces the composing region (or the selection when there is none) and marks the result as composing. */
     override fun setComposingText(text: CharSequence?, newCursorPosition: Int): Boolean {
-        return commitText(text, newCursorPosition)
+        if (rejectInserts) return false
+        val replacement = text?.toString().orEmpty()
+        if (replacement.isNotEmpty()) composingWrites += 1
+        val a = if (composingStart >= 0) composingStart else minOf(selectionStart, selectionEnd)
+        val b = if (composingStart >= 0) composingEnd else maxOf(selectionStart, selectionEnd)
+        buffer.replace(a, b, replacement)
+        val cursor = a + replacement.length
+        selectionStart = cursor
+        selectionEnd = cursor
+        if (replacement.isEmpty()) {
+            composingStart = -1
+            composingEnd = -1
+        } else {
+            composingStart = a
+            composingEnd = cursor
+        }
+        return true
     }
 
-    override fun finishComposingText(): Boolean = true
+    override fun finishComposingText(): Boolean {
+        composingStart = -1
+        composingEnd = -1
+        return true
+    }
 
     override fun beginBatchEdit(): Boolean = true
 

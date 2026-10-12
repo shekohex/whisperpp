@@ -15,8 +15,12 @@ class AudioFocusController(
     private val gateway: AudioFocusGateway,
     private val pauseMediaEnabled: StateFlow<Boolean>,
 ) {
+    /** True only after a request was granted and until it is abandoned; failed attempts never set it. */
     private var held = false
     private var lost = false
+
+    // One listener for the controller's lifetime, so the gateway can reuse a single request (no stacked owners).
+    private val listener: (Int) -> Unit = ::onFocusChange
 
     private val _focusLoss = MutableSharedFlow<Unit>(
         extraBufferCapacity = 1,
@@ -33,7 +37,9 @@ class AudioFocusController(
     fun acquire(): Boolean {
         if (!pauseMediaEnabled.value) return false
         if (held && !lost) return true
-        val granted = gateway.request(::onFocusChange)
+        // Re-acquiring after a loss: drop the request we still own before asking again.
+        if (held) release()
+        val granted = gateway.request(listener)
         if (granted) {
             held = true
             lost = false

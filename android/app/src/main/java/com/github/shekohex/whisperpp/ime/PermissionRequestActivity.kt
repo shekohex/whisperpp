@@ -99,8 +99,10 @@ class PermissionRequestActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (isFinishing && !published) {
-            publish(MicPermission.isGranted(this))
+        // Fallback for a finish without an explicit result (e.g. the task was swiped away). Never report a
+        // denial that is not real: re-check, and stay silent when access is in place by now.
+        if (isFinishing && !published && !MicPermission.isGranted(this)) {
+            publish(false)
         }
         super.onDestroy()
     }

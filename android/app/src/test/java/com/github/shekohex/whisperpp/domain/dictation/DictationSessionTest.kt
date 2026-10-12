@@ -63,8 +63,11 @@ class DictationSessionTest {
         val releases: Int
             get() = stops + cancels
 
+        val startedFiles = mutableListOf<File>()
+
         override suspend fun start(file: File, onPcm: ((ByteArray) -> Unit)?): Result<Unit> {
             starts += 1
+            startedFiles += file
             this.file = file
             pendingStart = true
             cancelledDuringStart = false
@@ -129,6 +132,10 @@ class DictationSessionTest {
         var commandMode = false
         var sendAllowed = true
         var enhancer: DictationEnhancer? = null
+        var useContext = false
+        val committer = TextCommitter { ic }
+        var nextAudioFile: (() -> File)? = null
+        val requests = mutableListOf<TranscriptionRequest>()
 
         private val dispatcher = StandardTestDispatcher(test.testScheduler)
         val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -139,7 +146,8 @@ class DictationSessionTest {
                     recorder = recorder,
                     focus = AudioFocusController(gateway, MutableStateFlow(true)),
                     cues = {},
-                    transcriber = { _, _ ->
+                    transcriber = { _, request ->
+                        requests += request
                         try {
                             transcript()
                         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -148,11 +156,12 @@ class DictationSessionTest {
                         }
                     },
                     enhancer = enhancer,
-                    committer = TextCommitter { ic },
+                    committer = committer,
                     planner = {
                         plannerCalls += 1
                         plannerGate?.await()
-                        StartDecision.Proceed(StartPlan(audioFile, request(), streaming))
+                        val file = nextAudioFile?.invoke() ?: audioFile
+                        StartDecision.Proceed(StartPlan(file, request().copy(useContext = useContext), streaming))
                     },
                     sendAllowed = { sendAllowed },
                     commandModeActive = { commandMode },
@@ -518,4 +527,185 @@ class DictationSessionTest {
             }
         }
     }
+
+    // region Phase 1 review regressions (WP-1.7)
+
+    @Test
+    fun cancelThenImmediateRestart_keepsTheNewTakesOwnFile() = sessionTest { h ->
+        val files = List(2) { File.createTempFile("take$it", ".wav").apply { writeText("pcm") } }
+        var next = 0
+        h.nextAudioFile = { files[next++] }
+        h.recordFor(1_000, locked = true)
+        h.session.onPause()
+        h.session.onCancel()
+        h.recordFor(1_000, locked = true)
+
+        assertEquals(files, h.recorder.startedFiles)
+        assertFalse(files[0].exists())
+        assertTrue(files[1].exists())
+
+        h.session.onStop()
+        advanceUntilIdle()
+        assertTrue(h.events.contains(SessionEvent.Committed("hello")))
+        assertFalse(files[1].exists())
+    }
+
+    @Test
+    fun focusChangeDuringStreaming_cancelLeavesOtherFieldUntouched() = sessionTest { h ->
+        h.streaming = FakeStreaming(committed = null)
+        h.recordFor(1_000, locked = true)
+        (h.streaming as FakeStreaming).events.emit(StreamEvent.Partial("hel"))
+        runCurrent()
+        assertEquals("prefix hel", h.ic.getText())
+
+        // Field B takes over the connection with its own composing text.
+        h.session.onFocusChanged(h.otherFocus)
+        h.ic.setText("B")
+        h.ic.setComposingText("x", 1)
+        h.session.onCancel()
+        advanceUntilIdle()
+
+        assertEquals("Bx", h.ic.getText())
+        assertEquals(1 to 2, h.ic.composingRegion())
+    }
+
+    @Test
+    fun commitBlockedByFocus_resetsComposingOwnership_beforeInsertingElsewhere() = sessionTest { h ->
+        h.streaming = FakeStreaming(committed = null)
+        h.recordFor(1_000, locked = true)
+        (h.streaming as FakeStreaming).events.emit(StreamEvent.Partial("hel"))
+        runCurrent()
+        h.session.onFocusChanged(h.otherFocus)
+        h.ic.setText("B")
+        h.session.onStop()
+        advanceUntilIdle()
+        assertTrue(h.events.contains(SessionEvent.CommitBlockedByFocus("hello")))
+        assertEquals("B", h.ic.getText())
+
+        h.session.onPendingCommitInsert()
+
+        assertEquals("Bhello", h.ic.getText())
+        // Undo uses B's real insertion offset, not the stale offset of A's partial.
+        assertTrue(h.committer.undoLastInsertion(h.otherFocus))
+        assertEquals("B", h.ic.getText())
+    }
+
+    @Test
+    fun emptyTranscript_clearsStreamedPartial() = sessionTest { h ->
+        h.streaming = FakeStreaming(committed = null)
+        // Dropped PCM disables the stream fallback, so the take really ends empty.
+        h.recorder.droppedChunks = 1
+        h.transcript = { Result.success("  ") }
+        h.recordFor(1_000, locked = true)
+        (h.streaming as FakeStreaming).events.emit(StreamEvent.Partial("hel"))
+        runCurrent()
+        assertEquals("prefix hel", h.ic.getText())
+
+        h.session.onStop()
+        advanceUntilIdle()
+
+        assertTrue(h.events.contains(SessionEvent.TranscriptionEmpty))
+        assertEquals(SessionState.Idle, h.session.state.value)
+        assertEquals("prefix ", h.ic.getText())
+    }
+
+    @Test
+    fun partialsWithoutSelectionSnapshot_replaceInsteadOfAppending() = sessionTest { h ->
+        h.ic.extractedTextAvailable = false
+        h.streaming = FakeStreaming(committed = null)
+        h.recordFor(1_000, locked = true)
+        val streaming = h.streaming as FakeStreaming
+        streaming.events.emit(StreamEvent.Partial("he"))
+        runCurrent()
+        advanceTimeBy(DictationSession.PARTIAL_THROTTLE_MS + 1)
+        streaming.events.emit(StreamEvent.Partial("hell"))
+        runCurrent()
+        assertEquals("prefix hell", h.ic.getText())
+
+        h.session.onStop()
+        advanceUntilIdle()
+
+        assertEquals("prefix hello", h.ic.getText())
+    }
+
+    @Test
+    fun contextPrompt_isCapturedAtStop_beforeFocusMoves() = sessionTest { h ->
+        h.useContext = true
+        h.recordFor(1_000, locked = true)
+
+        h.session.onStop()
+        // Focus moves to another field before the stop coroutine runs.
+        h.session.onFocusChanged(h.otherFocus)
+        h.ic.setText("secret from field B ")
+        advanceUntilIdle()
+
+        assertEquals(listOf("prefix "), h.requests.map { it.contextPrompt })
+    }
+
+    @Test
+    fun contextPrompt_isOmittedWhenFocusAlreadyMoved() = sessionTest { h ->
+        h.useContext = true
+        h.recordFor(1_000, locked = true)
+        h.session.onFocusChanged(h.otherFocus)
+        h.ic.setText("secret from field B ")
+
+        h.session.onStop()
+        advanceUntilIdle()
+
+        assertEquals(listOf<String?>(null), h.requests.map { it.contextPrompt })
+    }
+
+    @Test
+    fun sendBlockedWhileRecorderStops_dispatchesNothing() = sessionTest { h ->
+        h.recordFor(1_000, locked = true)
+
+        h.session.onStop()
+        h.sendAllowed = false
+        advanceUntilIdle()
+
+        assertTrue(h.requests.isEmpty())
+        assertTrue(h.events.contains(SessionEvent.SendBlocked))
+        assertTrue(h.events.contains(SessionEvent.Discarded(1_000L)))
+        assertEquals(SessionState.Idle, h.session.state.value)
+        assertFalse(h.audioFile.exists())
+        assertEquals("prefix ", h.ic.getText())
+    }
+
+    @Test
+    fun pressStartWithPendingCommit_isBlocked_andKeepsTranscript() = sessionTest { h ->
+        h.recordFor(1_000, locked = true)
+        h.session.onFocusChanged(h.otherFocus)
+        h.session.onStop()
+        advanceUntilIdle()
+        assertEquals("hello", h.session.pendingCommit.value)
+        val plannerCalls = h.plannerCalls
+
+        h.session.onPressStart()
+        advanceUntilIdle()
+
+        assertEquals("hello", h.session.pendingCommit.value)
+        assertEquals(plannerCalls, h.plannerCalls)
+        assertEquals(SessionState.Idle, h.session.state.value)
+        assertTrue(h.events.contains(SessionEvent.Notice(com.github.shekohex.whisperpp.R.string.dictation_pending_commit_blocks_start)))
+    }
+
+    @Test
+    fun rejectedInsert_keepsTranscriptPending_insteadOfReportingSuccess() = sessionTest { h ->
+        h.ic.rejectInserts = true
+        h.recordFor(1_000)
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        assertTrue(h.events.contains(SessionEvent.CommitFailed("hello", SessionEvent.CommitFailed.Reason.INSERT_FAILED)))
+        assertFalse(h.events.any { it is SessionEvent.Committed || it is SessionEvent.Completed })
+        assertEquals("hello", h.session.pendingCommit.value)
+
+        h.ic.rejectInserts = false
+        h.session.onPendingCommitInsert()
+
+        assertEquals("prefix hello", h.ic.getText())
+        assertNull(h.session.pendingCommit.value)
+    }
+
+    // endregion
 }

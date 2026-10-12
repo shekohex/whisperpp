@@ -28,9 +28,12 @@ sealed interface SessionEvent {
     /** The transcript belongs to another field; UI offers Insert here / Copy / Discard (G-07). */
     data class CommitBlockedByFocus(val text: String) : SessionEvent
 
-    /** Nowhere to insert (no editor, or sending got blocked); UI falls back to the clipboard. */
+    /**
+     * Nowhere to insert (no editor, or sending got blocked); UI falls back to the clipboard.
+     * [Reason.INSERT_FAILED]: the editor rejected the insert; the text is held in the pending-commit bar.
+     */
     data class CommitFailed(val text: String, val reason: Reason) : SessionEvent {
-        enum class Reason { NO_FIELD, BLOCKED }
+        enum class Reason { NO_FIELD, BLOCKED, INSERT_FAILED }
     }
 
     data class EnhancementNotice(val text: String, val isError: Boolean) : SessionEvent

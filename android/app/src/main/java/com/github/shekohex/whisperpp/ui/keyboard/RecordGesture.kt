@@ -25,8 +25,9 @@ sealed interface RecordSession {
     data object Busy : RecordSession
 }
 
-fun KeyboardState.toRecordSession(): RecordSession = when (this) {
-    KeyboardState.Ready -> RecordSession.Idle
+/** [isStarting]: the session is still opening the recorder; the projected state is still [KeyboardState.Ready]. */
+fun KeyboardState.toRecordSession(isStarting: Boolean = false): RecordSession = when (this) {
+    KeyboardState.Ready -> if (isStarting) RecordSession.Starting else RecordSession.Idle
     KeyboardState.Recording -> RecordSession.Recording(locked = false, paused = false)
     KeyboardState.RecordingLocked -> RecordSession.Recording(locked = true, paused = false)
     KeyboardState.Paused -> RecordSession.Recording(locked = false, paused = true)

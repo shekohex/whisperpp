@@ -11,12 +11,6 @@ object GestureTokens {
     /** Upward travel that commits a lock (hands-free). */
     const val LOCK_DISTANCE_DP: Float = 80f
 
-    /**
-     * Axis-lock hysteresis: once past touch slop, one axis must lead the other by this ratio
-     * before the gesture commits to it, so a diagonal drag cannot flip direction.
-     */
-    const val HYSTERESIS: Float = 0.1f
-
     /** Holds released before this much recording are discarded (mirrors the session's minimum). */
     const val MIN_RECORDING_MS: Long = 500L
 
