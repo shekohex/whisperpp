@@ -535,7 +535,7 @@ Order within a phase is flexible unless a dependency is noted. Commit per WP wit
 - `network_security_config.xml`, remove unused permissions/receiver filter, exclude secrets from backup, clamp KDF params, provider editor HTTPS rule + LAN exception.
 - Accept: lint clean; `SettingsBackupCryptoTest` extended; README updated.
 
-### Phase 1 — Keyboard core (the user-facing bugs)
+### Phase 1 — Keyboard core (the user-facing bugs) — DONE (cf44ad8…254cd85, review fixes 2354df3)
 
 **WP-1.1 Audio core** — C-01..C-04, F-01, F-02, F-05, F-06, E-01, E-02, L-05, L-06
 - New `core/audio/AudioRecorder.kt` (suspend API, events, dedicated dispatcher, `Result` on start), `AmplitudeMeter.kt`, `AudioFocusController.kt`, `SoundCues.kt`. Delete `RecorderManager.kt` after migration.
@@ -562,7 +562,7 @@ Order within a phase is flexible unless a dependency is noted. Commit per WP wit
 - `ime/PermissionRequestActivity.kt` (translucent), inline "Allow microphone" chip, remove `MainActivity.checkPermissions()`, `requiredPermissions = RECORD_AUDIO`.
 - Accept: fresh install → first press shows rationale chip → grant → recording starts without leaving the host app.
 
-### Phase 2 — Providers & pipeline
+### Phase 2 — Providers & pipeline — DONE (6995498…35db9b5)
 
 **WP-2.1 Provider interfaces + OpenAI-compatible impls** — I-02, G-01, G-04, G-08, G-09, G-10, L-04
 - `domain/providers/*`, `providers/openai/*`, `providers/realtime/*`; `WhisperTranscriber`/`SmartFixer` → thin adapters then deleted. Rename "SmartFix" → "Enhancement" in code and strings.
