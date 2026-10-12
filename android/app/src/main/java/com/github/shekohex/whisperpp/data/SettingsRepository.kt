@@ -65,6 +65,14 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         .map { prefs -> prefs[PreferenceKeys.TAP_TO_RECORD] ?: true }
         .distinctUntilChanged()
 
+    val commandModeEnabled: Flow<Boolean> = dataStore.data
+        .map { prefs -> prefs[PreferenceKeys.COMMAND_MODE_ENABLED] ?: false }
+        .distinctUntilChanged()
+
+    val showModeOnKeyboard: Flow<Boolean> = dataStore.data
+        .map { prefs -> prefs[PreferenceKeys.KEYBOARD_SHOW_MODE] ?: true }
+        .distinctUntilChanged()
+
     /** Transcript history (§4.8); see [PreferenceKeys.HISTORY_ENABLED]. */
     val historySettings: Flow<HistorySettings> = dataStore.data
         .map { prefs ->

@@ -15,6 +15,7 @@ import com.github.shekohex.whisperpp.domain.providers.Transcript
 import com.github.shekohex.whisperpp.domain.providers.TranscriptionProvider
 import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
 import com.github.shekohex.whisperpp.providers.ChineseScriptConverter
+import com.github.shekohex.whisperpp.providers.ModelClassifier
 import com.github.shekohex.whisperpp.providers.VERIFY_TIMEOUT_MS
 import com.github.shekohex.whisperpp.providers.apiKeyOrThrow
 import com.github.shekohex.whisperpp.providers.baseUrlOrThrow
@@ -45,7 +46,11 @@ class OpenAiCompatibleTranscription(
     private val postProcess: suspend (String, ScriptConversion) -> String = ChineseScriptConverter::convert,
 ) : TranscriptionProvider {
     override val id: String = provider.id
-    override val capabilities: ModelCapabilities = model.capabilities
+    // OpenAI's own transcription models stream out of the box; the flag only matters for turning it on elsewhere.
+    override val capabilities: ModelCapabilities = model.capabilities.let { declared ->
+        val streams = declared.stt && ModelClassifier.supportsRealtimeTranscription(model.id, provider.type)
+        if (streams) declared.copy(realtime = true) else declared
+    }
 
     override suspend fun transcribe(audio: File, req: TranscriptionRequest): Result<Transcript> = providerCall {
         val apiKey = provider.apiKeyOrThrow(credentials)

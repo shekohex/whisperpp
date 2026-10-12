@@ -4,7 +4,6 @@
     <string name="keyboard_context_pill_description">Language %1$s, mode %2$s</string>
     <string name="keyboard_language_pill_description">Language %1$s</string>
     <string name="keyboard_context_pill_action">change language or mode</string>
-    <string name="keyboard_context_pill_label" translatable="false">%1$s · %2$s</string>
     <string name="keyboard_language_mode_title">Language &amp; mode</string>
     <string name="keyboard_language_section">Dictation language</string>
     <string name="keyboard_command_exit">Exit command mode</string>

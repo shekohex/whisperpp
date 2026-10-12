@@ -58,6 +58,8 @@ class ImeController(
         c.undo.refresh()
 
         scope.launch { c.repository.tapToRecord.collect { c.ui.tapToRecord.value = it } }
+        scope.launch { c.repository.commandModeEnabled.collect { c.ui.commandModeEnabled.value = it } }
+        scope.launch { c.repository.showModeOnKeyboard.collect { c.ui.showModeOnKeyboard.value = it } }
         scope.launch(Dispatchers.IO) { c.recordingFiles.deleteStale() }
 
         scope.launch {

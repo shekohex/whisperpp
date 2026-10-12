@@ -30,6 +30,6 @@ class PcmChunkSink(capacity: Int = DEFAULT_CAPACITY) {
     }
 
     companion object {
-        const val DEFAULT_CAPACITY = 8
+        const val DEFAULT_CAPACITY = 2048
     }
 }

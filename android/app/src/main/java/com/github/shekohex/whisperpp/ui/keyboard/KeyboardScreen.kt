@@ -42,6 +42,9 @@ fun KeyboardScreen(
     recordingTimeMs: () -> Long,
     showLongPressHint: Boolean,
     tapToRecord: Boolean = true,
+    /** Settings: the command-mode button and the mode icon are optional so the bar stays minimal. */
+    commandModeEnabled: Boolean = false,
+    showModeOnKeyboard: Boolean = true,
     /** The session is opening the recorder: the button swallows presses (no second start / haptic). */
     isStarting: Boolean = false,
     undoAvailable: Boolean = false,
@@ -319,6 +322,8 @@ fun KeyboardScreen(
                 showLongPressHint = showLongPressHint,
                 tapToRecord = tapToRecord,
                 isStarting = isStarting,
+                commandButtonVisible = commandModeEnabled,
+                showModeIcon = showModeOnKeyboard,
             ),
             actions = KeyboardBarActions(
                 onRecordIntent = onRecordIntent,

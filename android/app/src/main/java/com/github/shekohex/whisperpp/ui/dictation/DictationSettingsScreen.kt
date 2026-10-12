@@ -14,6 +14,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
@@ -41,9 +43,11 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SEND_AFTER_INSERT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_SWITCH_BACK
 import com.github.shekohex.whisperpp.data.PreferenceKeys.AUTO_TRANSCRIBE_ON_PAUSE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.CANCEL_CONFIRMATION
+import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_MODE_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.FILTER_FILLERS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.FORMAT_PARAGRAPHS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.HAPTIC_FEEDBACK_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.KEYBOARD_SHOW_MODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.LANGUAGE_CODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING
 import com.github.shekohex.whisperpp.data.PreferenceKeys.REALTIME_STT_ENABLED
@@ -101,6 +105,10 @@ fun DictationSettingsScreen(
                 AUTO_TRANSCRIBE_ON_PAUSE,
                 true,
             )
+        }
+        SectionCard(title = stringResource(R.string.dictation_group_keyboard)) {
+            Toggle(Icons.Default.AutoFixHigh, stringResource(R.string.settings_command_mode_button), COMMAND_MODE_ENABLED, false)
+            Toggle(Icons.Default.Category, stringResource(R.string.settings_show_mode_on_keyboard), KEYBOARD_SHOW_MODE, true)
         }
         SectionCard(title = stringResource(R.string.dictation_group_extras)) {
             Toggle(Icons.Default.SpaceBar, stringResource(R.string.dictation_trailing_space), ADD_TRAILING_SPACE, false)

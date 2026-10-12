@@ -33,7 +33,7 @@ class KeyboardBarTouchTargetTest {
         composeRule.setContent {
             MaterialTheme {
                 Box(modifier = Modifier.requiredWidth(360.dp)) {
-                    KeyboardBar(model = previewBarModel(modeState = modeState), actions = previewBarActions())
+                    KeyboardBar(model = previewBarModel(modeState = modeState, commandButtonVisible = true), actions = previewBarActions())
                 }
             }
         }

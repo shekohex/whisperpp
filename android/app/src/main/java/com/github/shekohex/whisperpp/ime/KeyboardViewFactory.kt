@@ -65,6 +65,8 @@ class KeyboardViewFactory(private val deps: Deps) {
             recordingTimeMs = { ui.recordingTimeMs.longValue },
             showLongPressHint = ui.showLongPressHint.value,
             tapToRecord = ui.tapToRecord.value,
+            commandModeEnabled = ui.commandModeEnabled.value,
+            showModeOnKeyboard = ui.showModeOnKeyboard.value,
             isStarting = ui.sessionStarting.value,
             undoAvailable = undo.undoAvailable.value,
             undoQuickActionVisible = undo.quickActionVisible.value,

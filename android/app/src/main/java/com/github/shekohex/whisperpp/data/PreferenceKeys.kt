@@ -54,6 +54,10 @@ object PreferenceKeys {
     val SOUND_EFFECTS_ENABLED = booleanPreferencesKey("sound-effects-enabled")
     val PAUSE_MEDIA_WHILE_RECORDING = booleanPreferencesKey("pause-media-while-recording")
     val TAP_TO_RECORD = booleanPreferencesKey("tap-to-record")
+    /** Show the command-mode button on the keyboard bar. Default false: the bar stays minimal. */
+    val COMMAND_MODE_ENABLED = booleanPreferencesKey("command-mode-enabled")
+    /** Show the active mode's icon next to the language on the keyboard bar. Default true. */
+    val KEYBOARD_SHOW_MODE = booleanPreferencesKey("keyboard-show-mode")
     val SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN = booleanPreferencesKey("secure-field-explanation-dont-show-again")
     val VERBOSE_NETWORK_LOGS_ENABLED = booleanPreferencesKey("verbose-network-logs-enabled")
     val DISCLOSURE_SHOWN_DICTATION_AUDIO = booleanPreferencesKey("disclosure-shown-dictation-audio")
@@ -142,6 +146,8 @@ object PreferenceKeys {
         SOUND_EFFECTS_ENABLED,
         PAUSE_MEDIA_WHILE_RECORDING,
         TAP_TO_RECORD,
+        COMMAND_MODE_ENABLED,
+        KEYBOARD_SHOW_MODE,
         SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN,
         VERBOSE_NETWORK_LOGS_ENABLED,
         DISCLOSURE_SHOWN_DICTATION_AUDIO,

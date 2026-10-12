@@ -164,6 +164,9 @@
     <string name="recording_interrupted">Recording paused: audio interrupted</string>
     <string name="settings_pause_media_while_recording">Pause media while recording</string>
     <string name="settings_tap_to_record">Tap to record (hands-free)</string>
+    <string name="dictation_group_keyboard">Keyboard</string>
+    <string name="settings_command_mode_button">Show command mode button</string>
+    <string name="settings_show_mode_on_keyboard">Show mode icon on the keyboard</string>
     <string name="settings_realtime_stt_enabled">Use realtime transcription when available</string>
 
     <!-- Dictation session (WP-1.2) -->

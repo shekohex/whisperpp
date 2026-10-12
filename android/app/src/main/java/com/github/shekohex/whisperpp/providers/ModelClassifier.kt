@@ -74,6 +74,10 @@ object ModelClassifier {
         return name == "whisper-1" || name.contains("-transcribe")
     }
 
+    /** [isRealtimeTranscription] for a configured model id, so models added by hand stream without a flag. */
+    fun supportsRealtimeTranscription(id: String, providerType: ProviderType): Boolean =
+        isRealtimeTranscription(id.trim().substringAfterLast('/').lowercase(), providerType)
+
     private fun isReasoning(name: String): Boolean {
         if (REASONING_PREFIXES.any { name.startsWith(it) }) return true
         if (REASONING_MARKERS.any { name.contains(it) }) return true

@@ -168,6 +168,9 @@
     <string name="recording_interrupted">توقف التسجيل مؤقتًا: انقطع الصوت</string>
     <string name="settings_pause_media_while_recording">إيقاف الوسائط مؤقتًا أثناء التسجيل</string>
     <string name="settings_tap_to_record">انقر للتسجيل (دون استخدام اليدين)</string>
+    <string name="dictation_group_keyboard">لوحة المفاتيح</string>
+    <string name="settings_command_mode_button">إظهار زر وضع الأوامر</string>
+    <string name="settings_show_mode_on_keyboard">إظهار أيقونة الوضع على لوحة المفاتيح</string>
     <string name="settings_realtime_stt_enabled">استخدام النسخ الفوري عند توفره</string>
 
     <!-- Dictation session (WP-1.2) -->

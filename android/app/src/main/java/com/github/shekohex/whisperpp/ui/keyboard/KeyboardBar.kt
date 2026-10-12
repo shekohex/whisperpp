@@ -9,7 +9,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,7 +46,6 @@ const val KEYBOARD_SETTINGS_BUTTON_TAG = "keyboard_settings_button"
 const val KEYBOARD_COMMAND_BUTTON_TAG = "keyboard_command_button"
 
 /** Bars at least this wide show the mode name in the pill as well as the language. */
-private val ModeNameMinBarWidth = 420.dp
 private val StartClusterMinWidth = 96.dp
 
 /** Everything the bar renders; [KeyboardScreen] owns the state, the bar only draws and forwards. */
@@ -66,6 +64,8 @@ internal class KeyboardBarModel(
     val showLongPressHint: Boolean,
     val tapToRecord: Boolean,
     val isStarting: Boolean,
+    val commandButtonVisible: Boolean = false,
+    val showModeIcon: Boolean = true,
 )
 
 internal class KeyboardBarActions(
@@ -100,15 +100,14 @@ internal fun KeyboardBar(model: KeyboardBarModel, actions: KeyboardBarActions, m
         tonalElevation = 8.dp,
         shadowElevation = 4.dp,
     ) {
-        BoxWithConstraints {
-            val showModeName = maxWidth >= ModeNameMinBarWidth
+        Box {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                StartCluster(model, actions, showModeName)
+                StartCluster(model, actions)
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     CenterCluster(model, actions)
                 }
@@ -119,7 +118,7 @@ internal fun KeyboardBar(model: KeyboardBarModel, actions: KeyboardBarActions, m
 }
 
 @Composable
-private fun StartCluster(model: KeyboardBarModel, actions: KeyboardBarActions, showModeName: Boolean) {
+private fun StartCluster(model: KeyboardBarModel, actions: KeyboardBarActions) {
     Box(modifier = Modifier.widthIn(min = StartClusterMinWidth), contentAlignment = Alignment.CenterStart) {
         AnimatedContent(
             targetState = model.state,
@@ -153,8 +152,7 @@ private fun StartCluster(model: KeyboardBarModel, actions: KeyboardBarActions, s
                         }
                         KeyboardContextPill(
                             languageLabel = model.languageLabel,
-                            modeState = model.modeState,
-                            showModeName = showModeName,
+                            modeState = model.modeState.takeIf { model.showModeIcon },
                             onClick = actions.onOpenContextSheet,
                         )
                     }
@@ -221,16 +219,18 @@ private fun EndCluster(model: KeyboardBarModel, actions: KeyboardBarActions) {
         }
         AnimatedVisibility(visible = state == KeyboardState.Ready) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                FilledTonalIconButton(
-                    onClick = actions.onCommandToggle,
-                    modifier = Modifier.testTag(KEYBOARD_COMMAND_BUTTON_TAG),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoFixHigh,
-                        contentDescription = stringResource(
-                            if (model.commandModeActive) R.string.keyboard_command_exit else R.string.command_key_hint,
-                        ),
-                    )
+                if (model.commandButtonVisible || model.commandModeActive) {
+                    FilledTonalIconButton(
+                        onClick = actions.onCommandToggle,
+                        modifier = Modifier.testTag(KEYBOARD_COMMAND_BUTTON_TAG),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoFixHigh,
+                            contentDescription = stringResource(
+                                if (model.commandModeActive) R.string.keyboard_command_exit else R.string.command_key_hint,
+                            ),
+                        )
+                    }
                 }
                 BackspaceButton(actions.onDeleteAction)
             }
@@ -294,6 +294,7 @@ internal fun previewBarActions() = KeyboardBarActions(
 internal fun previewBarModel(
     state: KeyboardState = KeyboardState.Ready,
     modeState: KeyboardModeUiState? = null,
+    commandButtonVisible: Boolean = false,
 ) = KeyboardBarModel(
     state = state,
     languageLabel = "EN",
@@ -309,6 +310,7 @@ internal fun previewBarModel(
     showLongPressHint = false,
     tapToRecord = true,
     isStarting = false,
+    commandButtonVisible = commandButtonVisible,
 )
 
 @ThemePreviews

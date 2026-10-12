@@ -56,14 +56,13 @@ data class KeyboardLanguageOption(val code: String, val label: String)
 
 /**
  * Single "language · mode" pill on the keyboard bar (replaces the stacked 30 dp language label + mode
- * chip of WP-3.10b). 40 dp visually, 48 dp touch target; the mode name is shown only when [showModeName]
- * (wide bars), TalkBack always reads both.
+ * chip of WP-3.10b). 40 dp visually, 48 dp touch target; sighted users see the mode icon and
+ * language code only, TalkBack reads both names.
  */
 @Composable
 internal fun KeyboardContextPill(
     languageLabel: String,
     modeState: KeyboardModeUiState?,
-    showModeName: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -104,11 +103,7 @@ internal fun KeyboardContextPill(
                 contentDescription = null,
                 modifier = Modifier.size(18.dp),
             )
-            val text = if (active != null && showModeName) {
-                stringResource(R.string.keyboard_context_pill_label, languageLabel, active.name)
-            } else {
-                languageLabel
-            }
+            val text = languageLabel
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelLarge,
@@ -245,8 +240,8 @@ private fun KeyboardContextPillPreview() {
     )
     PreviewSurface {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(8.dp)) {
-            KeyboardContextPill(languageLabel = "EN", modeState = state, showModeName = true, onClick = {})
-            KeyboardContextPill(languageLabel = "AR", modeState = state, showModeName = false, onClick = {})
+            KeyboardContextPill(languageLabel = "EN", modeState = state, onClick = {})
+            KeyboardContextPill(languageLabel = "AR", modeState = state, onClick = {})
             KeyboardLanguageModeSheet(
                 languages = languages,
                 selectedLanguage = "en",

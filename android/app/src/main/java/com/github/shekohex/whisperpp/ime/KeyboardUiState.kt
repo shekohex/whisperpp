@@ -12,6 +12,8 @@ class KeyboardUiState {
     val recordingTimeMs = mutableLongStateOf(0L)
     val showLongPressHint = mutableStateOf(false)
     val tapToRecord = mutableStateOf(true)
+    val commandModeEnabled = mutableStateOf(false)
+    val showModeOnKeyboard = mutableStateOf(true)
     val sessionStarting = mutableStateOf(false)
     val pendingCommitText = mutableStateOf<String?>(null)
     val micPermissionMissing = mutableStateOf(false)
