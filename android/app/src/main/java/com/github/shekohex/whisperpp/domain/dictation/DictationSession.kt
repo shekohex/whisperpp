@@ -4,20 +4,14 @@ import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.core.audio.AudioFocusController
 import com.github.shekohex.whisperpp.core.audio.AudioRecorder
 import com.github.shekohex.whisperpp.core.audio.SoundCues
-import com.github.shekohex.whisperpp.dictation.DictationUndoEntry
 import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.domain.modes.OutputMode
-import com.github.shekohex.whisperpp.domain.providers.StreamEvent
-import com.github.shekohex.whisperpp.domain.providers.StreamingTranscriptionSession
-import com.github.shekohex.whisperpp.domain.providers.Transcript
 import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -61,47 +55,6 @@ class DictationSession(private val deps: Deps) {
         val history: HistoryRecorder? = null,
     )
 
-    private class Run(val id: Long, val focus: FocusKey) {
-        var plan: StartPlan? = null
-        var job: Job? = null
-        val auxJobs = mutableListOf<Job>()
-        var recorderLive = false
-        var streaming: StreamingTranscriptionSession? = null
-        var pcm: Channel<ByteArray>? = null
-        var pcmSender: Job? = null
-
-        // Set on the streaming dispatcher; read after joining [pcmSender].
-        @Volatile var streamBroken = false
-        var lastPartial: String? = null
-        var lastPartialAt: Long? = null
-        var composing = false
-        var contextPrompt: String? = null
-
-        /** [contextPrompt] plus the mode's extra sources (selected text, clipboard); enhancement only. */
-        var enhancementContext: String? = null
-
-        /** Output mode REPLACE_SELECTION: the selection when recording started. */
-        var replaceRange: DictationUndoEntry.SelectionSnapshot? = null
-        val options: DictationOptions
-            get() = plan?.options ?: DictationOptions()
-        var durationMs = 0L
-        var rawText: String? = null
-        var stoppedAt = 0L
-        var transcriptionLatencyMs = 0L
-        var enhancementProviderId: String? = null
-        var enhancementModelId: String? = null
-        var enhancementLatencyMs: Long? = null
-
-        /** Kept recording owned by this run until it is handed to history (or discarded in [finish]). */
-        var audioPath: String? = null
-    }
-
-    private sealed interface Outcome {
-        data class Text(val text: String) : Outcome
-        data object Empty : Outcome
-        data class Failed(val message: String) : Outcome
-    }
-
     private val _state = MutableStateFlow<SessionState>(SessionState.Idle)
     val state: StateFlow<SessionState> = _state.asStateFlow()
 
@@ -127,7 +80,11 @@ class DictationSession(private val deps: Deps) {
 
     private val windowVisible = MutableStateFlow(true)
     private var currentFocus: FocusKey? = null
-    private var run: Run? = null
+    private var run: DictationRun? = null
+
+    private val streamingPipeline = RealtimeStreaming(deps, _state, { currentFocus }, { run === it })
+    private val enhancement = EnhancementStep(deps, _state, { currentFocus }, { run === it }, ::emit)
+    private val completion = CompletionReporter(deps, { run === it }, ::emit)
 
     /** Id of the most recently started run; a [SessionEvent.Completed] with an older id is stale. */
     var latestRunId: Long = 0L
@@ -155,7 +112,7 @@ class DictationSession(private val deps: Deps) {
             emit(SessionEvent.Notice(R.string.dictation_pending_commit_blocks_start))
             return
         }
-        val r = Run(++latestRunId, focus)
+        val r = DictationRun(++latestRunId, focus)
         run = r
         _state.value = SessionState.Starting(focus, locked)
         r.job = deps.scope.launch { start(r) }
@@ -220,7 +177,7 @@ class DictationSession(private val deps: Deps) {
         } else {
             null
         }
-        r.enhancementContext = enhancementContext(r, plan.options)
+        r.enhancementContext = enhancement.context(r, plan.options)
         _state.value = SessionState.Transcribing(r.focus, plan.audioFile, r.lastPartial)
         r.job = deps.scope.launch { transcribeAndCommit(r, plan) }
     }
@@ -311,7 +268,7 @@ class DictationSession(private val deps: Deps) {
 
     // endregion
 
-    private suspend fun start(r: Run) {
+    private suspend fun start(r: DictationRun) {
         val decision = deps.planner(r.focus)
         if (run !== r) return
         val plan = when (decision) {
@@ -326,7 +283,7 @@ class DictationSession(private val deps: Deps) {
         }
         deps.focus.acquire()
         deps.cues(SoundCues.Cue.START)
-        val onPcm = plan.streaming?.let { startStreaming(r, it) }
+        val onPcm = plan.streaming?.let { streamingPipeline.start(r, it) }
         val result = deps.recorder.start(plan.audioFile, onPcm)
         if (run !== r) {
             // Cancelled while the recorder was opening; never keep a capture nobody owns.
@@ -336,63 +293,14 @@ class DictationSession(private val deps: Deps) {
         result.onFailure { error ->
             val kind = (error as? AudioRecorder.RecorderException)?.kind
             emit(SessionEvent.RecordingFailed(kind))
-            return finish(r, SessionState.Error(kind.toErrorKind(), recoverable = true))
+            return finish(r, SessionState.Error(kind.toSessionErrorKind(), recoverable = true))
         }
         r.recorderLive = true
         val locked = (_state.value as? SessionState.Starting)?.locked ?: false
         _state.value = SessionState.Recording(r.focus, deps.clock(), locked = locked, paused = false)
     }
 
-    private fun startStreaming(r: Run, streaming: StreamingTranscriptionSession): (ByteArray) -> Unit {
-        r.streaming = streaming
-        val channel = Channel<ByteArray>(Channel.UNLIMITED)
-        r.pcm = channel
-        r.auxJobs += deps.scope.launch {
-            streaming.events.collect { onStreamEvent(r, it) }
-        }
-        val sender = deps.scope.launch(deps.streamingDispatcher) {
-            try {
-                streaming.start()
-                for (chunk in channel) streaming.sendAudio(chunk)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // The WAV is complete regardless; the stop path falls back to batch.
-                r.streamBroken = true
-                channel.cancel()
-            }
-        }
-        r.pcmSender = sender
-        r.auxJobs += sender
-        return { chunk -> channel.trySend(chunk) }
-    }
-
-    private fun onStreamEvent(r: Run, event: StreamEvent) {
-        if (run !== r) return
-        when (event) {
-            is StreamEvent.Partial -> applyPartial(r, event.text)
-            is StreamEvent.Final -> r.lastPartial = event.text.takeIf { it.isNotBlank() } ?: r.lastPartial
-            else -> Unit
-        }
-    }
-
-    private fun applyPartial(r: Run, text: String) {
-        if (text.isBlank()) return
-        r.lastPartial = text
-        val s = _state.value
-        if (s !is SessionState.Recording && s !is SessionState.Transcribing) return
-        if (currentFocus != r.focus || !deps.sendAllowed()) return
-        // Partials would overwrite the selection to replace, or touch a field that gets nothing.
-        if (r.options.outputMode != OutputMode.INSERT) return
-        val now = deps.clock()
-        val last = r.lastPartialAt
-        if (last != null && now - last < deps.partialThrottleMs) return
-        r.lastPartialAt = now
-        if (deps.committer.setComposing(r.focus, text)) r.composing = true
-        if (s is SessionState.Transcribing) _state.value = s.copy(partial = text)
-    }
-
-    private suspend fun transcribeAndCommit(r: Run, plan: StartPlan) {
+    private suspend fun transcribeAndCommit(r: DictationRun, plan: StartPlan) {
         val stopped = deps.recorder.stop()
         r.recorderLive = false
         deps.focus.release()
@@ -409,52 +317,35 @@ class DictationSession(private val deps: Deps) {
             return cancelRun(recordDiscard = true)
         }
 
-        // F-05: dropped PCM means the stream diverged from the file; ignore every realtime result.
-        val streaming = r.streaming?.takeIf { recording.droppedChunks == 0 }
-        if (streaming == null) {
-            r.lastPartial = null
-            r.pcmSender?.cancel()
-            r.streaming?.let(::cancelStreaming)
-        }
+        val streaming = streamingPipeline.healthyStreamOrDiscard(r, recording.droppedChunks)
 
         // A healthy stream is primary; the WAV is kept so batch can always take over (§4.5.1).
         val outcome = try {
-            val streamed = streaming?.let { commitStream(r, it) }?.getOrNull()?.text?.takeIf { it.isNotBlank() }
+            val streamed = streaming?.let { streamingPipeline.committedText(r, it) }
             val result = if (streamed != null) {
-                Outcome.Text(streamed)
+                TranscriptionOutcome.Text(streamed)
             } else {
-                batchOutcome(transcribe(recording.file, plan.request.copy(contextPrompt = r.contextPrompt)))
+                val request = plan.request.copy(contextPrompt = r.contextPrompt)
+                TranscriptionOutcome.fromBatch(transcribe(recording.file, request))
             }
             r.transcriptionLatencyMs = (deps.clock() - r.stoppedAt).coerceAtLeast(0L)
-            if (result is Outcome.Text) retainAudio(r, recording.file)
+            if (result is TranscriptionOutcome.Text) completion.retainAudio(r, recording.file)
             result
         } finally {
             recording.file.delete()
         }
 
         when (outcome) {
-            is Outcome.Failed -> {
+            is TranscriptionOutcome.Failed -> {
                 emit(SessionEvent.TranscriptionFailed(outcome.message))
                 finish(r, SessionState.Error(SessionState.ErrorKind.TRANSCRIPTION_FAILED, recoverable = true))
             }
-            Outcome.Empty -> {
+            TranscriptionOutcome.Empty -> {
                 emit(SessionEvent.TranscriptionEmpty)
                 finish(r, SessionState.Idle)
             }
-            is Outcome.Text -> commit(r, outcome.text)
+            is TranscriptionOutcome.Text -> commit(r, outcome.text)
         }
-    }
-
-    private suspend fun retainAudio(r: Run, file: File) {
-        val history = deps.history ?: return
-        val path = try {
-            history.retainAudio(file)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            null
-        }
-        if (run === r) r.audioPath = path else path?.let(history::discardAudio)
     }
 
     private suspend fun transcribe(file: File, request: TranscriptionRequest): Result<String> {
@@ -467,31 +358,7 @@ class DictationSession(private val deps: Deps) {
         }
     }
 
-    /**
-     * Waits until every captured chunk was handed to the stream, then commits it. The stream's own
-     * final is the only accepted result; partials never stand in for it.
-     */
-    private suspend fun commitStream(r: Run, streaming: StreamingTranscriptionSession): Result<Transcript> {
-        r.pcmSender?.join()
-        if (r.streamBroken) return Result.failure(IllegalStateException("stream broken"))
-        return try {
-            streaming.commit()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    private fun batchOutcome(batch: Result<String>): Outcome {
-        val text = batch.getOrNull()
-        if (!text.isNullOrBlank()) return Outcome.Text(text)
-        return batch.exceptionOrNull()
-            ?.let { Outcome.Failed(it.message?.takeIf(String::isNotBlank) ?: it::class.java.simpleName) }
-            ?: Outcome.Empty
-    }
-
-    private suspend fun commit(r: Run, transcript: String) {
+    private suspend fun commit(r: DictationRun, transcript: String) {
         val processed = deps.postProcess(transcript, r.options)
         if (processed.isBlank()) {
             // Filtering removed everything: nothing to insert, enhance or send.
@@ -536,119 +403,20 @@ class DictationSession(private val deps: Deps) {
         r.rawText = raw
         emit(SessionEvent.Committed(raw))
 
-        val finalText = if (segment != null) enhance(r, raw, segment) else raw
+        val finalText = if (segment != null) enhancement.enhance(r, raw, segment) else raw
         if (run !== r) return
-        complete(r, raw, finalText)
+        completion.complete(r, raw, finalText)
         finish(r, SessionState.Idle)
-    }
-
-    /** Text reached the field: analytics event plus the history entry, which takes over the kept audio. */
-    private fun complete(r: Run, raw: String, finalText: String) {
-        val stats = CompletionStats(
-            providerId = r.plan?.request?.provider?.id.orEmpty(),
-            sttModelId = r.plan?.request?.modelId.orEmpty(),
-            languageCode = r.plan?.request?.languageCode?.takeIf { it.isNotBlank() && it != AUTO_LANGUAGE },
-            transcriptionLatencyMs = r.transcriptionLatencyMs,
-            enhancementProviderId = r.enhancementProviderId,
-            enhancementModelId = r.enhancementModelId,
-            enhancementLatencyMs = r.enhancementLatencyMs,
-        )
-        emit(
-            SessionEvent.Completed(
-                rawText = raw,
-                finalText = finalText,
-                durationMs = r.durationMs,
-                focus = r.focus,
-                runId = r.id,
-                stats = stats,
-                inserted = r.options.outputMode != OutputMode.CLIPBOARD,
-                autoSend = r.options.autoSend,
-            )
-        )
-        deps.history?.record(
-            HistoryRecorder.Entry(
-                rawText = raw,
-                enhancedText = finalText.takeIf { it != raw },
-                stats = stats,
-                appPackage = r.focus.packageName,
-                durationMs = r.durationMs,
-                audioPath = r.audioPath,
-            )
-        )
-        r.audioPath = null
     }
 
     /** Output mode CLIPBOARD: enhance without touching the field, then hand the text to the clipboard. */
-    private suspend fun deliverToClipboard(r: Run, raw: String) {
+    private suspend fun deliverToClipboard(r: DictationRun, raw: String) {
         r.rawText = raw
-        val finalText = when (val result = requestEnhancement(r, raw)) {
-            is DictationEnhancer.Result.Enhanced -> result.text
-            is DictationEnhancer.Result.Kept -> {
-                result.notice?.let { emit(SessionEvent.EnhancementNotice(it, result.isError)) }
-                raw
-            }
-            null -> raw
-        }
+        val finalText = enhancement.forClipboard(r, raw)
         if (run !== r) return
         emit(SessionEvent.CopyToClipboard(finalText))
-        complete(r, raw, finalText)
+        completion.complete(r, raw, finalText)
         finish(r, SessionState.Idle)
-    }
-
-    private suspend fun enhance(r: Run, raw: String, segment: TextCommitter.CapturedSegment): String {
-        val result = requestEnhancement(r, raw) ?: return raw
-        return when (result) {
-            is DictationEnhancer.Result.Kept -> {
-                result.notice?.let { emit(SessionEvent.EnhancementNotice(it, result.isError)) }
-                raw
-            }
-            is DictationEnhancer.Result.Enhanced -> {
-                if (deps.committer.replaceSegment(segment, result.text, currentFocus)) {
-                    emit(SessionEvent.EnhancementApplied)
-                    result.text
-                } else {
-                    emit(SessionEvent.EnhancementKeptRaw(result.label))
-                    raw
-                }
-            }
-        }
-    }
-
-    /** Null when enhancement is off, absent, or the run ended meanwhile. */
-    private suspend fun requestEnhancement(r: Run, raw: String): DictationEnhancer.Result? {
-        val enhancer = deps.enhancer ?: return null
-        val request = DictationEnhancer.Request(r.focus, raw, r.enhancementContext, r.options)
-        if (!enhancer.isEnabled(request)) return null
-        if (run !== r) return null
-        _state.value = SessionState.Enhancing(r.focus, raw)
-        val startedAt = deps.clock()
-        val result = try {
-            enhancer.enhance(request)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            DictationEnhancer.Result.Kept(e.message, isError = true)
-        }
-        if (run !== r) return null
-        if (result is DictationEnhancer.Result.Enhanced) {
-            r.enhancementLatencyMs = (deps.clock() - startedAt).coerceAtLeast(0L)
-            r.enhancementProviderId = result.providerId
-            r.enhancementModelId = result.modelId
-        }
-        return result
-    }
-
-    /** Enhancement context: text before the cursor plus the mode's extra sources. */
-    private fun enhancementContext(r: Run, options: DictationOptions): String? {
-        val sameField = currentFocus == r.focus
-        val selected = if (options.contextSelectedText && sameField) deps.committer.selectedText() else null
-        val clipboard = if (options.contextClipboard) deps.clipboardText()?.takeIf { it.isNotBlank() } else null
-        val parts = listOfNotNull(
-            r.contextPrompt,
-            selected?.let { "Selected text:\n$it" },
-            clipboard?.let { "Clipboard:\n$it" },
-        )
-        return if (parts.isEmpty()) null else parts.joinToString(separator = "\n\n")
     }
 
     private fun pause(s: SessionState.Recording) {
@@ -679,7 +447,7 @@ class DictationSession(private val deps: Deps) {
             // The raw text is already in the field; only the enhancement is abandoned.
             is SessionState.Enhancing -> {
                 if (r.options.outputMode == OutputMode.CLIPBOARD) emit(SessionEvent.CopyToClipboard(s.raw))
-                complete(r, s.raw, s.raw)
+                completion.complete(r, s.raw, s.raw)
             }
             is SessionState.Recording -> if (recordDiscard) emit(SessionEvent.Discarded(s.elapsedMs(deps.clock())))
             is SessionState.Transcribing,
@@ -691,7 +459,7 @@ class DictationSession(private val deps: Deps) {
     }
 
     /** The one terminal transition. Idempotent per run; late callbacks of [r] are ignored afterwards (G-06). */
-    private fun finish(r: Run, next: SessionState) {
+    private fun finish(r: DictationRun, next: SessionState) {
         if (run !== r) return
         run = null
         val wasStarting = _state.value is SessionState.Starting
@@ -706,7 +474,7 @@ class DictationSession(private val deps: Deps) {
             deps.recorder.cancel()
         }
         deps.focus.release()
-        r.streaming?.let(::cancelStreaming)
+        r.streaming?.let(streamingPipeline::cancel)
         // Every terminal path, Idle included; only the field that owns the partial is edited.
         if (r.composing) deps.committer.clearComposing(currentFocus)
         r.plan?.audioFile?.delete()
@@ -716,32 +484,13 @@ class DictationSession(private val deps: Deps) {
         if (next == SessionState.Cancelled) _state.value = SessionState.Idle
     }
 
-    private fun cancelStreaming(streaming: StreamingTranscriptionSession) {
-        deps.scope.launch {
-            try {
-                streaming.cancel()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // Closing is best effort.
-            }
-        }
-    }
-
     private fun emit(event: SessionEvent) {
         _events.tryEmit(event)
-    }
-
-    private fun AudioRecorder.ErrorKind?.toErrorKind(): SessionState.ErrorKind = when (this) {
-        AudioRecorder.ErrorKind.PERMISSION_DENIED -> SessionState.ErrorKind.PERMISSION_DENIED
-        AudioRecorder.ErrorKind.MIC_UNAVAILABLE -> SessionState.ErrorKind.MIC_UNAVAILABLE
-        else -> SessionState.ErrorKind.RECORDING_FAILED
     }
 
     companion object {
         const val MIN_RECORDING_MS = 500L
         const val PARTIAL_THROTTLE_MS = 150L
         private const val CONTEXT_CHARS = 500
-        private const val AUTO_LANGUAGE = "auto"
     }
 }
