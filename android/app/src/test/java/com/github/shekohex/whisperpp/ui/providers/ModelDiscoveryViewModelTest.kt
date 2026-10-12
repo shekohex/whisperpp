@@ -1,4 +1,4 @@
-package com.github.shekohex.whisperpp.ui.settings.providers
+package com.github.shekohex.whisperpp.ui.providers
 
 import com.github.shekohex.whisperpp.core.network.NetworkError
 import com.github.shekohex.whisperpp.data.ModelCapabilities
@@ -8,9 +8,9 @@ import com.github.shekohex.whisperpp.domain.providers.DiscoveredCache
 import com.github.shekohex.whisperpp.domain.providers.DiscoveredModel
 import com.github.shekohex.whisperpp.domain.providers.DiscoveryUnsupported
 import com.github.shekohex.whisperpp.domain.providers.ModelDiscovery
-import com.github.shekohex.whisperpp.ui.settings.providers.ModelDiscoveryViewModel.AddAction
-import com.github.shekohex.whisperpp.ui.settings.providers.ModelDiscoveryViewModel.Filter
-import com.github.shekohex.whisperpp.ui.settings.providers.ModelDiscoveryViewModel.UiState
+import com.github.shekohex.whisperpp.ui.providers.ModelDiscoveryViewModel.AddAction
+import com.github.shekohex.whisperpp.ui.providers.ModelDiscoveryViewModel.Filter
+import com.github.shekohex.whisperpp.ui.providers.ModelDiscoveryViewModel.UiState
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi

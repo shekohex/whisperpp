@@ -1,4 +1,4 @@
-package com.github.shekohex.whisperpp.ui.settings
+package com.github.shekohex.whisperpp.ui.settings.common
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,18 +35,9 @@ private data class SettingsHelpContent(
     val tips: List<String>,
 )
 
-private fun canonicalSettingsHelpRoute(route: String): String {
-    return when {
-        route.startsWith("app_mapping_detail?") -> SettingsScreen.AppMappings.route
-        route.startsWith("prompt_profile_edit?") -> SettingsScreen.PromptsProfiles.route
-        route.startsWith("provider_edit?") -> SettingsScreen.Backend.route
-        else -> route
-    }
-}
-
-private fun settingsHelpContent(route: String): SettingsHelpContent {
-    return when (canonicalSettingsHelpRoute(route)) {
-        SettingsScreen.Main.route -> SettingsHelpContent(
+private fun settingsHelpContent(topic: SettingsHelpTopic): SettingsHelpContent {
+    return when (topic) {
+        SettingsHelpTopic.HOME -> SettingsHelpContent(
             title = "Settings home",
             summary = "Start with the setup banner, then use the grouped cards to open a focused settings area.",
             tips = listOf(
@@ -56,7 +47,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
-        SettingsScreen.Backend.route -> SettingsHelpContent(
+        SettingsHelpTopic.PROVIDERS -> SettingsHelpContent(
             title = "Providers & models",
             summary = "Add providers here, then choose which ones Whisper++ should use elsewhere.",
             tips = listOf(
@@ -66,7 +57,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
-        SettingsScreen.ProviderSelections.route -> SettingsHelpContent(
+        SettingsHelpTopic.PROVIDER_SELECTIONS -> SettingsHelpContent(
             title = "Provider selections",
             summary = "Choose the default dictation, enhancement, and optional command models Whisper++ should use.",
             tips = listOf(
@@ -76,7 +67,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
-        SettingsScreen.LanguageDefaults.route -> SettingsHelpContent(
+        SettingsHelpTopic.LANGUAGE_DEFAULTS -> SettingsHelpContent(
             title = "Per-language defaults",
             summary = "Create language-specific STT and text defaults when one global setup is not enough.",
             tips = listOf(
@@ -86,7 +77,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
-        SettingsScreen.PromptsProfiles.route -> SettingsHelpContent(
+        SettingsHelpTopic.PROMPTS_PROFILES -> SettingsHelpContent(
             title = "Prompts & profiles",
             summary = "Shape how enhancement behaves globally, then reuse focused prompt profiles across apps.",
             tips = listOf(
@@ -96,7 +87,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
-        SettingsScreen.AppMappings.route -> SettingsHelpContent(
+        SettingsHelpTopic.APP_MAPPINGS -> SettingsHelpContent(
             title = "App mappings",
             summary = "Map individual apps to prompt profiles and optional provider overrides.",
             tips = listOf(
@@ -106,7 +97,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
-        SettingsScreen.Presets.route -> SettingsHelpContent(
+        SettingsHelpTopic.PRESETS -> SettingsHelpContent(
             title = "Transform presets",
             summary = "Set the default preset for post-dictation enhancement and command mode transforms.",
             tips = listOf(
@@ -116,7 +107,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
-        SettingsScreen.Keyboard.route -> SettingsHelpContent(
+        SettingsHelpTopic.DICTATION -> SettingsHelpContent(
             title = "Keyboard behavior",
             summary = "Tune how the IME behaves while recording, sending text, and giving feedback.",
             tips = listOf(
@@ -126,7 +117,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
-        SettingsScreen.PostProcessing.route -> SettingsHelpContent(
+        SettingsHelpTopic.ENHANCEMENT -> SettingsHelpContent(
             title = "Enhancement",
             summary = "Control enhancement behavior and the provider used to clean up dictation.",
             tips = listOf(
@@ -136,7 +127,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
-        SettingsScreen.PrivacySafety.route -> SettingsHelpContent(
+        SettingsHelpTopic.PRIVACY_SAFETY -> SettingsHelpContent(
             title = "Privacy & safety",
             summary = "Review what data is sent, manage blocked apps, and reset first-use disclosures.",
             tips = listOf(
@@ -146,7 +137,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
-        SettingsScreen.BackupRestore.route -> SettingsHelpContent(
+        SettingsHelpTopic.BACKUP_RESTORE -> SettingsHelpContent(
             title = "Backup & restore",
             summary = "Exports are password-encrypted only, and restores always go file pick to mode choice to password to preview before apply.",
             tips = listOf(
@@ -156,7 +147,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             ),
         )
 
-        SettingsScreen.Analytics.route -> SettingsHelpContent(
+        SettingsHelpTopic.ANALYTICS -> SettingsHelpContent(
             title = "Analytics dashboard",
             summary = "This screen stays local-only and compares your dictation wins against typing with a rolling seven-day view.",
             tips = listOf(
@@ -165,23 +156,14 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
                 "Reset clears the local dashboard in place on this device, including the visible seven-day trend scaffold.",
             ),
         )
-
-        else -> SettingsHelpContent(
-            title = "Settings help",
-            summary = "Use the grouped settings screens to change one focused area at a time.",
-            tips = listOf(
-                "Setup-critical issues always belong at the top of settings home.",
-                "Nested screens keep large configuration areas easier to scan.",
-            ),
-        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsHelpAction(route: String) {
-    var showSheet by rememberSaveable(route) { mutableStateOf(false) }
-    val help = settingsHelpContent(route)
+fun SettingsHelpAction(topic: SettingsHelpTopic) {
+    var showSheet by rememberSaveable(topic) { mutableStateOf(false) }
+    val help = settingsHelpContent(topic)
 
     if (showSheet) {
         ModalBottomSheet(onDismissRequest = { showSheet = false }) {

@@ -1,8 +1,9 @@
-package com.github.shekohex.whisperpp.ui.settings
+package com.github.shekohex.whisperpp.ui.analytics
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
@@ -11,13 +12,17 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
+import com.github.shekohex.whisperpp.analytics.analyticsDataStore
+import com.github.shekohex.whisperpp.data.BackupStatusStore
+import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.dataStore
+import com.github.shekohex.whisperpp.ui.home.HomeScreen
+import com.github.shekohex.whisperpp.ui.home.HomeViewModel
+import com.github.shekohex.whisperpp.ui.navigation.Destination
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -116,28 +121,33 @@ class AnalyticsDashboardUiTest {
 
     private fun setHomeContent() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val viewModel = HomeViewModel(
+            dataStore = context.dataStore,
+            settingsRepository = SettingsRepository(context.dataStore),
+            analyticsRepository = AnalyticsRepository(context.analyticsDataStore),
+            backupStatusStore = BackupStatusStore(),
+        )
         composeRule.setContent {
+            var openedInsights by remember { mutableStateOf(false) }
             MaterialTheme {
-                val navController = rememberNavController()
-                NavHost(navController = navController, startDestination = SettingsScreen.Main.route) {
-                    composable(SettingsScreen.Main.route) {
-                        SettingsHomeScreen(
-                            dataStore = context.dataStore,
-                            navController = navController,
-                        )
-                    }
-                    composable(SettingsScreen.Analytics.route) {
-                        androidx.compose.material3.Text("Analytics dashboard")
-                    }
+                if (openedInsights) {
+                    androidx.compose.material3.Text("Analytics dashboard")
+                } else {
+                    HomeScreen(
+                        onNavigate = { destination -> openedInsights = destination == Destination.Insights },
+                        viewModel = viewModel,
+                    )
                 }
             }
         }
-        composeRule.waitForIdle()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("analytics_home_card").assertIsDisplayed() }.isSuccess
+        }
     }
 
     private fun setAnalyticsContent(initialSnapshot: AnalyticsSnapshot) {
         composeRule.setContent {
-            var snapshot by mutableStateOf(initialSnapshot)
+            var snapshot by remember { mutableStateOf(initialSnapshot) }
             MaterialTheme {
                 AnalyticsDashboardScreen(
                     snapshot = snapshot,

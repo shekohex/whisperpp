@@ -8,57 +8,60 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.*
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
-import androidx.compose.runtime.*
 import com.github.shekohex.whisperpp.app.appContainer
-import com.github.shekohex.whisperpp.ui.components.SplashScreen
-import com.github.shekohex.whisperpp.ui.settings.SettingsScreen
-import com.github.shekohex.whisperpp.ui.settings.SettingsNavigation
+import com.github.shekohex.whisperpp.ui.navigation.AppNavHost
+import com.github.shekohex.whisperpp.ui.navigation.LaunchRequest
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
 import com.github.shekohex.whisperpp.updater.UpdateCheckWorker
-import kotlinx.coroutines.delay
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
+/** Legacy settings deep-link extra; values are resolved by `SettingsDeepLinks.resolve`. */
 const val EXTRA_SETTINGS_DESTINATION = "settings_destination"
 
 class MainActivity : ComponentActivity() {
 
+    /** Consumed once by the nav host; not restored after recreation so rotation doesn't re-navigate. */
+    private var launchRequest by mutableStateOf<LaunchRequest?>(null)
+
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        val container = appContainer
+        installSplashScreen().setKeepOnScreenCondition { !container.migrationsDone.value }
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         UpdateCheckWorker.schedule(this)
-        
+
+        if (savedInstanceState == null) {
+            launchRequest = LaunchRequest.from(
+                deepLink = intent?.getStringExtra(EXTRA_SETTINGS_DESTINATION),
+                showUpdate = intent?.getBooleanExtra(UpdateCheckWorker.EXTRA_SHOW_UPDATE, false) ?: false,
+            )
+        }
+
         setContent {
             WhisperToInputTheme {
-                var showSplash by remember { mutableStateOf(true) }
-                
-                LaunchedEffect(Unit) {
-                    delay(2500) // Show splash for 2.5 seconds
-                    showSplash = false
-                }
-                
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background,
                 ) {
-                    if (showSplash) {
-                        SplashScreen()
-                    } else {
-                        val showUpdate = intent?.getBooleanExtra(UpdateCheckWorker.EXTRA_SHOW_UPDATE, false) ?: false
-                        val settingsDestination = intent?.getStringExtra(EXTRA_SETTINGS_DESTINATION)
-                        val startRoute = resolveSettingsStartRoute(settingsDestination)
-                        SettingsNavigation(appContainer.settingsDataStore, showUpdate = showUpdate, startRoute = startRoute)
-                    }
+                    AppNavHost(
+                        widthSizeClass = calculateWindowSizeClass(this).widthSizeClass,
+                        launchRequest = launchRequest,
+                        onLaunchRequestHandled = { launchRequest = null },
+                    )
                 }
             }
         }
-    }
-
-    private fun resolveSettingsStartRoute(destination: String?): String {
-        return SettingsScreen.resolveStartRoute(destination)
     }
 }

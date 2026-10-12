@@ -1,6 +1,5 @@
-package com.github.shekohex.whisperpp.ui.settings
+package com.github.shekohex.whisperpp.ui.privacy
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,17 +18,13 @@ import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -37,12 +32,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,52 +43,37 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
-import androidx.navigation.NavHostController
-import com.github.shekohex.whisperpp.app.appContainer
-import com.github.shekohex.whisperpp.data.SettingsRepository
-import com.github.shekohex.whisperpp.data.validateSelections
-import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
-import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
-import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_COMMAND_TEXT
-import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_DICTATION_AUDIO
-import com.github.shekohex.whisperpp.data.PreferenceKeys.DISCLOSURE_SHOWN_ENHANCEMENT_TEXT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.util.Locale
+import com.github.shekohex.whisperpp.data.validateSelections
+import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
+import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
+import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
+import com.github.shekohex.whisperpp.ui.settings.common.loadLauncherApps
+import com.github.shekohex.whisperpp.ui.settings.common.mergeAndFilterApps
 
-private data class PrivacySafetyApp(
-    val packageName: String,
-    val label: String,
-)
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrivacySafetyScreen(
-    dataStore: DataStore<Preferences>,
-    navController: NavHostController,
-    sendPolicyRepository: SendPolicyRepository = LocalContext.current.appContainer.sendPolicyRepository,
-    settingsRepository: SettingsRepository = LocalContext.current.appContainer.settingsRepository,
+    onBack: () -> Unit,
+    viewModel: PrivacySafetyViewModel = defaultPrivacySafetyViewModel(),
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val rules by sendPolicyRepository.getAllRulesFlow().collectAsState(initial = emptyMap())
-    val providers by settingsRepository.providers.collectAsState(initial = emptyList())
-    val settingsState by dataStore.data.collectAsState(initial = emptyPreferences())
-    var searchQuery by remember { mutableStateOf("") }
-    var manualPackageName by remember { mutableStateOf("") }
+    val rules by viewModel.rules.collectAsStateWithLifecycle()
+    val providers by viewModel.providers.collectAsStateWithLifecycle()
+    val launcherApps by viewModel.launcherApps.collectAsStateWithLifecycle()
+    val prefs by viewModel.prefs.collectAsStateWithLifecycle()
+    val settingsState = prefs ?: emptyPreferences()
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var manualPackageName by rememberSaveable { mutableStateOf("") }
 
     val useContext = settingsState[USE_CONTEXT] ?: false
     val verboseNetworkLogsEnabled = settingsState[VERBOSE_NETWORK_LOGS_ENABLED] ?: false
@@ -153,63 +131,13 @@ fun PrivacySafetyScreen(
         )
     }
 
-    val launcherApps by produceState(initialValue = emptyList<PrivacySafetyApp>(), context) {
-        value = withContext(Dispatchers.IO) {
-            val packageManager = context.packageManager
-            val queryIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-            packageManager.queryIntentActivities(queryIntent, 0)
-                .mapNotNull { resolveInfo ->
-                    val packageName = resolveInfo.activityInfo?.packageName?.trim().orEmpty()
-                    if (packageName.isEmpty()) {
-                        null
-                    } else {
-                        val label = resolveInfo.loadLabel(packageManager)?.toString()?.trim().orEmpty()
-                        PrivacySafetyApp(
-                            packageName = packageName,
-                            label = label.ifEmpty { packageName },
-                        )
-                    }
-                }
-                .distinctBy { it.packageName }
-                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
-        }
-    }
-
     val visibleApps = remember(launcherApps, rules, searchQuery) {
-        val installed = launcherApps.associateBy { it.packageName }
-        val manualRules = rules.keys
-            .asSequence()
-            .filter { it.isNotBlank() && !installed.containsKey(it) }
-            .map { packageName -> PrivacySafetyApp(packageName = packageName, label = packageName) }
-            .toList()
-        val merged = (launcherApps + manualRules)
-            .distinctBy { it.packageName }
-            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.label })
-
-        val filter = searchQuery.trim().lowercase(Locale.US)
-        if (filter.isBlank()) {
-            merged
-        } else {
-            merged.filter {
-                it.label.lowercase(Locale.US).contains(filter) ||
-                    it.packageName.lowercase(Locale.US).contains(filter)
-            }
-        }
+        mergeAndFilterApps(launcherApps, rules.keys, searchQuery)
     }
 
     Scaffold(
         topBar = {
-            MediumTopAppBar(
-                title = { Text("Privacy & Safety") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    SettingsHelpAction(SettingsScreen.PrivacySafety.route)
-                },
-            )
+            DetailTopBar(title = "Privacy & Safety", onBack = onBack, helpTopic = SettingsHelpTopic.PRIVACY_SAFETY)
         },
         contentWindowInsets = WindowInsets.statusBars,
     ) { padding ->
@@ -271,26 +199,12 @@ fun PrivacySafetyScreen(
                         }
                         Switch(
                             checked = verboseNetworkLogsEnabled,
-                            onCheckedChange = { enabled ->
-                                scope.launch {
-                                    dataStore.edit { prefs ->
-                                        prefs[VERBOSE_NETWORK_LOGS_ENABLED] = enabled
-                                    }
-                                }
-                            },
+                            onCheckedChange = viewModel::setVerboseNetworkLogs,
                         )
                     }
 
                     OutlinedButton(
-                        onClick = {
-                            scope.launch {
-                                dataStore.edit { prefs ->
-                                    prefs[DISCLOSURE_SHOWN_DICTATION_AUDIO] = false
-                                    prefs[DISCLOSURE_SHOWN_ENHANCEMENT_TEXT] = false
-                                    prefs[DISCLOSURE_SHOWN_COMMAND_TEXT] = false
-                                }
-                            }
-                        },
+                        onClick = viewModel::resetDisclosures,
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("privacy_reset_disclosures_button"),
@@ -376,9 +290,7 @@ fun PrivacySafetyScreen(
                                     Switch(
                                         checked = !blocked,
                                         onCheckedChange = { allowExternal ->
-                                            scope.launch {
-                                                sendPolicyRepository.setBlocked(app.packageName, !allowExternal)
-                                            }
+                                            viewModel.setBlocked(app.packageName, !allowExternal)
                                         },
                                     )
                                 }
@@ -409,13 +321,8 @@ fun PrivacySafetyScreen(
                     )
                     Button(
                         onClick = {
-                            val normalizedPackage = manualPackageName.trim()
-                            if (normalizedPackage.isNotBlank()) {
-                                scope.launch {
-                                    sendPolicyRepository.setBlocked(normalizedPackage, true)
-                                    manualPackageName = ""
-                                }
-                            }
+                            viewModel.setBlocked(manualPackageName, true)
+                            manualPackageName = ""
                         },
                         enabled = manualPackageName.trim().isNotEmpty(),
                         modifier = Modifier
@@ -474,5 +381,18 @@ private fun DisclosureCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun defaultPrivacySafetyViewModel(): PrivacySafetyViewModel {
+    val appContext = LocalContext.current.applicationContext
+    return containerViewModel { container, _ ->
+        PrivacySafetyViewModel(
+            dataStore = container.settingsDataStore,
+            settingsRepository = container.settingsRepository,
+            sendPolicyRepository = container.sendPolicyRepository,
+            loadApps = { loadLauncherApps(appContext) },
+        )
     }
 }

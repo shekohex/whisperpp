@@ -1,4 +1,4 @@
-package com.github.shekohex.whisperpp.ui.settings
+package com.github.shekohex.whisperpp.ui.analytics
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.analytics.AnalyticsFormatter
 import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 
 private data class AnalyticsStat(
     val label: String,
@@ -63,19 +65,19 @@ fun AnalyticsDashboardScreen(
     actions: @Composable (() -> Unit)? = null,
 ) {
     var showResetDialog by remember { mutableStateOf(false) }
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val lifetimeStats = remember(snapshot, context) {
+    val resources = LocalResources.current
+    val lifetimeStats = remember(snapshot, resources) {
         listOf(
             AnalyticsStat(
-                label = context.getString(R.string.analytics_metric_minutes),
+                label = resources.getString(R.string.analytics_metric_minutes),
                 value = snapshot.totalRecordingDurationMinutes.toString(),
             ),
             AnalyticsStat(
-                label = context.getString(R.string.analytics_metric_wpm),
+                label = resources.getString(R.string.analytics_metric_wpm),
                 value = snapshot.averageWordsPerMinute.toString(),
             ),
             AnalyticsStat(
-                label = context.getString(R.string.analytics_metric_keystrokes),
+                label = resources.getString(R.string.analytics_metric_keystrokes),
                 value = snapshot.estimatedKeystrokesSaved.toString(),
             ),
         )
@@ -138,8 +140,8 @@ fun AnalyticsDashboardScreen(
                             label = stat.label,
                             value = stat.value,
                             valueTag = when (stat.label) {
-                                context.getString(R.string.analytics_metric_minutes) -> "analytics_metric_minutes_value"
-                                context.getString(R.string.analytics_metric_wpm) -> "analytics_metric_wpm_value"
+                                resources.getString(R.string.analytics_metric_minutes) -> "analytics_metric_minutes_value"
+                                resources.getString(R.string.analytics_metric_wpm) -> "analytics_metric_wpm_value"
                                 else -> "analytics_metric_keystrokes_value"
                             },
                         )

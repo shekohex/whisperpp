@@ -15,7 +15,7 @@ import com.github.shekohex.whisperpp.EXTRA_SETTINGS_DESTINATION
 import com.github.shekohex.whisperpp.MainActivity
 import com.github.shekohex.whisperpp.app.appContainer
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
-import com.github.shekohex.whisperpp.ui.settings.SettingsScreen
+import com.github.shekohex.whisperpp.ui.navigation.SettingsDeepLinks
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN
 import kotlinx.coroutines.launch
@@ -59,7 +59,7 @@ class BlockedExplanationActivity : ComponentActivity() {
                         onOpenSettings = {
                             startActivity(
                                 Intent(this@BlockedExplanationActivity, MainActivity::class.java)
-                                    .putExtra(EXTRA_SETTINGS_DESTINATION, SettingsScreen.PrivacySafety.route),
+                                    .putExtra(EXTRA_SETTINGS_DESTINATION, SettingsDeepLinks.PRIVACY_SAFETY),
                             )
                             finish()
                         },

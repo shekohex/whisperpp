@@ -1,5 +1,6 @@
-package com.github.shekohex.whisperpp.ui.settings
+package com.github.shekohex.whisperpp.ui.privacy
 
+import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -12,7 +13,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
-import androidx.navigation.compose.rememberNavController
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.data.ModelCapabilities
@@ -20,6 +21,7 @@ import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
+import com.github.shekohex.whisperpp.ui.settings.common.loadLauncherApps
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_PROVIDER_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
@@ -101,13 +103,18 @@ class PrivacySafetyScreenUiTest {
     }
 
     private fun setPrivacySafetyContent(dataStore: DataStore<Preferences>) {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val viewModel = PrivacySafetyViewModel(
+            dataStore = dataStore,
+            settingsRepository = SettingsRepository(dataStore),
+            sendPolicyRepository = SendPolicyRepository(dataStore),
+            loadApps = { loadLauncherApps(context) },
+        )
         composeRule.setContent {
             MaterialTheme {
                 PrivacySafetyScreen(
-                    dataStore = dataStore,
-                    navController = rememberNavController(),
-                    sendPolicyRepository = SendPolicyRepository(dataStore),
-                    settingsRepository = SettingsRepository(dataStore),
+                    onBack = {},
+                    viewModel = viewModel,
                 )
             }
         }

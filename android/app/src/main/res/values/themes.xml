@@ -106,6 +106,12 @@
 
     <style name="Theme.WhisperToInput" parent="Base.Theme.WhisperToInput" />
 
+    <!-- Launch theme: platform splash until startup migrations finish (H-02). -->
+    <style name="Theme.WhisperToInput.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.WhisperToInput</item>
+    </style>
+
     <style name="Theme.WhisperToInput.Translucent" parent="Theme.WhisperToInput">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>

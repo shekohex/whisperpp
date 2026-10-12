@@ -1,4 +1,4 @@
-package com.github.shekohex.whisperpp.ui.settings
+package com.github.shekohex.whisperpp.ui.analytics
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +19,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
@@ -44,19 +46,19 @@ fun AnalyticsDashboardCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val metrics = remember(snapshot, context) {
+    val resources = LocalResources.current
+    val metrics = remember(snapshot, resources) {
         listOf(
             HomeAnalyticsMetric(
-                title = context.getString(R.string.analytics_metric_minutes_short),
+                title = resources.getString(R.string.analytics_metric_minutes_short),
                 value = snapshot.totalRecordingDurationMinutes.toString(),
             ),
             HomeAnalyticsMetric(
-                title = context.getString(R.string.analytics_metric_wpm_short),
+                title = resources.getString(R.string.analytics_metric_wpm_short),
                 value = snapshot.averageWordsPerMinute.toString(),
             ),
             HomeAnalyticsMetric(
-                title = context.getString(R.string.analytics_metric_keystrokes_short),
+                title = resources.getString(R.string.analytics_metric_keystrokes_short),
                 value = formatCompactCount(snapshot.estimatedKeystrokesSaved),
             ),
         )
@@ -135,6 +137,7 @@ internal fun AnalyticsTrendPreview(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
+    val locale = LocalLocale.current.platformLocale
     val safeBuckets = if (buckets.isEmpty()) List(7) { AnalyticsDayBucket(date = java.time.LocalDate.now().minusDays((6 - it).toLong())) } else buckets.takeLast(7)
     val maxMinutes = safeBuckets.maxOfOrNull { it.estimatedTimeSavedMinutes } ?: 0
     val barWidth = if (compact) 10.dp else 18.dp
@@ -188,7 +191,7 @@ internal fun AnalyticsTrendPreview(
         ) {
             safeBuckets.forEach { bucket ->
                 Text(
-                    text = bucket.date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).take(1),
+                    text = bucket.date.dayOfWeek.getDisplayName(TextStyle.SHORT, locale).take(1),
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                     style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.bodySmall,

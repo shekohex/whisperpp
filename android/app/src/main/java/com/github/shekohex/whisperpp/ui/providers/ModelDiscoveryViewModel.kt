@@ -1,4 +1,4 @@
-package com.github.shekohex.whisperpp.ui.settings.providers
+package com.github.shekohex.whisperpp.ui.providers
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

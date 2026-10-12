@@ -8,6 +8,7 @@ import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.analyticsDataStore
 import com.github.shekohex.whisperpp.core.network.HttpClientFactory
 import com.github.shekohex.whisperpp.core.network.RedactingLoggingInterceptor
+import com.github.shekohex.whisperpp.data.BackupStatusStore
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.data.dictionary.DictionaryRepository
 import com.github.shekohex.whisperpp.dataStore
@@ -44,6 +45,7 @@ class AppContainer(context: Context) {
     val secretsStore: SecretsStore by lazy { SecretsStore(appContext) }
     val sendPolicyRepository: SendPolicyRepository by lazy { SendPolicyRepository(settingsDataStore) }
     val dictionaryRepository: DictionaryRepository by lazy { DictionaryRepository(settingsDataStore) }
+    val backupStatusStore: BackupStatusStore = BackupStatusStore()
 
     val httpLoggingInterceptor: RedactingLoggingInterceptor = RedactingLoggingInterceptor()
     val okHttpClient: OkHttpClient by lazy { HttpClientFactory.createOkHttpClient(httpLoggingInterceptor) }
@@ -56,8 +58,13 @@ class AppContainer(context: Context) {
     private val migrationsStarted = AtomicBoolean(false)
     private val migrationsDoneState = MutableStateFlow(false)
 
+    private val migrationsFailedState = MutableStateFlow(false)
+
     /** True once the startup DataStore migrations finished (successfully or not). */
     val migrationsDone: StateFlow<Boolean> = migrationsDoneState.asStateFlow()
+
+    /** True when the last migration run threw; the settings UI offers [retryMigrations]. */
+    val migrationsFailed: StateFlow<Boolean> = migrationsFailedState.asStateFlow()
 
     /** Runs the settings schema migrations once per process, off the main thread. */
     fun startMigrations() {
@@ -74,10 +81,20 @@ class AppContainer(context: Context) {
             } catch (e: Exception) {
                 // Leave the data as is and let the app run; a stuck spinner/keyboard is worse.
                 Log.e(TAG, "Startup migrations failed", e)
+                migrationsFailedState.value = true
             } finally {
                 migrationsDoneState.value = true
             }
         }
+    }
+
+    /** Re-runs the migrations after a failure; no-op while a run is in flight or after success. */
+    fun retryMigrations() {
+        if (!migrationsDoneState.value || !migrationsFailedState.value) return
+        migrationsFailedState.value = false
+        migrationsDoneState.value = false
+        migrationsStarted.set(false)
+        startMigrations()
     }
 
     /** Waits up to [timeoutMs] for [migrationsDone]; returns whether they finished. */

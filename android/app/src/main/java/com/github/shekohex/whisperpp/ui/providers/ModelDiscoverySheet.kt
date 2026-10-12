@@ -1,4 +1,4 @@
-package com.github.shekohex.whisperpp.ui.settings.providers
+package com.github.shekohex.whisperpp.ui.providers
 
 import android.text.format.DateUtils
 import androidx.annotation.StringRes
@@ -35,9 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.domain.providers.DiscoveredModel
-import com.github.shekohex.whisperpp.ui.settings.providers.ModelDiscoveryViewModel.AddAction
-import com.github.shekohex.whisperpp.ui.settings.providers.ModelDiscoveryViewModel.Filter
-import com.github.shekohex.whisperpp.ui.settings.providers.ModelDiscoveryViewModel.UiState
+import com.github.shekohex.whisperpp.ui.providers.ModelDiscoveryViewModel.AddAction
+import com.github.shekohex.whisperpp.ui.providers.ModelDiscoveryViewModel.Filter
+import com.github.shekohex.whisperpp.ui.providers.ModelDiscoveryViewModel.UiState
 
 /** Lists a provider's models with filters and add actions (§4.5.2). [existingIds] show as added. */
 @OptIn(ExperimentalMaterial3Api::class)

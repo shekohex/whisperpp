@@ -1,9 +1,9 @@
-package com.github.shekohex.whisperpp.ui.settings
+package com.github.shekohex.whisperpp.ui.backup
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -11,11 +11,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
+import com.github.shekohex.whisperpp.analytics.analyticsDataStore
+import com.github.shekohex.whisperpp.data.BackupStatusStore
 import com.github.shekohex.whisperpp.data.CategoryPreview
 import com.github.shekohex.whisperpp.data.ClearedSelection
 import com.github.shekohex.whisperpp.data.ImportAnalysis
@@ -33,8 +33,11 @@ import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_PROMPTS_PROFI
 import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS
 import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_SCHEMA_VERSION
 import com.github.shekohex.whisperpp.data.SettingsBackupPayload
+import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.data.SkippedImportItem
 import com.github.shekohex.whisperpp.dataStore
+import com.github.shekohex.whisperpp.ui.home.HomeScreen
+import com.github.shekohex.whisperpp.ui.home.HomeViewModel
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -99,22 +102,15 @@ class Phase06VerificationUiTest {
         repairCount: Int,
     ) {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val viewModel = HomeViewModel(
+            dataStore = context.dataStore,
+            settingsRepository = SettingsRepository(context.dataStore),
+            analyticsRepository = AnalyticsRepository(context.analyticsDataStore),
+            backupStatusStore = BackupStatusStore().apply { update(backupStatus, repairCount) },
+        )
         composeRule.setContent {
             MaterialTheme {
-                val navController = rememberNavController()
-                LaunchedEffect(navController, backupStatus, repairCount) {
-                    val homeEntry = navController.getBackStackEntry(SettingsScreen.Main.route)
-                    homeEntry.savedStateHandle[BACKUP_RESTORE_HOME_STATUS_KEY] = backupStatus
-                    homeEntry.savedStateHandle[BACKUP_RESTORE_REPAIR_COUNT_KEY] = repairCount
-                }
-                NavHost(navController = navController, startDestination = SettingsScreen.Main.route) {
-                    composable(SettingsScreen.Main.route) {
-                        SettingsHomeScreen(
-                            dataStore = context.dataStore,
-                            navController = navController,
-                        )
-                    }
-                }
+                HomeScreen(onNavigate = {}, viewModel = viewModel)
             }
         }
         composeRule.waitUntil(timeoutMillis = 5_000) {
@@ -126,7 +122,7 @@ class Phase06VerificationUiTest {
 
     private fun setImportPreviewContent(selectedMergeCategories: Set<String>) {
         composeRule.setContent {
-            var selectedCategories by mutableStateOf(selectedMergeCategories)
+            var selectedCategories by remember { mutableStateOf(selectedMergeCategories) }
             MaterialTheme {
                 ImportPreviewCard(
                     analysis = importAnalysisFixture(),
