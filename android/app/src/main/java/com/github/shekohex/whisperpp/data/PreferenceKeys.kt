@@ -75,6 +75,9 @@ object PreferenceKeys {
     val PROVIDER_SELECTIONS_V2_MIGRATION_DONE = booleanPreferencesKey("provider_selections_v2_migration_done")
     val PROMPTS_PROFILES_SCHEMA_V1_MIGRATION_DONE = booleanPreferencesKey("prompts_profiles_schema_v1_migration_done")
 
+    /** Per-provider last model listing (WP-2.6): JSON map providerId → DiscoveredCache. Not backed up. */
+    val MODEL_DISCOVERY_CACHE = stringPreferencesKey("model_discovery_cache_json")
+
     val SETTINGS: List<PreferenceKey<*>> = listOf(
         SPEECH_TO_TEXT_BACKEND,
         ACTIVE_STT_PROVIDER_ID,
@@ -128,6 +131,7 @@ object PreferenceKeys {
         PROVIDER_SCHEMA_V3_MIGRATION_DONE,
         PROVIDER_SELECTIONS_V2_MIGRATION_DONE,
         PROMPTS_PROFILES_SCHEMA_V1_MIGRATION_DONE,
+        MODEL_DISCOVERY_CACHE,
     )
 
     // Analytics DataStore ("analytics")

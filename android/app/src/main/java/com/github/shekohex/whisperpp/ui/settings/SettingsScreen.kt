@@ -18,12 +18,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.datastore.preferences.core.Preferences as PreferencesCore
 import android.Manifest
@@ -49,8 +53,12 @@ import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.core.network.NetworkError
 import com.github.shekohex.whisperpp.core.network.isLocalNetworkHost
 import com.github.shekohex.whisperpp.domain.providers.Credentials
+import com.github.shekohex.whisperpp.domain.providers.DiscoveredModel
+import com.github.shekohex.whisperpp.domain.providers.DiscoveryUnsupported
 import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
 import com.github.shekohex.whisperpp.domain.providers.toProviderUserMessage
+import com.github.shekohex.whisperpp.ui.settings.providers.ModelDiscoverySheet
+import com.github.shekohex.whisperpp.ui.settings.providers.ModelDiscoveryViewModel
 import com.github.shekohex.whisperpp.data.*
 import com.github.shekohex.whisperpp.updater.*
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
@@ -77,23 +85,14 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.UPDATE_CHANNEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import com.github.shekohex.whisperpp.data.PreferenceKeys.REALTIME_STT_ENABLED
 import kotlinx.coroutines.withContext
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.asRequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.TimeUnit
-import org.json.JSONArray
-import org.json.JSONObject
 
 sealed class SettingsScreen(val route: String) {
     companion object {
@@ -1919,13 +1918,13 @@ fun ProviderSelectionsScreen(dataStore: DataStore<Preferences>, navController: N
                             }
                         }
                     }
+                }
                 SettingsToggle(
                     icon = Icons.Default.GraphicEq,
                     title = stringResource(R.string.settings_realtime_stt_enabled),
                     checked = settingsState?.get(REALTIME_STT_ENABLED) ?: true,
                     onCheckedChange = { scope.launch { dataStore.edit { s -> s[REALTIME_STT_ENABLED] = it } } }
                 )
-                }
             }
 
             SettingsGroup(title = "Enhancement (Text)") {
@@ -2448,13 +2447,6 @@ fun ProviderEditScreen(
 
     val providerFactory = context.appContainer.providerFactory
     val testOkText = stringResource(R.string.provider_test_ok)
-    val httpClient = remember(context) {
-        context.appContainer.okHttpClient.newBuilder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .build()
-    }
 
     val existingProviderId = providerId?.trim().orEmpty().takeIf { it.isNotEmpty() }
     val isEditingExisting = existingProviderId != null
@@ -2462,6 +2454,23 @@ fun ProviderEditScreen(
     val effectiveProviderId = remember(existingProviderId, cloneFromId) {
         existingProviderId ?: UUID.randomUUID().toString()
     }
+    val discoveryCacheFlow = remember(effectiveProviderId) { repository.discoveredModels(effectiveProviderId) }
+    val discoveryCache by discoveryCacheFlow.collectAsState(initial = null)
+    val discoveryViewModel: ModelDiscoveryViewModel = viewModel(
+        key = "model-discovery-$effectiveProviderId",
+        factory = remember(effectiveProviderId) {
+            val appContext = context.applicationContext
+            viewModelFactory {
+                initializer {
+                    ModelDiscoveryViewModel(
+                        loadCache = { repository.discoveredModels(effectiveProviderId).first() },
+                        saveCache = { repository.saveDiscovered(effectiveProviderId, it.models, it.fetchedAtMillis) },
+                        errorMessage = { discoveryErrorMessage(appContext, it) },
+                    )
+                }
+            }
+        },
+    )
     
     // State
     var name by remember { mutableStateOf("") }
@@ -2491,8 +2500,8 @@ fun ProviderEditScreen(
     var thinkingLevel by remember { mutableStateOf("medium") }
 
     var isTestRunning by remember { mutableStateOf(false) }
-    var isImportRunning by remember { mutableStateOf(false) }
-    var lastImportSummary by remember { mutableStateOf<String?>(null) }
+    var showDiscoverySheet by remember { mutableStateOf(false) }
+    var lastAddedModelCount by remember { mutableStateOf<Int?>(null) }
     var showRawResponseDialog by remember { mutableStateOf(false) }
     var rawResponseTitle by remember { mutableStateOf("") }
     var rawResponseStatus by remember { mutableStateOf<Int?>(null) }
@@ -2508,7 +2517,7 @@ fun ProviderEditScreen(
     var sttAudioUri by remember { mutableStateOf<Uri?>(null) }
     var pendingSttTestAfterPick by remember { mutableStateOf(false) }
 
-    val isAnyActionRunning = isTestRunning || isImportRunning
+    val isAnyActionRunning = isTestRunning
     
     // Type Dropdown State
     var typeExpanded by remember { mutableStateOf(false) }
@@ -2778,104 +2787,42 @@ fun ProviderEditScreen(
         }
     }
 
-    suspend fun importModels() {
-        val endpointUrl = buildModelsListUrl(baseUrl) ?: run {
-            showRawResult("Import models", null, "", "Invalid base URL")
-            return
-        }
+    fun discoveryFromForm() = providerFactory.discovery(providerFromForm(), Credentials(resolveApiKeyForTests()))
 
-        val requestBuilder = Request.Builder().url(endpointUrl).get()
-        if (authMode == ProviderAuthMode.API_KEY) {
-            val apiKey = resolveApiKeyForTests()
-            if (apiKey.isBlank()) {
-                showRawResult("Import models", null, "", "API key missing")
-                return
-            }
-            if (type == ProviderType.GEMINI) {
-                requestBuilder.addHeader("x-goog-api-key", apiKey)
-            } else {
-                requestBuilder.addHeader("Authorization", "Bearer $apiKey")
-            }
-        }
-
-        val request = requestBuilder.build()
-        val (status, body, error) = withContext(Dispatchers.IO) {
-            try {
-                httpClient.newCall(request).execute().use { response ->
-                    Triple(response.code, response.body?.string().orEmpty(), null)
-                }
-            } catch (e: Exception) {
-                Triple(null, "", e.message)
-            }
-        }
-
-        if (status == null) {
-            showRawResult("Import models", null, body, error ?: "Request failed")
-            return
-        }
-        if (status / 100 != 2) {
-            showRawResult("Import models", status, body, error)
-            return
-        }
-
-        val json = runCatching { JSONObject(body) }.getOrNull()
-        if (json == null) {
-            showRawResult("Import models", status, body, "Invalid JSON response")
-            return
-        }
-
-        val importedModels = if (type == ProviderType.GEMINI) {
-            val modelsArray = json.optJSONArray("models")
-            if (modelsArray == null) {
-                emptyList()
-            } else {
-                (0 until modelsArray.length()).mapNotNull { i ->
-                    val obj = modelsArray.optJSONObject(i) ?: return@mapNotNull null
-                    val rawName = obj.optString("name").trim()
-                    val id = rawName.removePrefix("models/").trimStart('/').trim()
-                    if (id.isBlank()) {
-                        return@mapNotNull null
-                    }
-                    val displayName = obj.optString("displayName").trim()
-                    ModelConfig(
-                        id = id,
-                        name = displayName.ifBlank { id },
-                        capabilities = ModelCapabilities.TEXT,
-                    )
-                }
-            }
-        } else {
-            val dataArray = json.optJSONArray("data")
-            if (dataArray == null) {
-                emptyList()
-            } else {
-                (0 until dataArray.length()).mapNotNull { i ->
-                    val obj = dataArray.optJSONObject(i) ?: return@mapNotNull null
-                    val id = obj.optString("id").trim()
-                    if (id.isBlank()) {
-                        return@mapNotNull null
-                    }
-                    ModelConfig(
-                        id = id,
-                        name = id,
-                        capabilities = ModelCapabilities.TEXT,
-                    )
-                }
-            }
-        }
-
-        if (importedModels.isEmpty()) {
-            showRawResult("Import models", status, body, "No models found")
-            return
-        }
-
-        val existingIds = models.mapNotNull { it.id.trim().takeIf { id -> id.isNotBlank() } }.toSet()
-        val dedupedImport = importedModels.filter { it.id.trim().isNotBlank() && !existingIds.contains(it.id.trim()) }
-        val updatedModels = models + dedupedImport
-
+    fun addDiscoveredModels(discovered: List<DiscoveredModel>) {
+        val updatedModels = ModelDiscoveryViewModel.merge(models, discovered)
+        val addedCount = updatedModels.size - models.size
         models = updatedModels
-        repository.upsertProvider(providerFromForm(modelsOverride = updatedModels))
-        lastImportSummary = "Imported ${dedupedImport.size} model${if (dedupedImport.size == 1) "" else "s"}"
+        if (isEditingExisting) {
+            scope.launch { repository.upsertProvider(providerFromForm(modelsOverride = updatedModels)) }
+        }
+        lastAddedModelCount = addedCount
+        showDiscoverySheet = false
+    }
+
+    /** A successful listing proves auth + reachability; otherwise falls back to the model's verify(). */
+    suspend fun runConnectionTest() {
+        val title = context.getString(R.string.provider_test_connection)
+        val provider = providerFromForm()
+        val credentials = Credentials(resolveApiKeyForTests())
+        val listing = providerFactory.discovery(provider, credentials)?.listModels()
+        val listingMissing = (listing?.exceptionOrNull() as? NetworkError.Http)?.status in setOf(404, 405, 501)
+        if (listing != null && !listingMissing) {
+            listing.onSuccess { repository.saveDiscovered(effectiveProviderId, it) }
+            showTestResult(title, listing.map { context.getString(R.string.provider_test_connection_ok_models, it.size) })
+            return
+        }
+        val model = models.firstOrNull { it.capabilities.stt } ?: models.firstOrNull { it.capabilities.text }
+        if (model == null) {
+            showRawResult(title, null, "", context.getString(R.string.provider_test_connection_no_model))
+            return
+        }
+        val verified = if (model.capabilities.stt) {
+            providerFactory.transcription(provider, model, credentials).mapCatching { it.verify().getOrThrow() }
+        } else {
+            providerFactory.enhancement(provider, model, credentials).mapCatching { it.verify().getOrThrow() }
+        }
+        showTestResult(title, verified.map { testOkText })
     }
 
     val audioPickerLauncher = rememberLauncherForActivityResult(
@@ -3245,20 +3192,20 @@ fun ProviderEditScreen(
                     }
 
                     OutlinedButton(
-                        enabled = !isAnyActionRunning && type != ProviderType.WHISPER_ASR,
+                        enabled = !isAnyActionRunning,
                         onClick = {
                             scope.launch {
-                                isImportRunning = true
+                                isTestRunning = true
                                 try {
-                                    importModels()
+                                    runConnectionTest()
                                 } finally {
-                                    isImportRunning = false
+                                    isTestRunning = false
                                 }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Import models")
+                        Text(stringResource(R.string.provider_test_connection))
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -3310,10 +3257,6 @@ fun ProviderEditScreen(
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             Text("Running...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                    }
-
-                    lastImportSummary?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -3421,7 +3364,8 @@ fun ProviderEditScreen(
             
              models.forEachIndexed { index, model ->
                   ModelEditCard(
-                      model = model, 
+                      model = model,
+                      notFound = discoveryCache?.let { cache -> model.id.isNotBlank() && !cache.contains(model.id) } == true,
                       onUpdate = { updated -> 
                           val newModels = models.toMutableList()
                           newModels[index] = updated
@@ -3453,10 +3397,50 @@ fun ProviderEditScreen(
                 Spacer(Modifier.width(8.dp))
                 Text("Add Model")
             }
+
+            val discoveryAvailable = remember(type, baseUrl) {
+                providerFactory.discovery(
+                    ServiceProvider(name = "", type = type, endpoint = baseUrl, models = emptyList()),
+                    Credentials.NONE,
+                ) != null
+            }
+            OutlinedButton(
+                enabled = discoveryAvailable && isBaseUrlValid,
+                onClick = {
+                    discoveryViewModel.open(discoveryFromForm())
+                    showDiscoverySheet = true
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.model_discovery_open))
+            }
+            if (!discoveryAvailable) {
+                Text(
+                    stringResource(R.string.model_discovery_unavailable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            lastAddedModelCount?.let { count ->
+                Text(
+                    pluralStringResource(R.plurals.model_discovery_added, count, count),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             
              Spacer(Modifier.height(32.dp))
              Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
          }
+      }
+
+      if (showDiscoverySheet) {
+          ModelDiscoverySheet(
+              viewModel = discoveryViewModel,
+              existingIds = models.mapTo(HashSet()) { it.id.trim() },
+              onAdd = ::addDiscoveredModels,
+              onDismiss = { showDiscoverySheet = false },
+          )
       }
 
       if (showRawResponseDialog) {
@@ -3526,22 +3510,9 @@ fun ProviderEditScreen(
 
 private const val STT_TEST_TIMEOUT_MS = 30_000L
 
-private fun sanitizedBaseUrl(baseUrl: String): HttpUrl? {
-    return baseUrl.trim().toHttpUrlOrNull()
-        ?.newBuilder()
-        ?.query(null)
-        ?.fragment(null)
-        ?.build()
-}
-
-private fun buildModelsListUrl(baseUrl: String): HttpUrl? {
-    val base = sanitizedBaseUrl(baseUrl) ?: return null
-    val segments = base.pathSegments.filter { it.isNotBlank() }
-    return if (segments.lastOrNull() == "models") {
-        base
-    } else {
-        base.newBuilder().addPathSegment("models").build()
-    }
+private fun discoveryErrorMessage(context: Context, error: Throwable): String = when (error) {
+    is DiscoveryUnsupported -> context.getString(R.string.model_discovery_unavailable)
+    else -> error.toProviderUserMessage(context)
 }
 
 private fun redactSecretsForUi(value: String): String {
@@ -3556,7 +3527,12 @@ private fun redactSecretsForUi(value: String): String {
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun ModelEditCard(model: ModelConfig, onUpdate: (ModelConfig) -> Unit, onDelete: () -> Unit) {
+fun ModelEditCard(
+    model: ModelConfig,
+    onUpdate: (ModelConfig) -> Unit,
+    onDelete: () -> Unit,
+    notFound: Boolean = false,
+) {
     var kindExpanded by remember { mutableStateOf(false) }
 
     Card(
@@ -3573,6 +3549,13 @@ fun ModelEditCard(model: ModelConfig, onUpdate: (ModelConfig) -> Unit, onDelete:
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
                 }
+            }
+            if (notFound) {
+                Text(
+                    stringResource(R.string.model_discovery_not_found),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
@@ -4115,7 +4098,7 @@ fun UpdateSettingsSection(dataStore: DataStore<Preferences>, showUpdate: Boolean
                 } else {
                     Icon(Icons.Default.Refresh, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text(context.getString(R.string.settings_check_for_updates))
+                    Text(stringResource(R.string.settings_check_for_updates))
                 }
             }
         }
@@ -4133,7 +4116,7 @@ fun UpdateSettingsSection(dataStore: DataStore<Preferences>, showUpdate: Boolean
             }
             is UpdateCheckResult.UpToDate -> {
                 Text(
-                    text = context.getString(R.string.update_up_to_date),
+                    text = stringResource(R.string.update_up_to_date),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(16.dp)
@@ -4141,7 +4124,7 @@ fun UpdateSettingsSection(dataStore: DataStore<Preferences>, showUpdate: Boolean
             }
             is UpdateCheckResult.Error -> {
                 Text(
-                    text = context.getString(R.string.update_failed, result.message),
+                    text = stringResource(R.string.update_failed, result.message),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(16.dp)

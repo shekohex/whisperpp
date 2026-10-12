@@ -27,6 +27,8 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDER_SELECTIONS_V2_
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_BACKEND
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_MODEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SPEECH_TO_TEXT_BACKEND
+import com.github.shekohex.whisperpp.domain.providers.DiscoveredCache
+import com.github.shekohex.whisperpp.domain.providers.DiscoveredModel
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
@@ -443,6 +445,26 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    /** Last model listing for [providerId] (WP-2.6), or null when it was never refreshed. */
+    fun discoveredModels(providerId: String): Flow<DiscoveredCache?> = dataStore.data
+        .map { prefs -> parseDiscoveryCacheJson(prefs[PreferenceKeys.MODEL_DISCOVERY_CACHE], gson)[providerId.trim()] }
+        .distinctUntilChanged()
+
+    /** Replaces the cached listing for [providerId]; provider models are never touched. */
+    suspend fun saveDiscovered(
+        providerId: String,
+        models: List<DiscoveredModel>,
+        fetchedAtMillis: Long = System.currentTimeMillis(),
+    ) {
+        val id = providerId.trim()
+        if (id.isBlank()) return
+        dataStore.edit { prefs ->
+            val current = parseDiscoveryCacheJson(prefs[PreferenceKeys.MODEL_DISCOVERY_CACHE], gson)
+            val updated = current + (id to DiscoveredCache(fetchedAtMillis, models))
+            prefs[PreferenceKeys.MODEL_DISCOVERY_CACHE] = gson.toJson(updated)
+        }
+    }
+
     suspend fun exportSettings(appVersionName: String): String {
         val prefs = dataStore.data.first()
         val providersList = providers.first()
@@ -649,6 +671,33 @@ internal fun validateSelections(
         keysToClear = keysToClear,
         effective = EffectiveSelections(stt = effectiveStt, text = effectiveText, commandText = effectiveCommand),
     )
+}
+
+/** Gson leaves missing fields null; entries without a usable id are dropped. */
+@Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
+internal fun parseDiscoveryCacheJson(json: String?, gson: Gson): Map<String, DiscoveredCache> {
+    if (json.isNullOrBlank()) return emptyMap()
+    val type = object : TypeToken<Map<String, DiscoveredCache>>() {}.type
+    val parsed: Map<String, DiscoveredCache>? = try {
+        gson.fromJson(json, type)
+    } catch (e: Exception) {
+        // The cache is disposable: an unreadable one is rebuilt by the next refresh.
+        null
+    }
+    return parsed.orEmpty().mapNotNull { (providerId, cache) ->
+        if (providerId == null || cache == null) return@mapNotNull null
+        val models = (cache.models ?: emptyList()).mapNotNull { model ->
+            val id = (model?.id ?: "").trim()
+            if (id.isEmpty()) return@mapNotNull null
+            DiscoveredModel(
+                id = id,
+                displayName = model.displayName ?: id,
+                capabilities = model.capabilities ?: ModelCapabilities(),
+                raw = model.raw ?: emptyMap(),
+            )
+        }
+        providerId to DiscoveredCache(cache.fetchedAtMillis, models)
+    }.toMap()
 }
 
 internal fun sanitizeBasePrompt(value: String?): String {
