@@ -21,6 +21,14 @@
     <string name="provider_type_whisper_asr" translatable="false">Whisper ASR</string>
     <string name="provider_type_gemini" translatable="false">Google Gemini</string>
     <string name="provider_type_custom">Custom</string>
+    <string name="provider_type_deepgram" translatable="false">Deepgram</string>
+    <string name="provider_type_elevenlabs" translatable="false">ElevenLabs</string>
+    <string name="provider_type_mistral" translatable="false">Mistral</string>
+    <string name="provider_type_soniox" translatable="false">Soniox</string>
+    <string name="provider_type_speechmatics" translatable="false">Speechmatics</string>
+    <string name="provider_type_assemblyai" translatable="false">AssemblyAI</string>
+    <string name="provider_type_xai" translatable="false">xAI</string>
+    <string name="provider_type_cartesia" translatable="false">Cartesia</string>
 
     <!-- Selection references -->
     <string name="provider_selection_ref_dictation">Dictation (speech-to-text)</string>

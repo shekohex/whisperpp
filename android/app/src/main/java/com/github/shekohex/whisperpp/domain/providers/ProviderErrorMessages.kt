@@ -8,5 +8,6 @@ import com.github.shekohex.whisperpp.core.network.NetworkError
 fun Throwable.toProviderUserMessage(context: Context): String = when (this) {
     is NetworkError -> toUserMessage(context)
     is ProviderConfigException -> toUserMessage(context)
+    is BatchUnsupportedException -> toUserMessage(context)
     else -> message?.trim()?.takeIf { it.isNotEmpty() } ?: context.getString(R.string.provider_error_unknown)
 }

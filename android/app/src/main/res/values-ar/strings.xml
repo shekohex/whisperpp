@@ -203,6 +203,7 @@
     <string name="provider_error_invalid_endpoint">خطأ: عنوان نقطة الاتصال غير صالح.</string>
     <string name="provider_error_missing_model">خطأ: لم يتم اختيار نموذج لهذا المزوّد.</string>
     <string name="provider_error_unsupported_type">نوع هذا المزوّد لا يدعم هذه المهمة.</string>
+    <string name="provider_error_batch_unsupported">النسخ الدفعي غير مدعوم لدى %1$s. تحقّق من اتصالك وحاول مجددًا.</string>
     <string name="provider_error_model_lacks_stt">النموذج المحدد لا يدعم تحويل الكلام إلى نص.</string>
     <string name="provider_error_model_lacks_text">النموذج المحدد لا يدعم النصوص.</string>
     <string name="provider_error_unknown">خطأ غير معروف</string>

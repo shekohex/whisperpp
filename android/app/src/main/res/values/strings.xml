@@ -199,6 +199,7 @@
     <string name="provider_error_invalid_endpoint">Error: The endpoint URL is invalid.</string>
     <string name="provider_error_missing_model">Error: No model is selected for this provider.</string>
     <string name="provider_error_unsupported_type">This provider type doesn\'t support this task.</string>
+    <string name="provider_error_batch_unsupported">Batch transcription isn\'t supported for %1$s. Check your connection and try again.</string>
     <string name="provider_error_model_lacks_stt">The selected model doesn\'t support speech-to-text.</string>
     <string name="provider_error_model_lacks_text">The selected model doesn\'t support text.</string>
     <string name="provider_error_unknown">Unknown error</string>

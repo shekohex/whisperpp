@@ -96,6 +96,9 @@ data class ProviderDraft(
             ProviderType.GEMINI -> "https://generativelanguage.googleapis.com/v1beta"
             ProviderType.WHISPER_ASR -> "https://YOUR_SERVER_IP:9000/asr"
             ProviderType.CUSTOM -> ""
+            ProviderType.DEEPGRAM -> "https://api.deepgram.com/v1"
+            ProviderType.ELEVENLABS -> "https://api.elevenlabs.io/v1"
+            ProviderType.MISTRAL -> "https://api.mistral.ai/v1"
         }
 
         fun defaultAuthModeFor(type: ProviderType): ProviderAuthMode = when (type) {

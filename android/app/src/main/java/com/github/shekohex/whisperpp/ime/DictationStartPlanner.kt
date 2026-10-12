@@ -102,17 +102,19 @@ class DictationStartPlanner(private val deps: Deps) {
         val provider = selection.provider
         val basePrompt = provider.prompt.ifEmpty { prefs[PROMPT] ?: "" }
         val acceptsVocabulary = provider.models.find { it.id == selection.modelId }?.capabilities?.vocabulary == true
+        val vocabulary = if (acceptsVocabulary) deps.vocabulary() else emptyList()
         val request = TranscriptionRequest(
             provider = provider,
             modelId = selection.modelId,
             languageCode = selection.mode.languageCode,
-            prompt = if (acceptsVocabulary) Vocabulary.appendToPrompt(basePrompt, deps.vocabulary()) else basePrompt,
+            prompt = if (acceptsVocabulary) Vocabulary.appendToPrompt(basePrompt, vocabulary) else basePrompt,
             temperature = provider.temperature,
             timeoutMs = provider.timeout.toLong(),
             mediaType = deps.audioMediaType,
             scriptConversion = deps.scriptConversion(prefs[POSTPROCESSING]),
             addTrailingSpace = prefs[ADD_TRAILING_SPACE] ?: false,
             useContext = prefs[USE_CONTEXT] ?: false,
+            vocabulary = Vocabulary.normalize(vocabulary),
         )
         return StartDecision.Proceed(
             StartPlan(
@@ -137,16 +139,23 @@ class DictationStartPlanner(private val deps: Deps) {
 
     /**
      * Streams when the model is flagged realtime (discovery or the user, never URL heuristics) and the
-     * user keeps "Use realtime transcription" on (§4.5.1). The session falls back to batch on failure.
+     * user keeps "Use realtime transcription" on (§4.5.1); streaming-only providers ignore the setting.
+     * The session falls back to batch on failure.
      */
     private fun openStreaming(
         transcription: TranscriptionProvider,
         request: TranscriptionRequest,
         prefs: Preferences,
     ): StreamingTranscriptionSession? {
-        if (!transcription.capabilities.realtime || prefs[REALTIME_STT_ENABLED] == false) return null
+        if (!shouldStream(transcription, prefs[REALTIME_STT_ENABLED])) return null
         val session = transcription.openStream(request)
         if (session == null) deps.onStreamingUnsupported()
         return session
+    }
+
+    companion object {
+        /** [realtimeSetting] is "Use realtime transcription" (null = unset, which means on). */
+        internal fun shouldStream(transcription: TranscriptionProvider, realtimeSetting: Boolean?): Boolean =
+            transcription.capabilities.realtime && (realtimeSetting != false || transcription.streamingOnly)
     }
 }

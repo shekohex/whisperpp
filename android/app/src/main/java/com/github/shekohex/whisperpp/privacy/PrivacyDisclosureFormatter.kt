@@ -146,10 +146,11 @@ object PrivacyDisclosureFormatter {
         val basePath = parsed.encodedPath.ifBlank { "/" }
         val path = when (mode) {
             Mode.DICTATION_AUDIO -> {
-                if (provider.type == ProviderType.WHISPER_ASR) {
-                    basePath
-                } else {
-                    appendPath(basePath, "/audio/transcriptions")
+                when (provider.type) {
+                    ProviderType.WHISPER_ASR -> basePath
+                    ProviderType.DEEPGRAM -> appendPath(basePath, "/listen")
+                    ProviderType.ELEVENLABS -> appendPath(basePath, "/speech-to-text")
+                    else -> appendPath(basePath, "/audio/transcriptions")
                 }
             }
 

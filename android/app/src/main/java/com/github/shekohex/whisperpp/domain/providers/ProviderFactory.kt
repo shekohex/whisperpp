@@ -5,9 +5,12 @@ import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.domain.providers.ProviderConfigException.Problem
+import com.github.shekohex.whisperpp.providers.deepgram.DeepgramTranscription
+import com.github.shekohex.whisperpp.providers.elevenlabs.ElevenLabsTranscription
 import com.github.shekohex.whisperpp.providers.gemini.GeminiChat
 import com.github.shekohex.whisperpp.providers.gemini.GeminiDiscovery
 import com.github.shekohex.whisperpp.providers.gemini.GeminiTranscription
+import com.github.shekohex.whisperpp.providers.mistral.MistralTranscription
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleChat
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleDiscovery
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleTranscription
@@ -38,6 +41,9 @@ class ProviderFactory(
             ProviderType.OPENAI, ProviderType.WHISPER_ASR, ProviderType.CUSTOM ->
                 Result.success(OpenAiCompatibleTranscription(client, provider, model, credentials))
             ProviderType.GEMINI -> Result.success(GeminiTranscription(client, provider, model, credentials))
+            ProviderType.DEEPGRAM -> Result.success(DeepgramTranscription(client, provider, model, credentials))
+            ProviderType.ELEVENLABS -> Result.success(ElevenLabsTranscription(client, provider, model, credentials))
+            ProviderType.MISTRAL -> Result.success(MistralTranscription(client, provider, model, credentials))
         }
     }
 
@@ -56,7 +62,9 @@ class ProviderFactory(
             ProviderType.OPENAI, ProviderType.CUSTOM ->
                 Result.success(OpenAiCompatibleChat(client, provider, model, credentials))
             ProviderType.GEMINI -> Result.success(GeminiChat(client, provider, model, credentials))
-            ProviderType.WHISPER_ASR -> unsupported(Problem.UNSUPPORTED_PROVIDER_TYPE)
+            // Speech providers have no chat endpoint here.
+            ProviderType.WHISPER_ASR, ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL ->
+                unsupported(Problem.UNSUPPORTED_PROVIDER_TYPE)
         }
     }
 
@@ -78,6 +86,8 @@ class ProviderFactory(
                 null
             }
             ProviderType.GEMINI -> GeminiDiscovery(client, provider, credentials)
+            // No listing endpoint worth using: models are entered by hand.
+            ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL -> null
         }
     }
 

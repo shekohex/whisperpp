@@ -4,17 +4,35 @@ import com.google.gson.annotations.SerializedName
 import java.util.UUID
 
 enum class ProviderType {
-    OPENAI, WHISPER_ASR, GEMINI, CUSTOM;
-    
+    OPENAI, WHISPER_ASR, GEMINI, CUSTOM,
+    DEEPGRAM, ELEVENLABS, MISTRAL;
+
     override fun toString(): String {
         return when(this) {
             OPENAI -> "OpenAI"
             WHISPER_ASR -> "Whisper ASR"
             GEMINI -> "Google Gemini"
             CUSTOM -> "Custom"
+            DEEPGRAM -> "Deepgram"
+            ELEVENLABS -> "ElevenLabs"
+            MISTRAL -> "Mistral"
         }
     }
 }
+
+/** Cloud speech providers that dictate over their own WebSocket protocol (no on-device models). */
+val ProviderType.isCloudRealtime: Boolean
+    get() = when (this) {
+        ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL -> true
+        ProviderType.OPENAI, ProviderType.WHISPER_ASR, ProviderType.GEMINI, ProviderType.CUSTOM -> false
+    }
+
+/**
+ * Cloud providers without a batch endpoint here: dictation always streams, whatever the "Use
+ * realtime transcription" setting says. Deepgram, ElevenLabs and Mistral also batch (fallback).
+ */
+val ProviderType.isStreamingOnly: Boolean
+    get() = false
 
 enum class ThinkingType {
     BUDGET, LEVEL
@@ -90,7 +108,7 @@ data class ModelCapabilities(
             return ModelCapabilities(
                 stt = stt,
                 text = kind != ModelKind.STT || geminiAudio,
-                realtime = stt && !gemini && streamingPartialsSupported,
+                realtime = stt && !gemini && (streamingPartialsSupported || providerType.isCloudRealtime),
                 thinking = isThinking,
                 vocabulary = stt && providerType.acceptsTranscriptionPrompt,
             )
@@ -98,15 +116,23 @@ data class ModelCapabilities(
 
         fun stt(providerType: ProviderType, realtime: Boolean = false): ModelCapabilities = ModelCapabilities(
             stt = true,
-            realtime = realtime,
+            // Cloud realtime providers stream every STT model.
+            realtime = realtime || providerType.isCloudRealtime,
             vocabulary = providerType.acceptsTranscriptionPrompt,
         )
     }
 }
 
-/** OpenAI-compatible endpoints take a `prompt` field; Gemini gets it as preferred spellings. */
+/**
+ * OpenAI-compatible endpoints take a `prompt` field; Gemini gets it as preferred spellings; the
+ * cloud realtime providers take the vocabulary as key terms (Mistral and Cartesia have none).
+ */
 val ProviderType.acceptsTranscriptionPrompt: Boolean
-    get() = this == ProviderType.OPENAI || this == ProviderType.CUSTOM || this == ProviderType.GEMINI
+    get() = when (this) {
+        ProviderType.OPENAI, ProviderType.CUSTOM, ProviderType.GEMINI,
+        ProviderType.DEEPGRAM, ProviderType.ELEVENLABS -> true
+        ProviderType.WHISPER_ASR, ProviderType.MISTRAL -> false
+    }
 
 /** Gemini `generateContent` models (not embeddings) accept inline audio. */
 fun ProviderType.isGeminiAudioModel(modelId: String): Boolean {

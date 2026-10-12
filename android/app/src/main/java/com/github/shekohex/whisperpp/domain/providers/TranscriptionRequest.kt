@@ -23,6 +23,8 @@ data class TranscriptionRequest(
     val scriptConversion: ScriptConversion = ScriptConversion.NONE,
     val addTrailingSpace: Boolean = false,
     val useContext: Boolean = false,
+    /** Custom vocabulary terms, set only for models with `capabilities.vocabulary`; providers with key-term support send them natively. */
+    val vocabulary: List<String> = emptyList(),
 ) {
     /** Static prompt followed by the context prompt, as sent to the provider. */
     val fullPrompt: String

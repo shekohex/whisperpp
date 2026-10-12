@@ -62,5 +62,36 @@ object Presets {
         languageCode = "auto"
     )
 
-    val AllPresets = listOf(OpenAIWhisper, OpenAIChat, GoogleGemini, WhisperASR)
+    val Deepgram = cloudSttPreset(
+        type = ProviderType.DEEPGRAM,
+        endpoint = "https://api.deepgram.com/v1",
+        models = listOf("nova-3" to "Nova 3", "nova-3-medical" to "Nova 3 Medical"),
+    )
+
+    val ElevenLabs = cloudSttPreset(
+        type = ProviderType.ELEVENLABS,
+        endpoint = "https://api.elevenlabs.io/v1",
+        models = listOf("scribe_v2" to "Scribe v2"),
+    )
+
+    val Mistral = cloudSttPreset(
+        type = ProviderType.MISTRAL,
+        endpoint = "https://api.mistral.ai/v1",
+        models = listOf("voxtral-mini-latest" to "Voxtral Mini"),
+    )
+
+    val AllPresets = listOf(OpenAIWhisper, OpenAIChat, GoogleGemini, WhisperASR, Deepgram, ElevenLabs, Mistral)
+
+    /** A cloud realtime speech provider with its STT models (realtime and vocabulary included). */
+    private fun cloudSttPreset(type: ProviderType, endpoint: String, models: List<Pair<String, String>>) = ServiceProvider(
+        id = UUID.randomUUID().toString(),
+        name = type.toString(),
+        type = type,
+        endpoint = endpoint,
+        apiKey = "",
+        models = models.map { (id, name) -> ModelConfig(id = id, name = name, capabilities = ModelCapabilities.stt(type)) },
+        temperature = 0.0f,
+        prompt = "",
+        languageCode = "auto"
+    )
 }

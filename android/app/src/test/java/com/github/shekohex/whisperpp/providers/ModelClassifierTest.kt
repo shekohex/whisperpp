@@ -119,4 +119,12 @@ class ModelClassifierTest {
 
         assertEquals(false, caps?.thinking)
     }
+
+    @Test
+    fun cloudRealtimeProviders_streamEveryModelEnteredByHand() {
+        for (type in listOf(ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL)) {
+            assertEquals(type.name, true, ModelClassifier.supportsRealtimeTranscription("any-model", type))
+        }
+        assertEquals(false, ModelClassifier.supportsRealtimeTranscription("whisper-large-v3", ProviderType.CUSTOM))
+    }
 }

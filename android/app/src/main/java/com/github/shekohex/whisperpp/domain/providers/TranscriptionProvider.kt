@@ -15,6 +15,10 @@ interface TranscriptionProvider {
 
     suspend fun transcribe(audio: File, req: TranscriptionRequest): Result<Transcript>
 
+    /** No batch endpoint: dictation always streams, whatever the realtime setting says. */
+    val streamingOnly: Boolean
+        get() = false
+
     /** Realtime session for capable models (WP-2.5); null when unsupported. */
     fun openStream(req: TranscriptionRequest): StreamingTranscriptionSession? = null
 

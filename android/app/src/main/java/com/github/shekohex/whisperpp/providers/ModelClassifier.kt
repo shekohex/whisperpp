@@ -3,6 +3,7 @@ package com.github.shekohex.whisperpp.providers
 import com.github.shekohex.whisperpp.data.ModelCapabilities
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.acceptsTranscriptionPrompt
+import com.github.shekohex.whisperpp.data.isCloudRealtime
 
 /**
  * Maps listed model ids to [ModelCapabilities] (§4.5.2). `null` means "not useful for dictation"
@@ -74,9 +75,13 @@ object ModelClassifier {
         return name == "whisper-1" || name.contains("-transcribe")
     }
 
-    /** [isRealtimeTranscription] for a configured model id, so models added by hand stream without a flag. */
+    /**
+     * [isRealtimeTranscription] for a configured model id, so models added by hand stream without a
+     * flag. The cloud realtime providers stream every STT model; they have no model listing, so
+     * their models are always entered by hand.
+     */
     fun supportsRealtimeTranscription(id: String, providerType: ProviderType): Boolean =
-        isRealtimeTranscription(id.trim().substringAfterLast('/').lowercase(), providerType)
+        providerType.isCloudRealtime || isRealtimeTranscription(id.trim().substringAfterLast('/').lowercase(), providerType)
 
     private fun isReasoning(name: String): Boolean {
         if (REASONING_PREFIXES.any { name.startsWith(it) }) return true
