@@ -54,7 +54,13 @@ class ImeComponents(private val host: ImeHost, private val scope: CoroutineScope
     val autoLearnObserver: AutoLearnObserver = createAutoLearnObserver()
     private val postProcessor = TranscriptPostProcessor.create(scope, dataStore, dictionaryRepository)
     val audioRecorder = AudioRecorder(context, scope, AmplitudeMeter())
+    /** Throwaway takes: command mode, and dictation while history is off. */
     val recordingFiles = RecordingFiles(directory = { context.externalCacheDir ?: context.cacheDir })
+    private val dictationFiles = DictationRecordingFiles(
+        historyEnabled = { repository.historySettings.first().enabled },
+        durable = container.historyAudioStore,
+        temporary = recordingFiles,
+    )
     val audioFocus = AudioFocusController(
         SystemAudioFocusGateway(context.getSystemService(Context.AUDIO_SERVICE) as AudioManager),
         repository.pauseMediaWhileRecording.stateIn(scope, SharingStarted.Eagerly, true),
@@ -83,6 +89,11 @@ class ImeComponents(private val host: ImeHost, private val scope: CoroutineScope
     private val clipboard = ClipboardAccess(context)
     private val transcriber = SttTranscriber(context, providerFactory)
     private val awaitMigrations: suspend () -> Boolean = { container.awaitMigrations(MIGRATIONS_WAIT_MS) }
+    private val requestFactory = SttRequestFactory(
+        scriptConversion = transcriber::scriptConversion,
+        audioMediaType = SttTranscriber.MEDIA_TYPE_WAV,
+        vocabulary = { dictionaryRepository.vocabulary.first() },
+    )
     private val startPlanner: DictationStartPlanner = createStartPlanner()
     val session: DictationSession = DictationSession(
         DictationSession.Deps(
@@ -156,15 +167,13 @@ class ImeComponents(private val host: ImeHost, private val scope: CoroutineScope
                 // through the normal start path so policy and disclosure are checked again.
                 micPermissionGate.check(MicPermissionGate.ACTION_DICTATION) { router.onPressStart(locked = true) }
             },
-            recordingFile = recordingFiles::newFile,
-            scriptConversion = transcriber::scriptConversion,
-            audioMediaType = SttTranscriber.MEDIA_TYPE_WAV,
+            recordingFile = dictationFiles::newFile,
+            requests = requestFactory,
             onBlocked = { feedback.perform() },
             onSetupRequired = context::showSetupRequiredToast,
             describeWarnings = { warnings, channel -> runtimeWarningNotice(context, warnings, channel) },
             onNotice = { notices.show(it, EnhancementNoticeStyle.INFO) },
             onStreamingUnsupported = { context.showShortToast(context.getString(R.string.dictation_streaming_unsupported)) },
-            vocabulary = { dictionaryRepository.vocabulary.first() },
         )
     )
 

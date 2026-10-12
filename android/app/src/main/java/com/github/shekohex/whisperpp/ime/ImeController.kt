@@ -61,6 +61,7 @@ class ImeController(
         scope.launch { c.repository.commandModeEnabled.collect { c.ui.commandModeEnabled.value = it } }
         scope.launch { c.repository.showModeOnKeyboard.collect { c.ui.showModeOnKeyboard.value = it } }
         scope.launch(Dispatchers.IO) { c.recordingFiles.deleteStale() }
+        context.appContainer.pruneHistoryIfDue()
 
         scope.launch {
             // The retry runs from onStartInputView once the host app regains focus.

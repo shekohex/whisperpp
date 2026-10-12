@@ -11,12 +11,14 @@ internal class EnhancementStep(
     private val currentFocus: () -> FocusKey?,
     private val isCurrent: (DictationRun) -> Boolean,
     private val emit: (SessionEvent) -> Unit,
+    private val takeHistory: TakeHistory,
 ) {
     /** Output mode CLIPBOARD: enhance without touching the field; returns the text to copy. */
     suspend fun forClipboard(r: DictationRun, raw: String): String =
         when (val result = request(r, raw)) {
             is DictationEnhancer.Result.Enhanced -> result.text
             is DictationEnhancer.Result.Kept -> {
+                if (result.isError) r.enhancementFailed = true
                 result.notice?.let { emit(SessionEvent.EnhancementNotice(it, result.isError)) }
                 raw
             }
@@ -36,10 +38,12 @@ internal class EnhancementStep(
         return when (result) {
             null -> Outcome(raw, enhanced = false)
             is DictationEnhancer.Result.Kept -> {
+                if (result.isError) r.enhancementFailed = true
                 result.notice?.let { emit(SessionEvent.EnhancementNotice(it, result.isError)) }
                 Outcome(raw, enhanced = false)
             }
             is DictationEnhancer.Result.Enhanced -> if (result.text.isBlank()) {
+                r.enhancementFailed = true
                 emit(SessionEvent.EnhancementKeptRaw(result.label))
                 Outcome(raw, enhanced = false)
             } else {
@@ -74,6 +78,7 @@ internal class EnhancementStep(
         if (!enhancer.isEnabled(request)) return null
         if (!isCurrent(r)) return null
         state.value = SessionState.Enhancing(r.focus, raw)
+        takeHistory.enhancing(r)
         val startedAt = deps.clock()
         val result = try {
             enhancer.enhance(request)

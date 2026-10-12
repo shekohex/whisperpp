@@ -66,6 +66,12 @@ sealed interface SessionEvent {
     /** Output mode CLIPBOARD: copy [text] (enhanced when enabled); the field was not touched. */
     data class CopyToClipboard(val text: String) : SessionEvent
 
+    /**
+     * The take failed or was cut short after audio existed; the recording and whatever text exists are
+     * saved in History for retry. The keyboard says so without extra chrome.
+     */
+    data class RecordingSaved(val reason: HistoryFailureReason) : SessionEvent
+
     /** Terminal analytics: a started recording was discarded. */
     data class Discarded(val durationMs: Long) : SessionEvent
 }

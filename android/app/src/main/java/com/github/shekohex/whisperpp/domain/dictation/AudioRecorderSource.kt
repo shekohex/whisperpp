@@ -20,5 +20,5 @@ class AudioRecorderSource(private val recorder: AudioRecorder) : DictationRecord
 
     override suspend fun resume() = recorder.resume()
 
-    override fun cancel() = recorder.cancel()
+    override fun cancel(keepFile: Boolean) = recorder.cancel(keepFile)
 }

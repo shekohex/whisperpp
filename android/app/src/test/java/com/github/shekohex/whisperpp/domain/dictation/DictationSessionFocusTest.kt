@@ -17,8 +17,8 @@ import org.junit.Test
 class DictationSessionFocusTest {
 
     @Test
-    fun commitBlockedByFocus_discardsKeptAudio_withoutHistoryEntry() = sessionTest { h ->
-        val history = FakeHistory(keepAudio = true)
+    fun commitBlockedByFocus_keepsTheTake_asFailedWithItsText() = sessionTest { h ->
+        val history = FakeHistory()
         h.history = history
         h.recordFor(1_000)
         h.session.onStop()
@@ -26,9 +26,15 @@ class DictationSessionFocusTest {
         advanceUntilIdle()
 
         assertTrue(h.events.any { it is SessionEvent.CommitBlockedByFocus })
-        assertTrue(history.entries.isEmpty())
-        assertEquals(history.retained, history.discarded)
-        assertEquals(1, history.discarded.size)
+        val record = history.records.single()
+        assertEquals(HistoryStatus.FAILED, record.status)
+        assertEquals(HistoryFailureReason.INSERT_BLOCKED, record.reason)
+        assertEquals("hello", record.rawText)
+        assertTrue(h.audioFile.exists())
+        // The held transcript is inserted later: the take is resolved then.
+        h.session.onFocusChanged(h.focus)
+        h.session.onPendingCommitInsert()
+        assertEquals(HistoryStatus.COMPLETED, record.status)
     }
 
     @Test

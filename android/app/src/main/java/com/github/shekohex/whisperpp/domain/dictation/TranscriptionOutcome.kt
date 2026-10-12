@@ -4,15 +4,16 @@ package com.github.shekohex.whisperpp.domain.dictation
 internal sealed interface TranscriptionOutcome {
     data class Text(val text: String) : TranscriptionOutcome
     data object Empty : TranscriptionOutcome
-    data class Failed(val message: String) : TranscriptionOutcome
+
+    /** [network]: the provider could not be reached or answered with a service error. */
+    data class Failed(val message: String, val network: Boolean = false) : TranscriptionOutcome
 
     companion object {
         fun fromBatch(batch: Result<String>): TranscriptionOutcome {
             val text = batch.getOrNull()
             if (!text.isNullOrBlank()) return Text(text)
-            return batch.exceptionOrNull()
-                ?.let { Failed(it.message?.takeIf(String::isNotBlank) ?: it::class.java.simpleName) }
-                ?: Empty
+            val error = batch.exceptionOrNull() ?: return Empty
+            return Failed(error.message?.takeIf(String::isNotBlank) ?: error::class.java.simpleName, error.isNetworkFailure())
         }
     }
 }
