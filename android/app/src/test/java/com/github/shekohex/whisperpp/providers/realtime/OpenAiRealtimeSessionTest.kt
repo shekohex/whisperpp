@@ -273,8 +273,9 @@ class OpenAiRealtimeSessionTest {
         runCurrent()
         assertEquals(StreamEvent.Partial("Hello there. How"), events.last())
 
-        // Trailing audio after the last auto-commit is committed by us.
-        session.sendAudio(byteArrayOf(3, 4))
+        // A third utterance is still being spoken at stop: we commit it.
+        socket.receive(speechStarted("item_3"))
+        session.sendAudio(ByteArray(SPEECH_BYTES))
         val result = async { session.commit() }
         runCurrent()
         assertEquals("input_audio_buffer.commit", socket.types().last())
@@ -325,16 +326,67 @@ class OpenAiRealtimeSessionTest {
         socket.open()
         session.sendAudio(byteArrayOf(1, 2))
         socket.utterance("item_1", "Only this.")
-        // Audio the server had already consumed before its commit event reached us.
-        session.sendAudio(byteArrayOf(3, 4))
+        socket.receive(speechStarted("item_2"))
+        session.sendAudio(ByteArray(SPEECH_BYTES))
 
         val result = async { session.commit() }
         runCurrent()
         assertEquals("input_audio_buffer.commit", socket.types().last())
+        // The server had already consumed the audio; item_2 never gets a buffer.
         socket.receive(emptyCommitError)
         runCurrent()
 
         assertEquals("Only this.", result.await().getOrThrow().text)
+    }
+
+    @Test
+    fun serverVad_silenceAfterSpeechStopped_isCleared_notCommitted() = runTest {
+        val session = session()
+        session.start()
+        val socket = factory.sockets.single()
+        socket.open()
+        session.sendAudio(byteArrayOf(1, 2))
+        socket.utterance("item_1", "Hello.")
+        // Seconds of silence after the server auto-committed the utterance.
+        session.sendAudio(ByteArray(SPEECH_BYTES * 20))
+
+        val result = async { session.commit() }
+        runCurrent()
+
+        assertEquals("input_audio_buffer.clear", socket.types().last())
+        assertFalse(socket.types().contains("input_audio_buffer.commit"))
+        assertEquals("Hello.", result.await().getOrThrow().text)
+    }
+
+    @Test
+    fun serverVad_speechInProgress_isCommitted_unlessShorterThan100ms() = runTest {
+        val session = session()
+        session.start()
+        val socket = factory.sockets.single()
+        socket.open()
+        socket.receive(speechStarted("item_1"))
+        session.sendAudio(ByteArray(SPEECH_BYTES))
+
+        val result = async { session.commit() }
+        runCurrent()
+        assertEquals("input_audio_buffer.commit", socket.types().last())
+        socket.receive(committed("item_1"))
+        socket.receive(completed("item_1", "Still talking"))
+        runCurrent()
+        assertEquals("Still talking", result.await().getOrThrow().text)
+
+        // Under 100 ms after speech started counts as silence: cleared, and the empty item is dropped.
+        val short = session()
+        short.start()
+        val shortSocket = factory.sockets.last()
+        shortSocket.open()
+        shortSocket.receive(speechStarted("item_x"))
+        short.sendAudio(ByteArray(SPEECH_BYTES / 4))
+
+        val shortResult = async { short.commit() }
+        runCurrent()
+        assertEquals("input_audio_buffer.clear", shortSocket.types().last())
+        assertEquals("", shortResult.await().getOrThrow().text)
     }
 
     @Test
@@ -369,7 +421,7 @@ class OpenAiRealtimeSessionTest {
 
     @Test
     fun commitBeforeOpen_isSentAfterSessionUpdateAndReplay() = runTest {
-        val session = session()
+        val session = session(vad = Vad.None)
         session.start()
         session.sendAudio(byteArrayOf(1, 2))
         val result = async { session.commit() }
@@ -444,7 +496,7 @@ class OpenAiRealtimeSessionTest {
 
     @Test
     fun failureAfterCommit_neverReconnects() = runTest {
-        val session = session()
+        val session = session(vad = Vad.None)
         session.start()
         val socket = factory.sockets.single()
         socket.open()
@@ -486,5 +538,8 @@ class OpenAiRealtimeSessionTest {
 
     private companion object {
         const val COMMIT_TIMEOUT_MS = 2_000L
+
+        // 200 ms of 24 kHz PCM16 (input rate is 24 kHz in these tests, so no resampling).
+        const val SPEECH_BYTES = 9_600
     }
 }
