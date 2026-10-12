@@ -10,6 +10,7 @@ import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.analyticsDataStore
 import com.github.shekohex.whisperpp.core.network.HttpClientFactory
 import com.github.shekohex.whisperpp.core.network.RedactingLoggingInterceptor
+import com.github.shekohex.whisperpp.core.permissions.AndroidSetupSystemChecks
 import com.github.shekohex.whisperpp.data.BackupStatusStore
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.data.autolearn.AutoLearnDictionaryEditor
@@ -25,6 +26,7 @@ import com.github.shekohex.whisperpp.data.history.TranscriptHistoryRepository
 import com.github.shekohex.whisperpp.data.dictionary.readDictionary
 import com.github.shekohex.whisperpp.data.dictionary.writeDictionary
 import com.github.shekohex.whisperpp.dataStore
+import com.github.shekohex.whisperpp.domain.setup.SetupStatusChecker
 import com.github.shekohex.whisperpp.domain.dictation.HistoryRecorder
 import com.github.shekohex.whisperpp.domain.autolearn.AutoLearnAiReviewer
 import com.github.shekohex.whisperpp.domain.autolearn.AutoLearnCoordinator
@@ -65,6 +67,14 @@ class AppContainer(context: Context) {
     val sendPolicyRepository: SendPolicyRepository by lazy { SendPolicyRepository(settingsDataStore) }
     val dictionaryRepository: DictionaryRepository by lazy { DictionaryRepository(settingsDataStore) }
     val backupStatusStore: BackupStatusStore = BackupStatusStore()
+    val setupStatusChecker: SetupStatusChecker by lazy {
+        SetupStatusChecker(
+            systemChecks = AndroidSetupSystemChecks(appContext),
+            providers = settingsRepository.providers,
+            preferences = settingsDataStore.data,
+            hasCredential = { id -> !secretsStore.getProviderApiKey(id).isNullOrBlank() },
+        )
+    }
 
     // Transcript history (§4.8).
     private val historyDatabase: TranscriptHistoryDatabase by lazy { TranscriptHistoryDatabase.create(appContext) }

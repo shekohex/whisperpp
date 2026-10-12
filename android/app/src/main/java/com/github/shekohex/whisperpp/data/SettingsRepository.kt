@@ -97,6 +97,14 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         private val EXPORTABLE_FLOAT_KEYS = listOf(PreferenceKeys.ENHANCEMENT_TEMPERATURE)
     }
     
+    val onboardingCompleted: Flow<Boolean> = dataStore.data
+        .map { prefs -> prefs[PreferenceKeys.ONBOARDING_COMPLETED] ?: false }
+        .distinctUntilChanged()
+
+    suspend fun setOnboardingCompleted() {
+        dataStore.edit { it[PreferenceKeys.ONBOARDING_COMPLETED] = true }
+    }
+
     val soundEffectsEnabled: Flow<Boolean> = dataStore.data
         .map { prefs -> prefs[PreferenceKeys.SOUND_EFFECTS_ENABLED] ?: true }
         .distinctUntilChanged()

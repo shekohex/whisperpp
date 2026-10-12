@@ -15,6 +15,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.analyticsDataStore
+import com.github.shekohex.whisperpp.core.permissions.AndroidSetupSystemChecks
 import com.github.shekohex.whisperpp.data.BackupStatusStore
 import com.github.shekohex.whisperpp.data.CategoryPreview
 import com.github.shekohex.whisperpp.data.ClearedSelection
@@ -36,6 +37,7 @@ import com.github.shekohex.whisperpp.data.SettingsBackupPayload
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.data.SkippedImportItem
 import com.github.shekohex.whisperpp.dataStore
+import com.github.shekohex.whisperpp.domain.setup.SetupStatusChecker
 import com.github.shekohex.whisperpp.ui.home.HomeScreen
 import com.github.shekohex.whisperpp.ui.home.HomeViewModel
 import org.junit.Rule
@@ -54,7 +56,7 @@ class Phase06VerificationUiTest {
             repairCount = 2,
         )
 
-        composeRule.onNodeWithText("Setup essentials").assertIsDisplayed()
+        composeRule.onNodeWithText("Setup essentials").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Personalization").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Behavior & safety").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Backup & restore").performScrollTo().assertIsDisplayed()
@@ -107,6 +109,7 @@ class Phase06VerificationUiTest {
             settingsRepository = SettingsRepository(context.dataStore),
             analyticsRepository = AnalyticsRepository(context.analyticsDataStore),
             backupStatusStore = BackupStatusStore().apply { update(backupStatus, repairCount) },
+            setupStatusChecker = setupStatusChecker(context),
         )
         composeRule.setContent {
             MaterialTheme {
@@ -261,6 +264,16 @@ class Phase06VerificationUiTest {
                     message = "Choose a new enhancement selection.",
                 ),
             ),
+        )
+    }
+
+    private fun setupStatusChecker(context: android.content.Context): SetupStatusChecker {
+        val settingsRepository = SettingsRepository(context.dataStore)
+        return SetupStatusChecker(
+            systemChecks = AndroidSetupSystemChecks(context),
+            providers = settingsRepository.providers,
+            preferences = context.dataStore.data,
+            hasCredential = { false },
         )
     }
 }

@@ -29,6 +29,9 @@ object SettingsDeepLinks {
     const val DICTIONARY = "dictionary"
     const val MORE = "more"
 
+    /** Home, where the setup checklist lives while something is missing. */
+    const val SETUP = "setup"
+
     data class Target(val tab: Destination, val destination: Destination? = null)
 
     private val HOME = Target(Destination.Home)
@@ -40,7 +43,7 @@ object SettingsDeepLinks {
         val path = value.substringBefore('?')
         val query = parseQuery(value.substringAfter('?', missingDelimiterValue = ""))
         return when (path) {
-            MAIN -> HOME
+            MAIN, SETUP -> HOME
             MODES -> Target(Destination.Modes)
             HISTORY -> Target(Destination.History)
             DICTIONARY -> Target(Destination.Dictionary)

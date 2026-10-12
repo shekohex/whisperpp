@@ -20,6 +20,8 @@ import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_CLEANUP
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
 import com.github.shekohex.whisperpp.data.validateSelections
 import com.github.shekohex.whisperpp.di.AppContainer
+import com.github.shekohex.whisperpp.domain.setup.SetupStatus
+import com.github.shekohex.whisperpp.domain.setup.SetupStatusChecker
 import com.github.shekohex.whisperpp.ui.settings.common.PreferencesViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -34,6 +36,7 @@ class HomeViewModel(
     settingsRepository: SettingsRepository,
     analyticsRepository: AnalyticsRepository,
     backupStatusStore: BackupStatusStore,
+    private val setupStatusChecker: SetupStatusChecker,
 ) : PreferencesViewModel(dataStore) {
 
     constructor(container: AppContainer) : this(
@@ -41,6 +44,7 @@ class HomeViewModel(
         settingsRepository = container.settingsRepository,
         analyticsRepository = container.analyticsRepository,
         backupStatusStore = container.backupStatusStore,
+        setupStatusChecker = container.setupStatusChecker,
     )
 
     internal data class Summary(
@@ -108,7 +112,12 @@ class HomeViewModel(
 
     val backupStatus: StateFlow<BackupStatusStore.Status> = backupStatusStore.status
 
+    /** `null` until first computed; drives the setup checklist. */
+    val setupStatus: StateFlow<SetupStatus?> = setupStatusChecker.status.stateInScreen(null)
+
     fun setMicRequested() = set(MIC_PERMISSION_REQUESTED, true)
+
+    fun refreshSetupStatus() = setupStatusChecker.refresh()
 
     private fun validate(prefs: Preferences, providers: List<ServiceProvider>): SelectionValidationResult =
         validateSelections(

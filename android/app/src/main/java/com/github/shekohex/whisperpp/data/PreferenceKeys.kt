@@ -61,6 +61,8 @@ object PreferenceKeys {
     val DISCLOSURE_SHOWN_COMMAND_TEXT = booleanPreferencesKey("disclosure-shown-command-text")
     val PER_APP_SEND_POLICY_JSON = stringPreferencesKey("per-app-send-policy-json")
     val MIC_PERMISSION_REQUESTED = booleanPreferencesKey("mic-permission-requested")
+    /** First-run onboarding (§4.6) was finished or skipped. */
+    val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding-completed")
     /** Auto-Learn (§4.11): off by default; review model (blank = enhancement selection), schedule, last run. */
     val AUTO_LEARN_ENABLED = booleanPreferencesKey("auto-learn-enabled")
     val AUTO_LEARN_PROVIDER_ID = stringPreferencesKey("auto-learn-provider-id")
@@ -141,6 +143,7 @@ object PreferenceKeys {
         DISCLOSURE_SHOWN_COMMAND_TEXT,
         PER_APP_SEND_POLICY_JSON,
         MIC_PERMISSION_REQUESTED,
+        ONBOARDING_COMPLETED,
         AUTO_LEARN_ENABLED,
         AUTO_LEARN_PROVIDER_ID,
         AUTO_LEARN_MODEL_ID,

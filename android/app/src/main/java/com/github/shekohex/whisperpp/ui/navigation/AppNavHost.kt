@@ -28,7 +28,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -43,6 +42,7 @@ import com.github.shekohex.whisperpp.app.appContainer
 @Composable
 fun AppNavHost(
     widthSizeClass: WindowWidthSizeClass,
+    startDestination: Destination,
     launchRequest: LaunchRequest?,
     onLaunchRequestHandled: () -> Unit,
     modifier: Modifier = Modifier,
@@ -71,7 +71,8 @@ fun AppNavHost(
         onLaunchRequestHandled()
     }
 
-    val useRail = widthSizeClass == WindowWidthSizeClass.Expanded
+    val inOnboarding = currentDestination?.hasRoute(Destination.Onboarding::class) == true
+    val useRail = widthSizeClass == WindowWidthSizeClass.Expanded && !inOnboarding
     Row(modifier = modifier.fillMaxSize()) {
         if (useRail) {
             AppNavigationRail(currentTab = currentTab, onSelect = selectTab)
@@ -86,7 +87,7 @@ fun AppNavHost(
         ) { padding ->
             NavHost(
                 navController = navController,
-                startDestination = Destination.Home,
+                startDestination = startDestination,
                 modifier = Modifier
                     .padding(padding)
                     .consumeWindowInsets(padding),
@@ -95,6 +96,7 @@ fun AppNavHost(
                     onNavigate = { destination -> navController.navigateFromResumed(destination) },
                     onBack = { navController.popFromResumed() },
                     checkForUpdateOnAbout = { checkForUpdateOnAbout },
+                    onOnboardingFinished = { navController.finishOnboarding() },
                 )
             }
         }
@@ -167,11 +169,19 @@ private fun MigrationErrorDialog() {
 private fun NavDestination.topLevelTab(): TopLevelDestination? =
     TopLevelDestination.entries.firstOrNull { hasRoute(it.route::class) }
 
+/** Home is the root of the tab stack, also when the graph started at onboarding. */
 private fun NavHostController.navigateToTab(tab: TopLevelDestination) {
     navigate(tab.route) {
-        popUpTo(graph.findStartDestination().id) { saveState = true }
+        popUpTo<Destination.Home> { saveState = true }
         launchSingleTop = true
         restoreState = true
+    }
+}
+
+private fun NavHostController.finishOnboarding() {
+    navigate(Destination.Home) {
+        popUpTo<Destination.Onboarding> { inclusive = true }
+        launchSingleTop = true
     }
 }
 

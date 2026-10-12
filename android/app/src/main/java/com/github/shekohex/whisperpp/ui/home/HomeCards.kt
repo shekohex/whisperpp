@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -28,10 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.github.shekohex.whisperpp.R
 
 // TODO(WP-3.7): adopt shared components (SectionCard / SettingsRow / StatusChip).
 
@@ -99,91 +95,6 @@ internal fun HomeSetupBanner(
             ) {
                 Text(issues.firstOrNull()?.actionLabel ?: "Review setup")
             }
-        }
-    }
-}
-
-@Composable
-internal fun HomeSystemReadinessCard(
-    hasMicPermission: Boolean,
-    micPermanentlyDenied: Boolean,
-    isImeEnabled: Boolean,
-    onGrantMic: () -> Unit,
-    onOpenIme: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        HomeOverviewCard(
-            icon = Icons.Default.Mic,
-            title = "Device access",
-            status = "Microphone ${if (hasMicPermission) "ready" else "needs permission"} • Keyboard ${if (isImeEnabled) "enabled" else "not enabled"}",
-            guidance = if (micPermanentlyDenied) {
-                stringResource(R.string.settings_mic_permission_denied)
-            } else if (!hasMicPermission) {
-                stringResource(R.string.settings_mic_permission_rationale)
-            } else if (!isImeEnabled) {
-                "Enable Whisper++ in Android input settings before trying it in other apps."
-            } else {
-                "System prerequisites look good. Continue into provider and behavior setup."
-            },
-            onClick = if (!hasMicPermission) onGrantMic else onOpenIme,
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            QuickActionCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Default.Mic,
-                title = "Microphone",
-                status = when {
-                    hasMicPermission -> "Granted"
-                    micPermanentlyDenied -> stringResource(R.string.mic_permission_open_settings)
-                    else -> "Tap to grant"
-                },
-                onClick = onGrantMic,
-                highlighted = !hasMicPermission,
-            )
-            QuickActionCard(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Default.Keyboard,
-                title = "Keyboard",
-                status = if (isImeEnabled) "Enabled" else "Tap to enable",
-                onClick = onOpenIme,
-                highlighted = !isImeEnabled,
-            )
-        }
-    }
-}
-
-@Composable
-private fun QuickActionCard(
-    icon: ImageVector,
-    title: String,
-    status: String,
-    onClick: () -> Unit,
-    highlighted: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        modifier = modifier,
-        onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (highlighted) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(icon, contentDescription = null)
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(
-                text = status,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

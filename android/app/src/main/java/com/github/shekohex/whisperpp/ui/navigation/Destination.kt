@@ -5,6 +5,10 @@ import kotlinx.serialization.Serializable
 /** Type-safe Navigation Compose routes for the app (§4.8). */
 @Serializable
 sealed interface Destination {
+    /** First-run flow (§4.6); the start destination until completed or skipped. */
+    @Serializable
+    data object Onboarding : Destination
+
     // Top-level tabs.
     @Serializable
     data object Home : Destination

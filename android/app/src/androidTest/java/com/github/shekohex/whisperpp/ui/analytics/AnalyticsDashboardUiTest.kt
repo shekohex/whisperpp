@@ -17,9 +17,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
 import com.github.shekohex.whisperpp.analytics.analyticsDataStore
+import com.github.shekohex.whisperpp.core.permissions.AndroidSetupSystemChecks
 import com.github.shekohex.whisperpp.data.BackupStatusStore
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.dataStore
+import com.github.shekohex.whisperpp.domain.setup.SetupStatusChecker
 import com.github.shekohex.whisperpp.ui.home.HomeScreen
 import com.github.shekohex.whisperpp.ui.home.HomeViewModel
 import com.github.shekohex.whisperpp.ui.navigation.Destination
@@ -126,6 +128,7 @@ class AnalyticsDashboardUiTest {
             settingsRepository = SettingsRepository(context.dataStore),
             analyticsRepository = AnalyticsRepository(context.analyticsDataStore),
             backupStatusStore = BackupStatusStore(),
+            setupStatusChecker = setupStatusChecker(context),
         )
         composeRule.setContent {
             var openedInsights by remember { mutableStateOf(false) }
@@ -157,5 +160,15 @@ class AnalyticsDashboardUiTest {
             }
         }
         composeRule.waitForIdle()
+    }
+
+    private fun setupStatusChecker(context: android.content.Context): SetupStatusChecker {
+        val settingsRepository = SettingsRepository(context.dataStore)
+        return SetupStatusChecker(
+            systemChecks = AndroidSetupSystemChecks(context),
+            providers = settingsRepository.providers,
+            preferences = context.dataStore.data,
+            hasCredential = { false },
+        )
     }
 }

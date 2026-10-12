@@ -463,4 +463,53 @@
     <string name="migration_error_message">Some saved settings could not be migrated to the new format. Retry, or continue with the settings as they are.</string>
     <string name="migration_error_retry">Retry</string>
     <string name="migration_error_continue">Continue anyway</string>
+
+    <!-- Onboarding (§4.6) -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_finish">Get started</string>
+    <string name="onboarding_later">Later</string>
+    <string name="onboarding_page_indicator">Step %1$d of %2$d</string>
+    <string name="onboarding_welcome_title">Welcome to Whisper++</string>
+    <string name="onboarding_welcome_body">A voice keyboard for every app: hold the mic button, speak, and your words are typed for you.</string>
+    <string name="onboarding_welcome_cloud">Transcription runs in the cloud. Audio is sent only to the provider you choose, with your own API key.</string>
+    <string name="onboarding_enable_title">Enable the keyboard</string>
+    <string name="onboarding_enable_body">Turn on Whisper++ in the system keyboard list so other apps can use it.</string>
+    <string name="onboarding_enable_action">Open keyboard settings</string>
+    <string name="onboarding_select_title">Switch to Whisper++</string>
+    <string name="onboarding_select_body">Make Whisper++ your current keyboard. You can switch back any time from the keyboard switcher.</string>
+    <string name="onboarding_select_action">Choose keyboard</string>
+    <string name="onboarding_select_needs_enable">Enable the keyboard first.</string>
+    <string name="onboarding_mic_title">Allow the microphone</string>
+    <string name="onboarding_mic_body">The microphone is used only while you hold the record button. Nothing is recorded in the background.</string>
+    <string name="onboarding_mic_action">Allow microphone</string>
+    <string name="onboarding_mic_open_settings">Open app settings</string>
+    <string name="onboarding_mic_denied">Microphone access was denied. Turn it on in app settings.</string>
+    <string name="onboarding_provider_title">Connect a provider</string>
+    <string name="onboarding_provider_body">Add an API key for OpenAI, Groq, Gemini or a compatible endpoint, then pick a dictation model.</string>
+    <string name="onboarding_provider_add">Add a provider</string>
+    <string name="onboarding_provider_choose">Choose a dictation model</string>
+
+    <!-- Setup status and Home checklist -->
+    <string name="setup_status_keyboard_enabled">Enabled</string>
+    <string name="setup_status_keyboard_not_enabled">Not enabled</string>
+    <string name="setup_status_keyboard_selected">Selected</string>
+    <string name="setup_status_keyboard_not_selected">Not selected</string>
+    <string name="setup_status_mic_granted">Allowed</string>
+    <string name="setup_status_mic_not_granted">Not allowed</string>
+    <string name="setup_status_provider_ready">Ready</string>
+    <string name="setup_status_provider_missing">Not set up</string>
+    <string name="setup_checklist_title">Finish setup</string>
+    <string name="setup_checklist_subtitle">A few steps are left before you can dictate.</string>
+    <string name="setup_checklist_enable">Enable keyboard</string>
+    <string name="setup_checklist_select">Select keyboard</string>
+    <string name="setup_checklist_mic">Microphone</string>
+    <string name="setup_checklist_provider">Add a provider</string>
+    <string name="setup_action_enable">Enable</string>
+    <string name="setup_action_select">Select</string>
+    <string name="setup_action_allow">Allow</string>
+    <string name="setup_action_open_settings">Settings</string>
+    <string name="setup_action_add">Add</string>
+    <string name="setup_action_choose">Choose</string>
 </resources>

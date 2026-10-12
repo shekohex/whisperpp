@@ -20,6 +20,7 @@ import com.github.shekohex.whisperpp.ui.history.HistoryScreen
 import com.github.shekohex.whisperpp.ui.home.HomeScreen
 import com.github.shekohex.whisperpp.ui.modes.ModesHubScreen
 import com.github.shekohex.whisperpp.ui.more.MoreScreen
+import com.github.shekohex.whisperpp.ui.onboarding.OnboardingScreen
 import com.github.shekohex.whisperpp.ui.privacy.PrivacySafetyScreen
 import com.github.shekohex.whisperpp.ui.providers.ProviderEditScreen
 import com.github.shekohex.whisperpp.ui.providers.ProviderListScreen
@@ -30,7 +31,11 @@ internal fun NavGraphBuilder.appGraph(
     onNavigate: (Destination) -> Unit,
     onBack: () -> Unit,
     checkForUpdateOnAbout: () -> Boolean,
+    onOnboardingFinished: () -> Unit,
 ) {
+    composable<Destination.Onboarding> {
+        OnboardingScreen(onNavigate = onNavigate, onFinished = onOnboardingFinished)
+    }
     composable<Destination.Home> { HomeScreen(onNavigate = onNavigate) }
     composable<Destination.Modes> { ModesHubScreen(onNavigate = onNavigate) }
     composable<Destination.History> { HistoryScreen() }
