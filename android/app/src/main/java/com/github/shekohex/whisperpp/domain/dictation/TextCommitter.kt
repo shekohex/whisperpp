@@ -4,7 +4,6 @@ import android.view.KeyEvent
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import com.github.shekohex.whisperpp.dictation.DictationUndoEntry
-import com.github.shekohex.whisperpp.dictation.EnhancementUndoEntry
 import com.github.shekohex.whisperpp.dictation.FocusKey
 import java.util.ArrayDeque
 
@@ -15,7 +14,7 @@ import java.util.ArrayDeque
 class TextCommitter(
     private val inputConnection: () -> InputConnection?,
 ) {
-    /** Where the raw text landed, so enhancement can replace exactly that range later. */
+    /** Where the inserted text landed. */
     data class CapturedSegment(
         val focusKey: FocusKey,
         val start: Int,
@@ -34,7 +33,6 @@ class TextCommitter(
     }
 
     private val undoStacks = mutableMapOf<FocusKey, ArrayDeque<DictationUndoEntry>>()
-    private var enhancementUndoEntry: EnhancementUndoEntry? = null
 
     // Field that holds our composing partial; null when nothing is composing. Tracked independently of
     // [composingStart]: an editor without an extracted-text snapshot still gets its partial replaced.
@@ -116,11 +114,8 @@ class TextCommitter(
         }
     }
 
-    /**
-     * Inserts [text] for [focus], replacing our composing partial if any, and records undo.
-     * [rawBeforeEnhancement] is the transcript [text] was enhanced from; it enables "undo enhancement".
-     */
-    fun commit(focus: FocusKey, text: String, rawBeforeEnhancement: String? = null): CommitResult {
+    /** Inserts [text] for [focus], replacing our composing partial if any, and records undo. */
+    fun commit(focus: FocusKey, text: String): CommitResult {
         val ic = inputConnection()
         if (ic == null || focus.inputType == 0) {
             dropComposing()
@@ -132,7 +127,6 @@ class TextCommitter(
         val selectionBefore = captureSelectionBeforeInsert(ic, ownsComposing)
         val insertionStart = selectionBefore?.let { minOf(it.start, it.end) }
         dropComposing()
-        enhancementUndoEntry = null
 
         ic.beginBatchEdit()
         val failure = try {
@@ -160,35 +154,7 @@ class TextCommitter(
                 selectionAfterInsert = selectionAfter ?: DictationUndoEntry.SelectionSnapshot(end, end),
             )
         )
-        if (rawBeforeEnhancement != null) {
-            enhancementUndoEntry = EnhancementUndoEntry(
-                focusKey = focus,
-                start = insertionStart,
-                endAtReplace = end,
-                rawText = rawBeforeEnhancement,
-            )
-        }
         return CommitResult.Inserted(CapturedSegment(focus, insertionStart, end, text))
-    }
-
-    /** Replaces a captured raw segment with [enhancedText] when [currentFocus] still owns it. */
-    fun replaceSegment(segment: CapturedSegment, enhancedText: String, currentFocus: FocusKey?): Boolean {
-        if (enhancedText.isBlank()) return false
-        if (currentFocus != segment.focusKey) return false
-        val ic = inputConnection() ?: return false
-
-        enhancementUndoEntry = null
-        val replacementEnd = segment.start + enhancedText.length
-        if (!ic.replaceRange(segment.start, segment.endAtInsert, enhancedText)) return false
-
-        updateLatestUndoForReplacement(segment, enhancedText)
-        enhancementUndoEntry = EnhancementUndoEntry(
-            focusKey = segment.focusKey,
-            start = segment.start,
-            endAtReplace = replacementEnd,
-            rawText = segment.rawText,
-        )
-        return true
     }
 
     /**
@@ -232,20 +198,6 @@ class TextCommitter(
         return true
     }
 
-    fun isEnhancementUndoAvailable(focus: FocusKey?): Boolean {
-        val entry = enhancementUndoEntry ?: return false
-        return focus != null && entry.focusKey == focus
-    }
-
-    fun applyEnhancementUndo(focus: FocusKey?): Boolean {
-        val entry = enhancementUndoEntry ?: return false
-        if (focus == null || entry.focusKey != focus) return false
-        val ic = inputConnection() ?: return false
-        if (!ic.replaceRange(entry.start, entry.endAtReplace, entry.rawText)) return false
-        enhancementUndoEntry = null
-        return true
-    }
-
     /**
      * Where the insert begins, as if nothing were composing (G-03). The editor's selection sits after
      * a composing region, so our own partial (about to be replaced) is located by its tracked start
@@ -258,40 +210,6 @@ class TextCommitter(
         }
         ic.finishComposingText()
         return ic.selectionSnapshot()
-    }
-
-    private fun InputConnection.replaceRange(start: Int, end: Int, text: String): Boolean {
-        val cursor = start + text.length
-        beginBatchEdit()
-        return try {
-            // commitText would replace a live composing region instead of the selection.
-            finishForeignComposing(this)
-            if (setSelection(start, end) && commitText(text, 1)) {
-                setSelection(cursor, cursor)
-                true
-            } else {
-                false
-            }
-        } catch (_: Exception) {
-            false
-        } finally {
-            endBatchEdit()
-        }
-    }
-
-    private fun updateLatestUndoForReplacement(segment: CapturedSegment, enhancedText: String) {
-        val stack = undoStacks[segment.focusKey] ?: return
-        val last = stack.peekLast() ?: return
-        val insertionStart = minOf(last.selectionBeforeInsert.start, last.selectionBeforeInsert.end)
-        if (insertionStart != segment.start || last.insertedText != segment.rawText) return
-        val end = insertionStart + enhancedText.length
-        stack.removeLast()
-        stack.addLast(
-            last.copy(
-                insertedText = enhancedText,
-                selectionAfterInsert = DictationUndoEntry.SelectionSnapshot(end, end),
-            )
-        )
     }
 
     private fun applyUndoSafely(ic: InputConnection, focus: FocusKey, entry: DictationUndoEntry): Boolean {

@@ -97,7 +97,6 @@ class KeyboardBarStatesUiTest {
             onCancelAction = {},
             onDeleteAction = {},
             onUndoAction = {},
-            onEnhancementUndoAction = {},
             onOpenSettings = {},
             onOpenContextSheet = {},
             onAllowMicPermission = {},

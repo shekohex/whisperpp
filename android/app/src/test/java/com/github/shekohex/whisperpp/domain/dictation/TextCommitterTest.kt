@@ -24,46 +24,6 @@ class TextCommitterTest {
     }
 
     @Test
-    fun capturedRangeReplacement_usesOriginalBounds_andDoesNotModifySurroundingText() {
-        val segment = commitRaw("RAW")
-
-        ic.setSelection(ic.getText().length, ic.getText().length)
-        ic.commitText("!", 1)
-
-        assertTrue(committer.replaceSegment(segment, "ENHANCED", focus))
-        assertEquals("prefix ENHANCEDsuffix!", ic.getText())
-        val cursor = "prefix ".length + "ENHANCED".length
-        assertEquals(cursor to cursor, ic.getSelection())
-    }
-
-    @Test
-    fun focusMismatchDrop_replacementDoesNothing_andDoesNotCreateEnhancementUndo() {
-        val segment = commitRaw("RAW")
-        val before = ic.getText()
-
-        assertFalse(committer.replaceSegment(segment, "ENH", otherFocus))
-        assertEquals(before, ic.getText())
-        assertFalse(committer.isEnhancementUndoAvailable(otherFocus))
-        assertFalse(committer.isEnhancementUndoAvailable(focus))
-    }
-
-    @Test
-    fun enhancementUndo_restoresRawWithinOriginalReplacementRange_evenAfterUserEdits() {
-        val segment = commitRaw("RAW")
-        assertTrue(committer.replaceSegment(segment, "ENHANCED", focus))
-        assertTrue(committer.isEnhancementUndoAvailable(focus))
-
-        val start = "prefix ".length
-        ic.replaceRange(start + 1, start + 2, "x")
-
-        assertTrue(committer.applyEnhancementUndo(focus))
-        assertEquals("prefix RAWsuffix", ic.getText())
-        assertFalse(committer.isEnhancementUndoAvailable(focus))
-        val end = start + "RAW".length
-        assertEquals(end to end, ic.getSelection())
-    }
-
-    @Test
     fun undoLastInsertion_removesInsertedText_onlyForOwningFocus() {
         commitRaw("RAW")
         assertTrue(committer.isUndoAvailable(focus))
@@ -150,8 +110,6 @@ class TextCommitterTest {
         val start = "prefix ".length
         assertEquals(TextCommitter.CapturedSegment(focus, start, start + "hello world".length, "hello world"), segment)
 
-        assertTrue(committer.replaceSegment(segment, "Hello, world.", focus))
-        assertEquals("prefix Hello, world.suffix", ic.getText())
         // The undo entry starts where the partial started, not after it.
         assertTrue(committer.undoLastInsertion(focus))
         assertEquals("prefix suffix", ic.getText())
@@ -166,17 +124,6 @@ class TextCommitterTest {
 
         assertEquals("prefix RAWsuffix", ic.getText())
         assertEquals("RAW", ic.getText().substring(segment.start, segment.endAtInsert))
-    }
-
-    @Test
-    fun replaceSegment_withForeignComposingRegion_replacesOnlyTheSegment() {
-        val segment = commitRaw("RAW")
-        val end = ic.getText().length
-        ic.setComposingRegion(end - "fix".length, end)
-
-        assertTrue(committer.replaceSegment(segment, "ENHANCED", focus))
-
-        assertEquals("prefix ENHANCEDsuffix", ic.getText())
     }
 
     // endregion

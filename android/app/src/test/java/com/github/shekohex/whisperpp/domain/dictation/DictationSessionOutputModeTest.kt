@@ -162,7 +162,7 @@ class DictationSessionOutputModeTest {
         assertFalse("nothing to auto-send", completed.inserted)
         assertEquals("hello", completed.rawText)
         assertEquals("Hello!", completed.finalText)
-        assertTrue(h.events.none { it is SessionEvent.Committed || it is SessionEvent.EnhancementApplied })
+        assertTrue(h.events.none { it is SessionEvent.Committed })
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.github.shekohex.whisperpp.ime
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.github.shekohex.whisperpp.R
@@ -77,18 +78,23 @@ class DictationIntentRouter(private val deps: Deps) {
     }
 
     fun onPressStart(locked: Boolean = false) {
-        if (deps.isCommandModeActive()) return
+        if (deps.isCommandModeActive()) {
+            Log.i(TAG, "press ignored: command mode active")
+            return
+        }
         if (deps.shouldBlockExternalSend()) {
             deps.feedback.perform()
             return
         }
         deps.undo.clearQuickAction()
-        deps.undo.clearEnhancement()
         if (dictationDisclosureShown.value == true) {
             session.onPressStart(locked)
             return
         }
-        if (dictationDisclosureJob?.isActive == true) return
+        if (dictationDisclosureJob?.isActive == true) {
+            Log.i(TAG, "press ignored: disclosure already open")
+            return
+        }
         dictationDisclosureJob = deps.scope.launch {
             // The finger leaves the button to answer the disclosure, so a confirmed start is hands-free.
             if (confirmDictationDisclosure()) session.onPressStart(locked = true)
@@ -107,18 +113,6 @@ class DictationIntentRouter(private val deps: Deps) {
             context.showShortToast(context.getString(R.string.dictation_undo_unavailable))
         }
         deps.undo.refresh()
-    }
-
-    fun onEnhancementUndoAction() {
-        deps.feedback.perform(isDelete = true)
-        val applied = deps.textCommitter.applyEnhancementUndo(deps.currentFocus())
-        deps.undo.refreshEnhancement()
-        if (!applied) {
-            deps.notices.show(
-                context.getString(R.string.keyboard_enhancement_undo_unavailable),
-                EnhancementNoticeStyle.INFO,
-            )
-        }
     }
 
     fun onPendingCommitCopy() {
@@ -181,5 +175,9 @@ class DictationIntentRouter(private val deps: Deps) {
                 deps.ui.pendingCancelConfirm.value = onConfirm
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "WhisperDictation"
     }
 }

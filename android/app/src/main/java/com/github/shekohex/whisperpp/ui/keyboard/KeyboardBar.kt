@@ -59,7 +59,6 @@ internal class KeyboardBarModel(
     val externalSendingBlocked: Boolean,
     val micPermissionMissing: Boolean,
     val showUndoAction: Boolean,
-    val showEnhancementUndoAction: Boolean,
     val commandModeActive: Boolean,
     val showLongPressHint: Boolean,
     val tapToRecord: Boolean,
@@ -74,7 +73,6 @@ internal class KeyboardBarActions(
     val onCancelAction: () -> Unit,
     val onDeleteAction: () -> Unit,
     val onUndoAction: () -> Unit,
-    val onEnhancementUndoAction: () -> Unit,
     val onOpenSettings: () -> Unit,
     val onOpenContextSheet: () -> Unit,
     val onAllowMicPermission: () -> Unit,
@@ -201,13 +199,6 @@ private fun CenterCluster(model: KeyboardBarModel, actions: KeyboardBarActions) 
 private fun EndCluster(model: KeyboardBarModel, actions: KeyboardBarActions) {
     val state = model.state
     Row(verticalAlignment = Alignment.CenterVertically) {
-        AnimatedVisibility(visible = model.showEnhancementUndoAction) {
-            AssistChip(
-                onClick = actions.onEnhancementUndoAction,
-                label = { Text(stringResource(R.string.undo)) },
-                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Undo, null, modifier = Modifier.size(18.dp)) },
-            )
-        }
         AnimatedVisibility(visible = model.showUndoAction) {
             IconButton(onClick = actions.onUndoAction) {
                 Icon(
@@ -282,7 +273,6 @@ internal fun previewBarActions() = KeyboardBarActions(
     onCancelAction = {},
     onDeleteAction = {},
     onUndoAction = {},
-    onEnhancementUndoAction = {},
     onOpenSettings = {},
     onOpenContextSheet = {},
     onAllowMicPermission = {},
@@ -305,7 +295,6 @@ internal fun previewBarModel(
     externalSendingBlocked = false,
     micPermissionMissing = false,
     showUndoAction = false,
-    showEnhancementUndoAction = false,
     commandModeActive = false,
     showLongPressHint = false,
     tapToRecord = true,

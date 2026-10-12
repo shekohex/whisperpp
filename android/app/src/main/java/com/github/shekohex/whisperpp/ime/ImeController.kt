@@ -95,13 +95,11 @@ class ImeController(
             c.commands.onFocusChanged()
         }
         c.undo.showQuickActionIfAvailable()
-        c.undo.refreshEnhancement()
         onExternalSendBlockMayHaveChanged(attribute)
     }
 
     fun onStartInputView(info: EditorInfo?) {
         c.undo.showQuickActionIfAvailable()
-        c.undo.refreshEnhancement()
         onExternalSendBlockMayHaveChanged(info)
         c.micPermissionGate.onInputViewStarted()
     }

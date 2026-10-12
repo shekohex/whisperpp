@@ -13,6 +13,9 @@ sealed interface SessionEvent {
     /** Released too early to count as a recording (< min duration). */
     data object ShortPressHint : SessionEvent
 
+    /** A press arrived while a run was still in progress (or command mode owned the mic); it did nothing. */
+    data class PressIgnored(val busy: Boolean) : SessionEvent
+
     data class RecordingFailed(val kind: AudioRecorder.ErrorKind?) : SessionEvent
 
     /** The provider call failed; distinct from [TranscriptionEmpty] (F-07). */
@@ -39,8 +42,6 @@ sealed interface SessionEvent {
 
     data class EnhancementNotice(val text: String, val isError: Boolean) : SessionEvent
 
-    /** Enhanced text replaced the raw segment; enhancement undo is available. */
-    data object EnhancementApplied : SessionEvent
 
     /** Enhancement finished but the field lost focus, so the raw text stays. [label] names provider/model. */
     data class EnhancementKeptRaw(val label: String) : SessionEvent

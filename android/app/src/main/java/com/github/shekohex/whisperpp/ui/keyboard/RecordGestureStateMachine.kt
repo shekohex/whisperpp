@@ -21,6 +21,7 @@ class RecordGestureStateMachine(
 ) {
     private val cancelDistancePx = GestureTokens.CANCEL_DISTANCE_DP * density
     private val lockDistancePx = GestureTokens.LOCK_DISTANCE_DP * density
+    private val pressWanderPx = maxOf(GestureTokens.PRESS_WANDER_DP * density, touchSlopPx)
 
     private var phase = GesturePhase.Idle
     private var axis = GestureAxis.None
@@ -85,10 +86,11 @@ class RecordGestureStateMachine(
 
     private fun onMove(input: GestureInput.Move, intents: MutableList<RecordIntent>) {
         when (phase) {
-            // Past slop before the hold fires (or on the send button) it is a swipe, not a press.
-            GesturePhase.Pressing,
-            GesturePhase.Armed,
-            -> if (hypot(input.dx, input.dy) > touchSlopPx) phase = GesturePhase.Ignored
+            // A thumb rolls a little while it presses: only a clear swipe before the hold fires is not a press.
+            GesturePhase.Pressing ->
+                if (hypot(input.dx, input.dy) > pressWanderPx) phase = GesturePhase.Ignored
+            // On the send button of a locked or paused recording any move past slop is a swipe, not a tap.
+            GesturePhase.Armed -> if (hypot(input.dx, input.dy) > touchSlopPx) phase = GesturePhase.Ignored
             GesturePhase.Holding -> track(input, intents)
             GesturePhase.Idle,
             GesturePhase.Locked,

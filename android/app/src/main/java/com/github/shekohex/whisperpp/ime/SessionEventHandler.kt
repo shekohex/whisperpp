@@ -31,6 +31,10 @@ class SessionEventHandler(private val deps: Deps) {
             is SessionEvent.Notice -> context.showShortToast(context.getString(event.resId))
             is SessionEvent.NoticeText -> context.showShortToast(event.text)
             SessionEvent.ShortPressHint -> deps.ui.showLongPressHint.value = true
+            is SessionEvent.PressIgnored -> {
+                Log.i(TAG, "press ignored: session busy=${event.busy}")
+                deps.feedback.perform()
+            }
             is SessionEvent.RecordingFailed -> {
                 if (event.kind != AudioRecorder.ErrorKind.CANCELLED) {
                     context.showShortToast(context.getString(recorderErrorMessageRes(event.kind)))
@@ -69,7 +73,6 @@ class SessionEventHandler(private val deps: Deps) {
                 event.text,
                 if (event.isError) EnhancementNoticeStyle.ERROR else EnhancementNoticeStyle.INFO,
             )
-            SessionEvent.EnhancementApplied -> deps.undo.refreshEnhancement()
             is SessionEvent.EnhancementKeptRaw -> deps.notices.show(
                 context.getString(R.string.keyboard_enhancement_kept_raw, event.label),
                 EnhancementNoticeStyle.INFO,

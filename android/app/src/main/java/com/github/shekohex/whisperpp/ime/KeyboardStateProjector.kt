@@ -1,6 +1,7 @@
 package com.github.shekohex.whisperpp.ime
 
 import android.os.SystemClock
+import android.util.Log
 import com.github.shekohex.whisperpp.core.audio.AudioRecorder
 import com.github.shekohex.whisperpp.domain.dictation.DictationSession
 import com.github.shekohex.whisperpp.domain.dictation.SessionEvent
@@ -33,6 +34,7 @@ class KeyboardStateProjector(
         scope.launch {
             session.state.collectLatest { state ->
                 ui.keyboardState.value = state.toKeyboardState()
+                Log.i(TAG, "keyboard=${ui.keyboardState.value} starting=${state is SessionState.Starting}")
                 ui.sessionStarting.value = state is SessionState.Starting
                 when (state) {
                     is SessionState.Recording -> {
@@ -54,6 +56,7 @@ class KeyboardStateProjector(
     }
 
     private companion object {
+        const val TAG = "WhisperDictation"
         const val RECORDING_TICK_MS = 100L
     }
 }

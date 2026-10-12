@@ -98,7 +98,11 @@ class DictationSession(private val deps: Deps) {
     // region Intents
 
     fun onPressStart(locked: Boolean = false) {
-        if (deps.commandModeActive() || isBusy) return
+        if (deps.commandModeActive() || isBusy) {
+            // The keyboard shows this state; nothing else says why a press did nothing.
+            emit(SessionEvent.PressIgnored(busy = isBusy))
+            return
+        }
         val focus = currentFocus
         if (focus == null) {
             emit(SessionEvent.Notice(R.string.dictation_no_field))
@@ -121,7 +125,11 @@ class DictationSession(private val deps: Deps) {
     /** End of a hold: cancels a pending start (B-01), discards a too-short take, otherwise sends. */
     fun onPressRelease() {
         when (val s = _state.value) {
-            is SessionState.Starting -> if (!s.locked) cancelRun(recordDiscard = false)
+            // Let go before the recorder even opened: the take never existed, but say why nothing happened.
+            is SessionState.Starting -> if (!s.locked) {
+                emit(SessionEvent.ShortPressHint)
+                cancelRun(recordDiscard = false)
+            }
             is SessionState.Recording -> {
                 if (s.locked || s.paused) return
                 if (s.elapsedMs(deps.clock()) < deps.minRecordingMs) {
@@ -396,7 +404,7 @@ class DictationSession(private val deps: Deps) {
             return finish(r, SessionState.Idle)
         }
         r.replaceRange?.let(deps.committer::select)
-        val result = deps.committer.commit(r.focus, text, rawBeforeEnhancement = raw.takeIf { outcome.enhanced })
+        val result = deps.committer.commit(r.focus, text)
         r.composing = false
         when (result) {
             TextCommitter.CommitResult.NoField -> {
@@ -413,7 +421,6 @@ class DictationSession(private val deps: Deps) {
         }
         r.rawText = raw
         emit(SessionEvent.Committed(text))
-        if (outcome.enhanced) emit(SessionEvent.EnhancementApplied)
         completion.complete(r, raw, text)
         finish(r, SessionState.Idle)
     }

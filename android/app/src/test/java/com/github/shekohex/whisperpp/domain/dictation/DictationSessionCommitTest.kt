@@ -190,7 +190,6 @@ class DictationSessionCommitTest {
         advanceUntilIdle()
 
         assertEquals("prefix Hello.", h.ic.getText())
-        assertTrue(h.events.contains(SessionEvent.EnhancementApplied))
     }
 
     @Test
@@ -206,7 +205,6 @@ class DictationSessionCommitTest {
 
         assertEquals("prefix hello", h.ic.getText())
         assertTrue(h.events.contains(SessionEvent.EnhancementNotice("offline", true)))
-        assertTrue(h.events.none { it is SessionEvent.EnhancementApplied })
     }
 
     @Test

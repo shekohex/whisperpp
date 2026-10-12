@@ -164,8 +164,18 @@ class RecordGestureStateMachineTest {
     }
 
     @Test
-    fun pressing_dragPastSlopBeforeHold_isIgnored() {
-        val inputs = listOf(Down(0), Move(-40f, 0f, 50), HoldTimerFired, Move(-300f, 0f, 300), Up(400))
+    fun pressing_smallWanderBeforeHold_stillRecords() {
+        val inputs = listOf(Down(0), Move(-14f, 10f, 50), HoldTimerFired, Up(900))
+
+        val intents = machine().run(RecordSession.Idle, inputs).intents()
+
+        assertTrue(intents.contains(PressStart(locked = false)))
+        assertTrue(intents.contains(PressRelease))
+    }
+
+    @Test
+    fun pressing_clearSwipeBeforeHold_isIgnored() {
+        val inputs = listOf(Down(0), Move(-80f, 0f, 50), HoldTimerFired, Move(-300f, 0f, 300), Up(400))
 
         val intents = machine().run(RecordSession.Idle, inputs).intents()
 

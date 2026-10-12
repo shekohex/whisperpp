@@ -5,6 +5,9 @@ object GestureTokens {
     /** A press shorter than this is a tap; reaching it starts a hold-to-record. */
     const val HOLD_THRESHOLD_MS: Long = 180L
 
+    /** How far a finger may wander during the hold delay and still count as a press (not a swipe). */
+    const val PRESS_WANDER_DP: Float = 32f
+
     /** Horizontal travel towards the start edge that commits a cancel. */
     const val CANCEL_DISTANCE_DP: Float = 120f
 
