@@ -18,6 +18,9 @@ interface DictationRecorder {
 
     suspend fun resume()
 
-    /** Stops capture and deletes the file; also aborts a start that is still in flight. */
-    fun cancel()
+    /**
+     * Stops capture and deletes the file; also aborts a start that is still in flight. With [keepFile]
+     * the capture is finalized instead, so a take torn down mid-recording can still be saved.
+     */
+    fun cancel(keepFile: Boolean = false)
 }

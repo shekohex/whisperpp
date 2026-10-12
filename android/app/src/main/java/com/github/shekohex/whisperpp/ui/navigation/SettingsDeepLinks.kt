@@ -45,7 +45,7 @@ object SettingsDeepLinks {
         return when (path) {
             MAIN, SETUP -> HOME
             MODES -> Target(Destination.Modes)
-            HISTORY -> Target(Destination.History)
+            HISTORY -> Target(Destination.History())
             DICTIONARY -> Target(Destination.Dictionary)
             MORE -> Target(Destination.More)
             BACKEND -> more(Destination.ProviderList)

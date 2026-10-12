@@ -48,7 +48,7 @@ import java.time.LocalDate
 
 /** History tab (§4.8): search, day-grouped list, multi-select, export, history settings. */
 @Composable
-fun HistoryScreen(onNavigate: (Destination) -> Unit) {
+fun HistoryScreen(onNavigate: (Destination) -> Unit, failedOnly: Boolean = false) {
     val appContext = LocalContext.current.applicationContext
     val viewModel = containerViewModel { container, _ ->
         HistoryViewModel(
@@ -56,6 +56,7 @@ fun HistoryScreen(onNavigate: (Destination) -> Unit) {
             settingsStore = SettingsRepositoryHistorySettings(container.settingsRepository),
             appResolver = PackageManagerAppResolver(appContext.packageManager),
             writeText = { uri, text -> writeTextToUri(appContext, uri, text) },
+            initialFilter = if (failedOnly) HistoryFilter.NEEDS_ATTENTION else HistoryFilter.ALL,
         )
     }
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -65,6 +66,7 @@ fun HistoryScreen(onNavigate: (Destination) -> Unit) {
         actions = HistoryActions(
             onOpen = { onNavigate(Destination.HistoryDetail(it)) },
             onQueryChange = viewModel::onQueryChange,
+            onFilterChange = viewModel::onFilterChange,
             onToggleSelection = viewModel::toggleSelection,
             onToggleSelectAll = viewModel::toggleSelectAll,
             onClearSelection = viewModel::clearSelection,
@@ -176,6 +178,17 @@ private fun HistoryBody(state: HistoryViewModel.UiState, actions: HistoryActions
             onQueryChange = actions.onQueryChange,
             modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg, vertical = Spacing.sm),
         )
+        HistoryRetentionNote(
+            retentionDays = state.settings.retentionDays,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg),
+        )
+        if (state.needsAttentionCount > 0 || state.filter != HistoryFilter.ALL) {
+            HistoryFilterRow(
+                selected = state.filter,
+                needsAttentionCount = state.needsAttentionCount,
+                onSelect = actions.onFilterChange,
+            )
+        }
         val disabledBanner: (@Composable () -> Unit)? = if (state.settings.enabled) {
             null
         } else {
@@ -191,6 +204,12 @@ private fun HistoryBody(state: HistoryViewModel.UiState, actions: HistoryActions
                 onToggleSelection = actions.onToggleSelection,
                 modifier = Modifier.fillMaxSize(),
                 header = disabledBanner,
+            )
+            state.filter == HistoryFilter.NEEDS_ATTENTION && !state.isSearching -> EmptyState(
+                icon = Icons.Default.History,
+                title = stringResource(R.string.history_empty_attention_title),
+                body = stringResource(R.string.history_empty_attention_body),
+                modifier = Modifier.fillMaxSize(),
             )
             state.isSearching -> EmptyState(
                 icon = Icons.Default.SearchOff,

@@ -28,10 +28,10 @@ import com.github.shekohex.whisperpp.ui.components.PreviewSurface
 import com.github.shekohex.whisperpp.ui.components.SettingsSwitchRow
 import com.github.shekohex.whisperpp.ui.theme.Spacing
 
-/** Retention windows offered in the sheet; 0 = forever. A restored custom value is added as well. */
+/** Retention windows offered in the sheet (7 / 15 / 30 days, forever last). A restored custom value is added as well. */
 internal fun retentionOptions(currentDays: Int): List<Int> {
     val windows = buildSet {
-        addAll(listOf(7, 30, 90))
+        addAll(HistorySettings.RETENTION_CHOICES.filter { it > 0 })
         if (currentDays > 0) add(currentDays)
     }
     return windows.sorted() + 0
@@ -119,6 +119,10 @@ internal fun HistorySettingsContent(
                 )
             }
         }
+        HistoryRetentionNote(
+            retentionDays = settings.retentionDays,
+            modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+        )
     }
 }
 

@@ -49,6 +49,7 @@ class SessionEventHandler(private val deps: Deps) {
                 context.showShortToast(context.getString(R.string.toast_transcription_empty))
                 deps.feedback.perform()
             }
+            is SessionEvent.RecordingSaved -> context.showShortToast(context.getString(R.string.dictation_saved_retry_history))
             SessionEvent.SendBlocked -> context.showShortToast(deps.blockedNotice())
             is SessionEvent.Committed -> {
                 deps.undo.showQuickActionIfAvailable()

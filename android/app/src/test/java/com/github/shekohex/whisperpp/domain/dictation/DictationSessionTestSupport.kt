@@ -77,8 +77,11 @@ internal object DictationSessionTestSupport {
             return Result.success(Unit)
         }
 
+        var stopFailure: AudioRecorder.ErrorKind? = null
+
         override suspend fun stop(): Result<AudioRecorder.Event.Stopped> {
             stops += 1
+            stopFailure?.let { return Result.failure(AudioRecorder.RecorderException(it, "failed")) }
             return Result.success(AudioRecorder.Event.Stopped(file!!, durationMs = 1_000L, droppedChunks = droppedChunks))
         }
 
@@ -88,9 +91,12 @@ internal object DictationSessionTestSupport {
 
         override suspend fun resume() = Unit
 
-        override fun cancel() {
+        var keptCancels = 0
+
+        override fun cancel(keepFile: Boolean) {
             if (pendingStart) cancelledDuringStart = true
             cancels += 1
+            if (keepFile) keptCancels += 1
         }
     }
 
@@ -203,22 +209,61 @@ internal object DictationSessionTestSupport {
         }
     }
 
-    class FakeHistory(private val keepAudio: Boolean) : HistoryRecorder {
-        val entries = mutableListOf<HistoryRecorder.Entry>()
-        val retained = mutableListOf<String>()
-        val discarded = mutableListOf<String>()
+    /** In-memory [HistoryRecorder]: one [Record] per take with its status transitions. */
+    class FakeHistory : HistoryRecorder {
+        class Record(val take: HistoryRecorder.Take) : HistoryTicket {
+            val statuses = mutableListOf(HistoryStatus.RECORDED)
+            var rawText: String? = null
+            var enhancedText: String? = null
+            var reason: HistoryFailureReason? = null
+            var stats: CompletionStats? = null
+            var enhancementFailed = false
 
-        override suspend fun retainAudio(file: File): String? {
-            if (!keepAudio) return null
-            return "kept/${file.name}".also { retained += it }
+            val status: HistoryStatus get() = statuses.last()
         }
 
-        override fun record(entry: HistoryRecorder.Entry) {
-            entries += entry
+        val records = mutableListOf<Record>()
+
+        override fun begin(take: HistoryRecorder.Take): HistoryTicket = Record(take).also { records += it }
+
+        override fun transcribing(ticket: HistoryTicket) {
+            (ticket as Record).statuses += HistoryStatus.TRANSCRIBING
         }
 
-        override fun discardAudio(path: String) {
-            discarded += path
+        override fun transcribed(ticket: HistoryTicket, rawText: String) {
+            (ticket as Record).run {
+                this.rawText = rawText
+                statuses += HistoryStatus.TRANSCRIBED
+            }
+        }
+
+        override fun enhancing(ticket: HistoryTicket) {
+            (ticket as Record).statuses += HistoryStatus.ENHANCING
+        }
+
+        override fun complete(
+            ticket: HistoryTicket,
+            rawText: String,
+            enhancedText: String?,
+            stats: CompletionStats,
+            enhancementFailed: Boolean,
+        ) {
+            (ticket as Record).run {
+                this.rawText = rawText
+                this.enhancedText = enhancedText
+                this.stats = stats
+                this.enhancementFailed = enhancementFailed
+                statuses += HistoryStatus.COMPLETED
+            }
+        }
+
+        override fun fail(ticket: HistoryTicket, reason: HistoryFailureReason, rawText: String?, enhancedText: String?) {
+            (ticket as Record).run {
+                this.reason = reason
+                rawText?.let { this.rawText = it }
+                enhancedText?.let { this.enhancedText = it }
+                statuses += HistoryStatus.FAILED
+            }
         }
     }
 

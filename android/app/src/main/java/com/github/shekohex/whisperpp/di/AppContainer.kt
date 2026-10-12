@@ -23,6 +23,7 @@ import com.github.shekohex.whisperpp.data.modes.LegacyModesMigration
 import com.github.shekohex.whisperpp.data.modes.ModesRepository
 import com.github.shekohex.whisperpp.data.history.DictationHistoryRecorder
 import com.github.shekohex.whisperpp.data.history.HistoryAudioStore
+import com.github.shekohex.whisperpp.data.history.HistoryMaintenance
 import com.github.shekohex.whisperpp.data.history.TranscriptHistoryDatabase
 import com.github.shekohex.whisperpp.data.history.TranscriptHistoryRepository
 import com.github.shekohex.whisperpp.data.dictionary.readDictionary
@@ -60,6 +61,9 @@ private const val AUTO_LEARN_TAG = "AutoLearn"
 class AppContainer(context: Context) {
     private val appContext: Context = context.applicationContext
 
+    /** Wall clock at process start (the container is created in `Application.onCreate`). */
+    private val createdAt: Long = System.currentTimeMillis()
+
     val settingsDataStore: DataStore<Preferences> = appContext.dataStore
     val analyticsDataStore: DataStore<Preferences> = appContext.analyticsDataStore
 
@@ -84,7 +88,7 @@ class AppContainer(context: Context) {
 
     // Transcript history (§4.8).
     private val historyDatabase: TranscriptHistoryDatabase by lazy { TranscriptHistoryDatabase.create(appContext) }
-    private val historyAudioStore: HistoryAudioStore by lazy {
+    val historyAudioStore: HistoryAudioStore by lazy {
         HistoryAudioStore(File(appContext.filesDir, HistoryAudioStore.DIR_NAME))
     }
     val transcriptHistoryRepository: TranscriptHistoryRepository by lazy {
@@ -92,6 +96,15 @@ class AppContainer(context: Context) {
     }
     val historyRecorder: HistoryRecorder by lazy {
         DictationHistoryRecorder(transcriptHistoryRepository, historyAudioStore, settingsRepository.historySettings, appScope)
+    }
+    private val historyMaintenance: HistoryMaintenance by lazy {
+        HistoryMaintenance(
+            repository = transcriptHistoryRepository,
+            settings = settingsRepository.historySettings,
+            lastRunAt = settingsRepository::historyLastPruneAt,
+            markRun = settingsRepository::setHistoryLastPruneAt,
+            processStartedAt = createdAt,
+        )
     }
 
     val httpLoggingInterceptor: RedactingLoggingInterceptor = RedactingLoggingInterceptor()
@@ -137,17 +150,26 @@ class AppContainer(context: Context) {
         }
     }
 
-    /** App start: analytics schema step and history retention pruning, off the main thread. */
+    /** App start: analytics schema step, then history recovery and retention pruning, off the main thread. */
     fun startDataMaintenance() {
         appScope.launch {
-            try {
-                analyticsRepository.migrateIfNeeded()
-                transcriptHistoryRepository.pruneExpired(settingsRepository.historySettings.first().retentionDays)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "Data maintenance failed: ${e.javaClass.simpleName}")
-            }
+            guardedMaintenance { analyticsRepository.migrateIfNeeded() }
+            guardedMaintenance { historyMaintenance.runAtStartup() }
+        }
+    }
+
+    /** The keyboard service calls this when it starts: retention pruning at most once a day. */
+    fun pruneHistoryIfDue() {
+        appScope.launch { guardedMaintenance { historyMaintenance.runIfDue() } }
+    }
+
+    private suspend fun guardedMaintenance(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Data maintenance failed: ${e.javaClass.simpleName}")
         }
     }
 

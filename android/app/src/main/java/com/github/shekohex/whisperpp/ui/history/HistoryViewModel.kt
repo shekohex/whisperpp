@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -34,6 +35,7 @@ class HistoryViewModel(
     private val appResolver: HistoryAppResolver,
     /** Writes [text] to a SAF document the user picked. */
     private val writeText: suspend (Uri, String) -> Unit,
+    initialFilter: HistoryFilter = HistoryFilter.ALL,
 ) : ViewModel() {
     data class UiState(
         val query: String = "",
@@ -43,6 +45,9 @@ class HistoryViewModel(
         val selectedIds: Set<Long> = emptySet(),
         val settings: HistorySettings = HistorySettings(),
         val apps: Map<String, HistoryAppInfo> = emptyMap(),
+        val filter: HistoryFilter = HistoryFilter.ALL,
+        /** Failed takes the user can still retry, whatever the filter or search. */
+        val needsAttentionCount: Int = 0,
     ) {
         val isSelecting: Boolean get() = selectedIds.isNotEmpty()
         val allSelected: Boolean get() = entries.isNotEmpty() && selectedIds.size == entries.size
@@ -65,9 +70,11 @@ class HistoryViewModel(
     val messages: Flow<Message> = messageChannel.receiveAsFlow()
 
     private val query = MutableStateFlow("")
+    private val filter = MutableStateFlow(initialFilter)
     private val resolvedPackages = mutableSetOf<String>()
 
     init {
+        _state.update { it.copy(filter = initialFilter) }
         observeEntries()
         observeSettings()
         observeCount()
@@ -80,6 +87,7 @@ class HistoryViewModel(
                 .debounce { if (it.isBlank()) 0L else SEARCH_DEBOUNCE_MS }
                 .distinctUntilChanged()
                 .flatMapLatest { repository.search(it) }
+                .combine(filter) { entries, selected -> entries.filtered(selected) }
                 .catch {
                     _state.update { s -> s.copy(isLoading = false) }
                     messageChannel.send(Message.LOAD_FAILED)
@@ -104,7 +112,13 @@ class HistoryViewModel(
         viewModelScope.launch {
             repository.count.collect { count -> _state.update { it.copy(totalCount = count) } }
         }
+        viewModelScope.launch {
+            repository.needsAttentionCount.collect { count -> _state.update { it.copy(needsAttentionCount = count) } }
+        }
     }
+
+    private fun List<TranscriptHistoryEntry>.filtered(selected: HistoryFilter) =
+        if (selected == HistoryFilter.NEEDS_ATTENTION) filter { it.needsAttention } else this
 
     private fun resolveApps(entries: List<TranscriptHistoryEntry>) {
         val missing = entries.mapNotNull { it.appPackage }.filter { resolvedPackages.add(it) }.distinct()
@@ -113,6 +127,11 @@ class HistoryViewModel(
             val resolved = missing.mapNotNull { pkg -> appResolver.resolve(pkg)?.let { pkg to it } }.toMap()
             if (resolved.isNotEmpty()) _state.update { it.copy(apps = it.apps + resolved) }
         }
+    }
+
+    fun onFilterChange(value: HistoryFilter) {
+        filter.value = value
+        _state.update { it.copy(filter = value) }
     }
 
     fun onQueryChange(value: String) {

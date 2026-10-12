@@ -78,7 +78,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         .map { prefs ->
             HistorySettings(
                 enabled = prefs[PreferenceKeys.HISTORY_ENABLED] ?: true,
-                keepAudio = prefs[PreferenceKeys.HISTORY_KEEP_AUDIO] ?: false,
+                keepAudio = prefs[PreferenceKeys.HISTORY_KEEP_AUDIO] ?: HistorySettings.DEFAULT_KEEP_AUDIO,
                 retentionDays = (prefs[PreferenceKeys.HISTORY_RETENTION_DAYS] ?: HistorySettings.DEFAULT_RETENTION_DAYS)
                     .coerceAtLeast(0),
             )
@@ -96,6 +96,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     /** 0 keeps entries forever. */
     suspend fun setHistoryRetentionDays(days: Int) {
         dataStore.edit { it[PreferenceKeys.HISTORY_RETENTION_DAYS] = days.coerceAtLeast(0) }
+    }
+
+    suspend fun historyLastPruneAt(): Long = dataStore.data.first()[PreferenceKeys.HISTORY_LAST_PRUNE_AT] ?: 0L
+
+    suspend fun setHistoryLastPruneAt(millis: Long) {
+        dataStore.edit { it[PreferenceKeys.HISTORY_LAST_PRUNE_AT] = millis }
     }
 
     val providers: Flow<List<ServiceProvider>> = dataStore.data.map { prefs ->

@@ -216,11 +216,14 @@ class AudioRecorder(
         current.paused = false
     }
 
-    /** Stops capture and deletes the file. Safe to call from any lifecycle callback. */
-    fun cancel() {
+    /**
+     * Stops capture and deletes the file (unless [keepFile]: the capture is finalized and the file
+     * stays). Safe to call from any lifecycle callback.
+     */
+    fun cancel(keepFile: Boolean = false) {
         generation.incrementAndGet()
         val current = session.getAndSet(null) ?: return
-        current.discard = true
+        current.discard = !keepFile
         current.stopRequested = true
         _isRecording.value = false
         meter.reset()

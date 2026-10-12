@@ -20,26 +20,31 @@ import org.junit.Test
 class DictationSessionCommitTest {
 
     @Test
-    fun completion_recordsHistoryEntry_withStatsAndKeptAudio() = sessionTest { h ->
-        val history = FakeHistory(keepAudio = true)
+    fun completion_completesTheTake_withStats_andKeepsTheAudioForHistory() = sessionTest { h ->
+        val history = FakeHistory()
         h.history = history
         h.recordFor(1_000)
         h.session.onPressRelease()
         advanceUntilIdle()
 
-        val entry = history.entries.single()
-        assertEquals("hello", entry.rawText)
-        assertNull(entry.enhancedText)
-        assertEquals(STATS, entry.stats)
-        assertEquals("com.example", entry.appPackage)
-        assertEquals(1_000L, entry.durationMs)
-        assertEquals(history.retained.single(), entry.audioPath)
-        assertTrue(history.discarded.isEmpty())
+        val record = history.records.single()
+        assertEquals(
+            listOf(HistoryStatus.RECORDED, HistoryStatus.TRANSCRIBING, HistoryStatus.TRANSCRIBED, HistoryStatus.COMPLETED),
+            record.statuses,
+        )
+        assertEquals("hello", record.rawText)
+        assertNull(record.enhancedText)
+        assertEquals(STATS, record.stats)
+        assertEquals("com.example", record.take.appPackage)
+        assertEquals(1_000L, record.take.durationMs)
+        assertEquals(STATS, record.take.stats)
+        // History owns the file now; the session must not delete it.
+        assertTrue(h.audioFile.exists())
     }
 
     @Test
     fun enhancedCompletion_recordsRawAndEnhancedText_andEnhancementModel() = sessionTest { h ->
-        val history = FakeHistory(keepAudio = false)
+        val history = FakeHistory()
         h.history = history
         h.enhancer = object : DictationEnhancer {
             override suspend fun isEnabled(request: DictationEnhancer.Request) = true
@@ -52,28 +57,33 @@ class DictationSessionCommitTest {
         h.session.onPressRelease()
         advanceUntilIdle()
 
-        val entry = history.entries.single()
-        assertEquals("hello", entry.rawText)
-        assertEquals("Hello.", entry.enhancedText)
-        assertNull(entry.audioPath)
-        assertEquals("p2", entry.stats.enhancementProviderId)
-        assertEquals("gpt", entry.stats.enhancementModelId)
-        assertEquals(250L, entry.stats.enhancementLatencyMs)
+        val record = history.records.single()
+        assertEquals(
+            listOf(
+                HistoryStatus.RECORDED,
+                HistoryStatus.TRANSCRIBING,
+                HistoryStatus.TRANSCRIBED,
+                HistoryStatus.ENHANCING,
+                HistoryStatus.COMPLETED,
+            ),
+            record.statuses,
+        )
+        assertEquals("hello", record.rawText)
+        assertEquals("Hello.", record.enhancedText)
+        assertEquals("p2", record.stats!!.enhancementProviderId)
+        assertEquals("gpt", record.stats!!.enhancementModelId)
+        assertEquals(250L, record.stats!!.enhancementLatencyMs)
         val completed = h.events.filterIsInstance<SessionEvent.Completed>().single()
-        assertEquals(entry.stats, completed.stats)
+        assertEquals(record.stats, completed.stats)
     }
 
     @Test
-    fun failedTranscription_recordsNoHistory_andKeepsNoAudio() = sessionTest { h ->
-        val history = FakeHistory(keepAudio = true)
-        h.history = history
-        h.transcript = { Result.failure(IllegalStateException("boom")) }
+    fun withoutHistory_theAudioIsDeletedWhenTheRunEnds() = sessionTest { h ->
         h.recordFor(1_000)
         h.session.onPressRelease()
         advanceUntilIdle()
 
-        assertTrue(history.entries.isEmpty())
-        assertTrue(history.retained.isEmpty())
+        assertFalse(h.audioFile.exists())
     }
 
     @Test

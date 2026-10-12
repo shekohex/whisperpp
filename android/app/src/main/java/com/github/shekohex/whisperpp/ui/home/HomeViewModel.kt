@@ -39,6 +39,7 @@ class HomeViewModel(
     backupStatusStore: BackupStatusStore,
     private val setupStatusChecker: SetupStatusChecker,
     recentTranscripts: Flow<List<TranscriptHistoryEntry>> = flowOf(emptyList()),
+    needsAttention: Flow<Int> = flowOf(0),
 ) : PreferencesViewModel(dataStore) {
 
     constructor(container: AppContainer) : this(
@@ -48,6 +49,7 @@ class HomeViewModel(
         backupStatusStore = container.backupStatusStore,
         setupStatusChecker = container.setupStatusChecker,
         recentTranscripts = container.transcriptHistoryRepository.observeRecent(RECENT_TRANSCRIPTS_LIMIT),
+        needsAttention = container.transcriptHistoryRepository.needsAttentionCount,
     )
 
     internal data class Summary(
@@ -69,6 +71,9 @@ class HomeViewModel(
     val analytics: StateFlow<AnalyticsSnapshot?> = analyticsRepository.snapshot.stateInScreen(null)
 
     val recent: StateFlow<List<TranscriptHistoryEntry>> = recentTranscripts.stateInScreen(emptyList())
+
+    /** Failed takes whose recording is still saved; Home offers to open them. */
+    val needsAttention: StateFlow<Int> = needsAttention.stateInScreen(0)
 
     val backupStatus: StateFlow<BackupStatusStore.Status> = backupStatusStore.status
 

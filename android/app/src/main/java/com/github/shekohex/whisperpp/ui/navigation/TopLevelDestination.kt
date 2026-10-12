@@ -24,7 +24,7 @@ enum class TopLevelDestination(
 ) {
     HOME(Destination.Home, R.string.nav_home, Icons.Filled.Home, Icons.Outlined.Home),
     MODES(Destination.Modes, R.string.nav_modes, Icons.Filled.AutoAwesome, Icons.Outlined.AutoAwesome),
-    HISTORY(Destination.History, R.string.nav_history, Icons.Filled.History, Icons.Outlined.History),
+    HISTORY(Destination.History(), R.string.nav_history, Icons.Filled.History, Icons.Outlined.History),
     DICTIONARY(Destination.Dictionary, R.string.nav_dictionary, Icons.AutoMirrored.Filled.MenuBook, Icons.AutoMirrored.Outlined.MenuBook),
     MORE(Destination.More, R.string.nav_more, Icons.Filled.MoreHoriz, Icons.Outlined.MoreHoriz),
 }

@@ -53,9 +53,10 @@ class HistoryHelpersTest {
 
     @Test
     fun retentionOptions_listsPresetsThenForever_andKeepsACustomValue() {
-        assertEquals(listOf(7, 30, 90, 0), retentionOptions(30))
-        assertEquals(listOf(7, 30, 45, 90, 0), retentionOptions(45))
-        assertEquals(listOf(7, 30, 90, 0), retentionOptions(0))
+        assertEquals(listOf(7, 15, 30, 0), retentionOptions(30))
+        assertEquals(listOf(7, 15, 30, 45, 0), retentionOptions(45))
+        assertEquals(listOf(7, 15, 30, 90, 0), retentionOptions(90))
+        assertEquals(listOf(7, 15, 30, 0), retentionOptions(0))
     }
 
     @Test

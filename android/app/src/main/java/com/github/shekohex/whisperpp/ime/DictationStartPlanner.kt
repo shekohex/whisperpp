@@ -33,16 +33,12 @@ class DictationStartPlanner(private val deps: Deps) {
         val awaitSendPolicy: suspend () -> Unit,
         val isSendBlocked: () -> Boolean,
         val checkMicPermission: () -> Boolean,
-        val recordingFile: () -> File,
-        /** Maps the stored post-processing preference (null when unset) to a script conversion. */
-        val scriptConversion: (String?) -> ScriptConversion,
-        val audioMediaType: String,
+        val recordingFile: suspend () -> File,
+        val requests: SttRequestFactory,
         val onBlocked: () -> Unit,
         val onSetupRequired: () -> Unit,
         val onNotice: (String) -> Unit,
         val onStreamingUnsupported: () -> Unit,
-        /** Dictionary vocabulary; sent only to models with `capabilities.vocabulary`. */
-        val vocabulary: suspend () -> List<String> = { emptyList() },
         /** User-facing (localized) summary of resolver warnings for one channel. */
         val describeWarnings: (List<RuntimeWarning>, RuntimeChannel) -> String = { warnings, channel ->
             warnings.toNoticeText(channel)
@@ -99,23 +95,7 @@ class DictationStartPlanner(private val deps: Deps) {
         }
 
         val prefs = selection.prefs
-        val provider = selection.provider
-        val basePrompt = provider.prompt.ifEmpty { prefs[PROMPT] ?: "" }
-        val acceptsVocabulary = provider.models.find { it.id == selection.modelId }?.capabilities?.vocabulary == true
-        val vocabulary = if (acceptsVocabulary) deps.vocabulary() else emptyList()
-        val request = TranscriptionRequest(
-            provider = provider,
-            modelId = selection.modelId,
-            languageCode = selection.mode.languageCode,
-            prompt = if (acceptsVocabulary) Vocabulary.appendToPrompt(basePrompt, vocabulary) else basePrompt,
-            temperature = provider.temperature,
-            timeoutMs = provider.timeout.toLong(),
-            mediaType = deps.audioMediaType,
-            scriptConversion = deps.scriptConversion(prefs[POSTPROCESSING]),
-            addTrailingSpace = prefs[ADD_TRAILING_SPACE] ?: false,
-            useContext = prefs[USE_CONTEXT] ?: false,
-            vocabulary = Vocabulary.normalize(vocabulary),
-        )
+        val request = deps.requests.create(prefs, selection.provider, selection.modelId, selection.mode.languageCode)
         return StartDecision.Proceed(
             StartPlan(
                 audioFile = deps.recordingFile(),

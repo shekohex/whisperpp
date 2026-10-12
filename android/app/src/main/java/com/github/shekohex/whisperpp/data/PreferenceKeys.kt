@@ -108,8 +108,10 @@ object PreferenceKeys {
     /** Transcript history (§4.8): record completed dictations (default true), keep their audio (default false). */
     val HISTORY_ENABLED = booleanPreferencesKey("history-enabled")
     val HISTORY_KEEP_AUDIO = booleanPreferencesKey("history-keep-audio")
-    /** Entries older than this many days are pruned on app start; 0 keeps them forever. Default 30. */
+    /** Entries older than this many days are pruned on app start and daily; 0 keeps them forever. Default 30. */
     val HISTORY_RETENTION_DAYS = intPreferencesKey("history-retention-days")
+    /** Epoch millis of the last retention pruning; machine state, not backed up. */
+    val HISTORY_LAST_PRUNE_AT = longPreferencesKey("history-last-prune-at")
 
     val SETTINGS: List<PreferenceKey<*>> = listOf(
         SPEECH_TO_TEXT_BACKEND,
@@ -185,6 +187,7 @@ object PreferenceKeys {
         HISTORY_ENABLED,
         HISTORY_KEEP_AUDIO,
         HISTORY_RETENTION_DAYS,
+        HISTORY_LAST_PRUNE_AT,
     )
 
     // Analytics DataStore ("analytics")

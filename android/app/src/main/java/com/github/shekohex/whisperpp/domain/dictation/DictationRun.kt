@@ -41,6 +41,32 @@ internal class DictationRun(val id: Long, val focus: FocusKey) {
     var enhancementModelId: String? = null
     var enhancementLatencyMs: Long? = null
 
-    /** Kept recording owned by this run until it is handed to history (or discarded on finish). */
-    var audioPath: String? = null
+    /** The take's history row once the recording stopped with audio; history owns the file from then on. */
+    var ticket: HistoryTicket? = null
+    var resolution = TakeResolution.OPEN
+
+    /** Why the run is being cut short, when the cause is not a plain cancel (recorded if the take is still open). */
+    var abortReason: HistoryFailureReason? = null
+
+    /** Enhancement was attempted and fell back to the raw text. */
+    var enhancementFailed = false
+
+    /** Live capture is stopped but kept (service teardown mid-recording) so the take can be saved. */
+    var salvageOnFinish = false
+
+    enum class TakeResolution { OPEN, COMPLETED, FAILED }
+
+    fun stats(): CompletionStats = CompletionStats(
+        providerId = plan?.request?.provider?.id.orEmpty(),
+        sttModelId = plan?.request?.modelId.orEmpty(),
+        languageCode = plan?.request?.languageCode?.takeIf { it.isNotBlank() && it != AUTO_LANGUAGE },
+        transcriptionLatencyMs = transcriptionLatencyMs,
+        enhancementProviderId = enhancementProviderId,
+        enhancementModelId = enhancementModelId,
+        enhancementLatencyMs = enhancementLatencyMs,
+    )
+
+    private companion object {
+        const val AUTO_LANGUAGE = "auto"
+    }
 }

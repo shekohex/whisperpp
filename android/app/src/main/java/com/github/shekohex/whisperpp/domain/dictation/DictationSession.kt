@@ -51,7 +51,7 @@ class DictationSession(private val deps: Deps) {
         val postProcess: (String, DictationOptions) -> String = { text, _ -> text },
         /** Clipboard text for modes that add it to the enhancement context. */
         val clipboardText: () -> String? = { null },
-        /** Transcript history (§4.8); null disables it. */
+        /** Durable record of every take (§4.8); null disables it. */
         val history: HistoryRecorder? = null,
     )
 
@@ -65,6 +65,7 @@ class DictationSession(private val deps: Deps) {
     val events: SharedFlow<SessionEvent> = _events.asSharedFlow()
 
     private val _pendingCommit = MutableStateFlow<String?>(null)
+    private var heldTake: TakeHistory.HeldTake? = null
 
     /**
      * Transcript held back because focus moved away from its field (G-07) or the editor rejected the
@@ -83,8 +84,9 @@ class DictationSession(private val deps: Deps) {
     private var run: DictationRun? = null
 
     private val streamingPipeline = RealtimeStreaming(deps, _state, { currentFocus }, { run === it })
-    private val enhancement = EnhancementStep(deps, _state, { currentFocus }, { run === it }, ::emit)
-    private val completion = CompletionReporter(deps, { run === it }, ::emit)
+    private val takeHistory = TakeHistory(deps, ::emit)
+    private val enhancement = EnhancementStep(deps, _state, { currentFocus }, { run === it }, ::emit, takeHistory)
+    private val completion = CompletionReporter(takeHistory, ::emit)
 
     /** Id of the most recently started run; a [SessionEvent.Completed] with an older id is stale. */
     var latestRunId: Long = 0L
@@ -172,11 +174,7 @@ class DictationSession(private val deps: Deps) {
         val r = run ?: return
         val s = _state.value as? SessionState.Recording ?: return
         val plan = r.plan ?: return
-        if (!deps.sendAllowed()) {
-            emit(SessionEvent.SendBlocked)
-            cancelRun(recordDiscard = true)
-            return
-        }
+        // A blocked editor is checked once the recorder stopped: the take is saved, never sent.
         r.durationMs = s.elapsedMs(deps.clock())
         r.stoppedAt = deps.clock()
         // Read now, before stopping the recorder suspends: later the editor may be another field's.
@@ -239,6 +237,7 @@ class DictationSession(private val deps: Deps) {
             is SessionState.Committing,
             -> {
                 emit(SessionEvent.SendBlocked)
+                r.abortReason = HistoryFailureReason.INSERT_BLOCKED
                 cancelRun(recordDiscard = true)
             }
             else -> Unit
@@ -261,17 +260,29 @@ class DictationSession(private val deps: Deps) {
                 _pendingCommit.value = text
                 emit(SessionEvent.CommitFailed(text, SessionEvent.CommitFailed.Reason.INSERT_FAILED))
             }
-            is TextCommitter.CommitResult.Inserted -> emit(SessionEvent.Committed(text))
+            is TextCommitter.CommitResult.Inserted -> {
+                emit(SessionEvent.Committed(text))
+                resolveHeldTake()
+            }
         }
     }
 
+    /** The user dismissed the held transcript; it stays in History, which is no longer waiting on it. */
     fun onPendingCommitDiscard() {
         _pendingCommit.value = null
+        resolveHeldTake()
     }
 
-    /** Service teardown: ends any run and releases its resources. */
+    /** Service teardown: ends any run and releases its resources; a take mid-recording is saved. */
     fun release() {
-        run?.let { finish(it, SessionState.Idle) }
+        val r = run ?: return
+        val s = _state.value
+        r.abortReason = HistoryFailureReason.INTERRUPTED
+        if (s is SessionState.Recording && r.recorderLive && s.elapsedMs(deps.clock()) >= deps.minRecordingMs) {
+            r.durationMs = s.elapsedMs(deps.clock())
+            r.salvageOnFinish = true
+        }
+        finish(r, SessionState.Idle)
     }
 
     // endregion
@@ -315,14 +326,21 @@ class DictationSession(private val deps: Deps) {
         deps.focus.release()
         val recording = stopped.getOrElse { error ->
             emit(SessionEvent.RecordingFailed((error as? AudioRecorder.RecorderException)?.kind))
+            // Whatever the recorder wrote before it broke is still the user's words.
+            if (takeHistory.saveFailedCapture(r, plan.audioFile, r.durationMs, HistoryFailureReason.RECORDER_ERROR)) {
+                emit(SessionEvent.RecordingSaved(HistoryFailureReason.RECORDER_ERROR))
+            }
             return finish(r, SessionState.Error(SessionState.ErrorKind.RECORDING_FAILED, recoverable = true))
         }
         deps.cues(SoundCues.Cue.STOP)
         // No more chunks; the sender drains what is queued before the stream is committed.
         r.pcm?.close()
-        // The editor may have become blocked while the recorder was stopping; nothing leaves the device then.
+        // From here the audio is saved: no failure below can lose it.
+        takeHistory.begin(r, recording.file, r.durationMs)
+        // The editor may be blocked for sending (it can change while recording or stopping): save, never send.
         if (!deps.sendAllowed()) {
             emit(SessionEvent.SendBlocked)
+            r.abortReason = HistoryFailureReason.INSERT_BLOCKED
             return cancelRun(recordDiscard = true)
         }
 
@@ -338,22 +356,28 @@ class DictationSession(private val deps: Deps) {
                 TranscriptionOutcome.fromBatch(transcribe(recording.file, request))
             }
             r.transcriptionLatencyMs = (deps.clock() - r.stoppedAt).coerceAtLeast(0L)
-            if (result is TranscriptionOutcome.Text) completion.retainAudio(r, recording.file)
             result
         } finally {
-            recording.file.delete()
+            // History owns the file once the take is saved; without it nobody keeps the audio.
+            if (r.ticket == null) recording.file.delete()
         }
 
         when (outcome) {
             is TranscriptionOutcome.Failed -> {
+                val reason = if (outcome.network) HistoryFailureReason.NETWORK_ERROR else HistoryFailureReason.TRANSCRIPTION_FAILED
                 emit(SessionEvent.TranscriptionFailed(outcome.message))
+                takeHistory.failAndNotify(r, reason)
                 finish(r, SessionState.Error(SessionState.ErrorKind.TRANSCRIPTION_FAILED, recoverable = true))
             }
             TranscriptionOutcome.Empty -> {
                 emit(SessionEvent.TranscriptionEmpty)
+                takeHistory.failAndNotify(r, HistoryFailureReason.EMPTY_TRANSCRIPT)
                 finish(r, SessionState.Idle)
             }
-            is TranscriptionOutcome.Text -> commit(r, outcome.text)
+            is TranscriptionOutcome.Text -> {
+                takeHistory.transcribed(r, outcome.text)
+                commit(r, outcome.text)
+            }
         }
     }
 
@@ -372,6 +396,7 @@ class DictationSession(private val deps: Deps) {
         if (processed.isBlank()) {
             // Filtering removed everything: nothing to insert, enhance or send.
             emit(SessionEvent.TranscriptionEmpty)
+            takeHistory.failAndNotify(r, HistoryFailureReason.EMPTY_TRANSCRIPT, rawText = transcript)
             return finish(r, SessionState.Idle)
         }
         // Applied once here, for streamed and batch transcripts alike.
@@ -395,12 +420,13 @@ class DictationSession(private val deps: Deps) {
         if (run !== r) return
 
         if (currentFocus != r.focus) {
-            _pendingCommit.value = text
+            holdTranscript(r, HistoryFailureReason.INSERT_BLOCKED, raw, text)
             emit(SessionEvent.CommitBlockedByFocus(text))
             return finish(r, SessionState.Idle)
         }
         if (!deps.sendAllowed()) {
             emit(SessionEvent.CommitFailed(text, SessionEvent.CommitFailed.Reason.BLOCKED))
+            takeHistory.fail(r, HistoryFailureReason.INSERT_BLOCKED, raw, text.takeIf { it != raw })
             return finish(r, SessionState.Idle)
         }
         r.replaceRange?.let(deps.committer::select)
@@ -409,11 +435,12 @@ class DictationSession(private val deps: Deps) {
         when (result) {
             TextCommitter.CommitResult.NoField -> {
                 emit(SessionEvent.CommitFailed(text, SessionEvent.CommitFailed.Reason.NO_FIELD))
+                takeHistory.fail(r, HistoryFailureReason.INSERT_FAILED, raw, text.takeIf { it != raw })
                 return finish(r, SessionState.Idle)
             }
             is TextCommitter.CommitResult.Failed -> {
                 // Not in the field: keep it for Insert here / Copy instead of reporting success.
-                _pendingCommit.value = text
+                holdTranscript(r, HistoryFailureReason.INSERT_FAILED, raw, text)
                 emit(SessionEvent.CommitFailed(text, SessionEvent.CommitFailed.Reason.INSERT_FAILED))
                 return finish(r, SessionState.Idle)
             }
@@ -438,22 +465,24 @@ class DictationSession(private val deps: Deps) {
     /** Cancelling while enhancing skips the enhancement; the raw text still lands (or is held for Insert here). */
     private fun insertRawAfterCancel(r: DictationRun, raw: String): Boolean {
         if (currentFocus != r.focus || !windowVisible.value) {
-            _pendingCommit.value = raw
+            holdTranscript(r, HistoryFailureReason.INSERT_BLOCKED, raw, raw)
             emit(SessionEvent.CommitBlockedByFocus(raw))
             return false
         }
         if (!deps.sendAllowed()) {
             emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.BLOCKED))
+            takeHistory.fail(r, HistoryFailureReason.INSERT_BLOCKED, raw)
             return false
         }
         r.replaceRange?.let(deps.committer::select)
         return when (deps.committer.commit(r.focus, raw)) {
             TextCommitter.CommitResult.NoField -> {
                 emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.NO_FIELD))
+                takeHistory.fail(r, HistoryFailureReason.INSERT_FAILED, raw)
                 false
             }
             is TextCommitter.CommitResult.Failed -> {
-                _pendingCommit.value = raw
+                holdTranscript(r, HistoryFailureReason.INSERT_FAILED, raw, raw)
                 emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.INSERT_FAILED))
                 false
             }
@@ -482,8 +511,15 @@ class DictationSession(private val deps: Deps) {
         val r = run ?: return
         val s = _state.value as? SessionState.Recording ?: return
         if (!r.recorderLive) return
+        val durationMs = s.elapsedMs(deps.clock())
+        r.durationMs = durationMs
         emit(SessionEvent.RecordingFailed(event.kind))
-        emit(SessionEvent.Discarded(s.elapsedMs(deps.clock())))
+        // The recorder keeps what it captured before it broke; that is saved as a failed take.
+        val plan = r.plan
+        if (plan != null && takeHistory.saveFailedCapture(r, plan.audioFile, durationMs, HistoryFailureReason.RECORDER_ERROR)) {
+            emit(SessionEvent.RecordingSaved(HistoryFailureReason.RECORDER_ERROR))
+        }
+        emit(SessionEvent.Discarded(durationMs))
         finish(r, SessionState.Error(SessionState.ErrorKind.RECORDING_FAILED, recoverable = true))
     }
 
@@ -500,9 +536,12 @@ class DictationSession(private val deps: Deps) {
                 }
             }
             is SessionState.Recording -> if (recordDiscard) emit(SessionEvent.Discarded(s.elapsedMs(deps.clock())))
-            is SessionState.Transcribing,
-            is SessionState.Committing,
-            -> if (recordDiscard) emit(SessionEvent.Discarded(r.durationMs))
+            is SessionState.Transcribing -> if (recordDiscard) emit(SessionEvent.Discarded(r.durationMs))
+            is SessionState.Committing -> {
+                if (recordDiscard) emit(SessionEvent.Discarded(r.durationMs))
+                // The text exists already: keep it with the take rather than only the audio.
+                takeHistory.failAndNotify(r, r.abortReason ?: HistoryFailureReason.CANCELLED, enhancedText = s.text)
+            }
             else -> Unit
         }
         finish(r, SessionState.Cancelled)
@@ -518,7 +557,7 @@ class DictationSession(private val deps: Deps) {
         r.pcm?.close()
         if (r.recorderLive) {
             r.recorderLive = false
-            deps.recorder.cancel()
+            deps.recorder.cancel(keepFile = r.salvageOnFinish)
         } else if (wasStarting && r.plan != null) {
             // Aborts a recorder start that is still opening the device.
             deps.recorder.cancel()
@@ -527,11 +566,20 @@ class DictationSession(private val deps: Deps) {
         r.streaming?.let(streamingPipeline::cancel)
         // Every terminal path, Idle included; only the field that owns the partial is edited.
         if (r.composing) deps.committer.clearComposing(currentFocus)
-        r.plan?.audioFile?.delete()
-        r.audioPath?.let { path -> deps.history?.discardAudio(path) }
-        r.audioPath = null
+        takeHistory.settle(r)
         _state.value = next
         if (next == SessionState.Cancelled) _state.value = SessionState.Idle
+    }
+
+    /** Keeps a transcript the field did not take for Insert here / Copy, and records why in History. */
+    private fun holdTranscript(r: DictationRun, reason: HistoryFailureReason, raw: String, text: String) {
+        _pendingCommit.value = text
+        heldTake = takeHistory.hold(r, reason, raw, text)
+    }
+
+    private fun resolveHeldTake() {
+        heldTake?.let(takeHistory::resolveHeld)
+        heldTake = null
     }
 
     private fun emit(event: SessionEvent) {

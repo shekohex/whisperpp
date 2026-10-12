@@ -2,7 +2,10 @@ package com.github.shekohex.whisperpp.ui.history
 
 import com.github.shekohex.whisperpp.data.HistorySettings
 import com.github.shekohex.whisperpp.data.history.TranscriptHistoryEntry
+import com.github.shekohex.whisperpp.domain.dictation.HistoryFailureReason
+import com.github.shekohex.whisperpp.domain.dictation.HistoryStatus
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.io.File
 
 internal fun historyEntry(
     createdAt: Long,
@@ -10,6 +13,8 @@ internal fun historyEntry(
     enhanced: String? = null,
     appPackage: String? = null,
     audioPath: String? = null,
+    status: HistoryStatus = HistoryStatus.COMPLETED,
+    failureReason: HistoryFailureReason? = null,
 ) = TranscriptHistoryEntry(
     createdAt = createdAt,
     rawText = raw,
@@ -20,7 +25,16 @@ internal fun historyEntry(
     durationMs = 4_000,
     wordCount = raw.split(' ').size,
     audioPath = audioPath,
+    status = status,
+    failureReason = failureReason,
 )
+
+/** A [HistoryTranscriber] a test never reaches. */
+internal object UnusedTranscriber : HistoryTranscriber {
+    override suspend fun transcribe(audio: File, entry: TranscriptHistoryEntry): HistoryTranscriber.Result = error("unused")
+
+    override suspend fun enhancementEnabled(entry: TranscriptHistoryEntry): Boolean = error("unused")
+}
 
 /** In-memory [HistorySettingsStore]. */
 internal class FakeHistorySettingsStore(initial: HistorySettings = HistorySettings()) : HistorySettingsStore {

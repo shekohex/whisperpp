@@ -51,7 +51,7 @@ class DictationSessionOutputModeTest {
 
         override suspend fun pause() = Unit
         override suspend fun resume() = Unit
-        override fun cancel() = Unit
+        override fun cancel(keepFile: Boolean) = Unit
     }
 
     private class RecordingEnhancer(private val output: String?) : DictationEnhancer {

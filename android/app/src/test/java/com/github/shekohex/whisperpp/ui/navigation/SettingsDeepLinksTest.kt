@@ -41,7 +41,7 @@ class SettingsDeepLinksTest {
     @Test
     fun newTopLevelNamesOpenTheirTab() {
         assertEquals(Target(Destination.Modes), SettingsDeepLinks.resolve("modes"))
-        assertEquals(Target(Destination.History), SettingsDeepLinks.resolve("history"))
+        assertEquals(Target(Destination.History()), SettingsDeepLinks.resolve("history"))
         assertEquals(Target(Destination.Dictionary), SettingsDeepLinks.resolve("dictionary"))
         assertEquals(Target(Destination.More), SettingsDeepLinks.resolve("more"))
         assertEquals(Target(Destination.More, Destination.AudioSettings), SettingsDeepLinks.resolve("audio"))

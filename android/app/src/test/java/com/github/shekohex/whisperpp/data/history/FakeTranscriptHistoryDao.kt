@@ -1,5 +1,6 @@
 package com.github.shekohex.whisperpp.data.history
 
+import com.github.shekohex.whisperpp.domain.dictation.HistoryStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -19,6 +20,12 @@ class FakeTranscriptHistoryDao : TranscriptHistoryDao {
 
     override suspend fun insertAll(entries: List<TranscriptHistoryEntry>) {
         entries.forEach { insert(it) }
+    }
+
+    override suspend fun update(entry: TranscriptHistoryEntry): Int {
+        if (rows.value.none { it.id == entry.id }) return 0
+        rows.value = rows.value.map { if (it.id == entry.id) entry else it }
+        return 1
     }
 
     override suspend fun updateEnhancedText(id: Long, enhancedText: String?, enhancementModelId: String?): Int {
@@ -48,6 +55,12 @@ class FakeTranscriptHistoryDao : TranscriptHistoryDao {
     override suspend fun all(): List<TranscriptHistoryEntry> = sorted(rows.value)
 
     override fun observeCount(): Flow<Int> = rows.map { it.size }
+
+    override fun observeNeedsAttentionCount(): Flow<Int> =
+        rows.map { list -> list.count { it.status == HistoryStatus.FAILED } }
+
+    override suspend fun inFlightBefore(before: Long): List<TranscriptHistoryEntry> =
+        rows.value.filter { it.status.isInFlight && it.createdAt < before }
 
     override suspend fun audioPathsFor(ids: List<Long>): List<String> =
         rows.value.filter { it.id in ids }.mapNotNull { it.audioPath }

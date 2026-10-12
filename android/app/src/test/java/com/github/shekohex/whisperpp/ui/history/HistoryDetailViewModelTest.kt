@@ -54,7 +54,7 @@ class HistoryDetailViewModelTest {
     }
 
     private fun viewModel(id: Long, reEnhancer: HistoryReEnhancer = HistoryReEnhancer { error("unused") }) =
-        HistoryDetailViewModel(id, repository, reEnhancer, appResolver = { null })
+        HistoryDetailViewModel(id, repository, reEnhancer, UnusedTranscriber, appResolver = { null })
 
     @Test
     fun loadsTheEntry() = runTest(dispatcher) {

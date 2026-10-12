@@ -20,8 +20,9 @@ sealed interface Destination {
     @Serializable
     data class ModeEdit(val id: String? = null) : Destination
 
+    /** The History tab; [failedOnly] opens it filtered to takes that need attention (Home's banner). */
     @Serializable
-    data object History : Destination
+    data class History(val failedOnly: Boolean = false) : Destination
 
     /** One transcript (raw vs enhanced, audio, re-enhance). */
     @Serializable
