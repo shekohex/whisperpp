@@ -319,6 +319,7 @@
     <string name="dictation_no_field">No text field focused</string>
     <string name="dictation_transcription_failed">Transcription failed: %1$s</string>
     <string name="dictation_copied_no_field">No field focused; copied to clipboard</string>
+    <string name="dictation_copied_mode">Copied to clipboard</string>
     <string name="dictation_copied_blocked">Sending blocked here; transcript copied</string>
     <string name="dictation_undo_unavailable">Can\'t undo here</string>
     <string name="dictation_streaming_unsupported">Realtime transcription is not supported for this provider; using batch</string>

@@ -56,7 +56,14 @@ sealed interface SessionEvent {
         val focus: FocusKey,
         val runId: Long,
         val stats: CompletionStats = CompletionStats(),
+        /** False when the text went to the clipboard (output mode CLIPBOARD): nothing to auto-send. */
+        val inserted: Boolean = true,
+        /** The mode's resolved auto-send; null = decide from settings. */
+        val autoSend: Boolean? = null,
     ) : SessionEvent
+
+    /** Output mode CLIPBOARD: copy [text] (enhanced when enabled); the field was not touched. */
+    data class CopyToClipboard(val text: String) : SessionEvent
 
     /** Terminal analytics: a started recording was discarded. */
     data class Discarded(val durationMs: Long) : SessionEvent

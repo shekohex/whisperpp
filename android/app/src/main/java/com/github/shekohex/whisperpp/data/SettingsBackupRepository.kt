@@ -12,6 +12,10 @@ import com.github.shekohex.whisperpp.data.dictionary.writeDictionary
 import com.github.shekohex.whisperpp.data.history.HistoryBackup
 import com.github.shekohex.whisperpp.data.history.HistoryBackupSource
 import com.github.shekohex.whisperpp.data.history.sanitizeHistoryBackup
+import com.github.shekohex.whisperpp.data.modes.ModeRules
+import com.github.shekohex.whisperpp.data.modes.storedModes
+import com.github.shekohex.whisperpp.data.modes.writeModes
+import com.github.shekohex.whisperpp.domain.modes.Mode
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.google.gson.Gson
 import com.google.gson.JsonElement
@@ -157,6 +161,7 @@ class SettingsBackupRepository(
                 updateChannel = prefs.stringValue(PreferenceKeys.UPDATE_CHANNEL).ifBlank { "stable" },
             ),
             dictionary = readDictionary(prefs, gson),
+            modes = ModesBackup(modes = storedModes(prefs, gson).orEmpty()),
             history = if (includeHistory) historySource?.exportBackup() else null,
         )
     }
@@ -229,6 +234,7 @@ class SettingsBackupRepository(
             privacySafety = resolvePrivacySafety(current, imported, availableCategoryIds, restoreMode),
             advancedPreferences = resolveAdvancedPreferences(current, imported, availableCategoryIds),
             dictionary = resolveDictionary(current, imported, availableCategoryIds, restoreMode),
+            modes = resolveModes(current, imported, availableCategoryIds, restoreMode),
             history = resolveHistory(current, imported, availableCategoryIds, restoreMode),
         )
     }
@@ -249,6 +255,24 @@ class SettingsBackupRepository(
         val existing = current.history?.entries.orEmpty()
         val merged = (existing + incoming.entries).distinctBy { it.createdAt to it.rawText }.sortedByDescending { it.createdAt }
         return incoming.copy(entries = merged)
+    }
+
+    /** Merge by id like providers/prompts; imported modes win the default flag and contested packages. */
+    private fun resolveModes(
+        current: SettingsBackupPayload,
+        imported: SettingsBackupPayload,
+        availableCategoryIds: Set<String>,
+        restoreMode: RestoreMode,
+    ): ModesBackup {
+        val incoming = imported.modes.modes
+        if (SETTINGS_BACKUP_CATEGORY_MODES !in availableCategoryIds || incoming.isEmpty()) {
+            return current.modes
+        }
+        if (restoreMode == RestoreMode.OVERWRITE) {
+            return ModesBackup(ModeRules.normalize(incoming))
+        }
+        val merged = mergeByKey(current.modes.modes, incoming) { it.id }
+        return ModesBackup(ModeRules.normalize(merged, claimFirst = incoming.map { it.id }.toSet()))
     }
 
     private fun resolveProvidersModels(
@@ -532,6 +556,9 @@ class SettingsBackupRepository(
                 if (SETTINGS_BACKUP_CATEGORY_DICTIONARY in categoriesToApply) {
                     writeDictionary(prefs, resolvedPayload.dictionary, gson)
                 }
+                if (SETTINGS_BACKUP_CATEGORY_MODES in categoriesToApply) {
+                    applyModes(prefs, resolvedPayload.modes)
+                }
             }
 
             if (SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS in categoriesToApply) {
@@ -769,6 +796,17 @@ class SettingsBackupRepository(
         }
     }
 
+    /** Restored modes replace the legacy migration: it is marked done so it never runs on top of them. */
+    private fun applyModes(prefs: MutablePreferences, category: ModesBackup) {
+        val modes = ModeRules.normalize(category.modes)
+        // Nothing imported (the backup had no modes): leave the store and the migration state alone.
+        if (category.modes.isEmpty() || modes == storedModes(prefs, gson)) return
+        writeModes(prefs, modes, gson)
+        prefs[PreferenceKeys.MODES_MIGRATED] = true
+        val selected = prefs[PreferenceKeys.SELECTED_MODE_ID]
+        if (selected != null && modes.none { it.id == selected }) prefs.remove(PreferenceKeys.SELECTED_MODE_ID)
+    }
+
     private fun applyProvidersModels(prefs: MutablePreferences, category: ProvidersModelsBackup) {
         prefs[PreferenceKeys.PROVIDERS_JSON] = gson.toJson(category.providers)
     }
@@ -855,6 +893,7 @@ class SettingsBackupRepository(
                 privacySafety = parsePrivacySafetyCategory(root, availableCategoryIds, skippedItems),
                 advancedPreferences = parseAdvancedPreferencesCategory(root, availableCategoryIds, skippedItems),
                 dictionary = parseDictionaryCategory(root, availableCategoryIds, skippedItems),
+                modes = parseModesCategory(root, availableCategoryIds, skippedItems),
                 history = parseHistoryCategory(root, availableCategoryIds, skippedItems),
             ),
             availableCategoryIds = availableCategoryIds,
@@ -1273,6 +1312,39 @@ class SettingsBackupRepository(
         )
     }
 
+    private fun parseModesCategory(
+        root: JsonObject,
+        availableCategoryIds: MutableSet<String>,
+        skippedItems: MutableList<SkippedImportItem>,
+    ): ModesBackup {
+        val category = root.readCategoryObject("modes", SETTINGS_BACKUP_CATEGORY_MODES, availableCategoryIds, skippedItems)
+            ?: return ModesBackup()
+        val modesElement = category.get("modes")
+        if (modesElement == null || modesElement.isJsonNull) return ModesBackup()
+        if (!modesElement.isJsonArray) {
+            skippedItems += SkippedImportItem(categoryId = SETTINGS_BACKUP_CATEGORY_MODES, reason = "Expected modes array.")
+            return ModesBackup()
+        }
+        val modes = mutableListOf<Mode>()
+        modesElement.asJsonArray.forEachIndexed { index, element ->
+            val mode = try {
+                ModeRules.sanitize(gson.fromJson(element, Mode::class.java))
+            } catch (_: Exception) {
+                null
+            }
+            if (mode == null) {
+                skippedItems += SkippedImportItem(
+                    categoryId = SETTINGS_BACKUP_CATEGORY_MODES,
+                    itemKey = "mode[$index]",
+                    reason = "Mode is invalid.",
+                )
+                return@forEachIndexed
+            }
+            modes += mode
+        }
+        return ModesBackup(modes = modes)
+    }
+
     private fun parseDictionaryCategory(
         root: JsonObject,
         availableCategoryIds: MutableSet<String>,
@@ -1435,6 +1507,7 @@ class SettingsBackupRepository(
             }
 
             SETTINGS_BACKUP_CATEGORY_ADVANCED_PREFERENCES -> listOf("updateChannel")
+            SETTINGS_BACKUP_CATEGORY_MODES -> payload.modes.modes.map { it.id }
             SETTINGS_BACKUP_CATEGORY_DICTIONARY -> buildList {
                 addAll(payload.dictionary.replacements.flatMap { rule -> rule.originals.map { "replacement:${it.lowercase()}" } })
                 addAll(payload.dictionary.vocabulary.map { "vocabulary:${it.lowercase()}" })

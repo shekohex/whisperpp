@@ -96,6 +96,7 @@ import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.domain.dictation.AudioRecorderSource
 import com.github.shekohex.whisperpp.domain.dictation.AutoSend
 import com.github.shekohex.whisperpp.domain.dictation.CompletionStats
+import com.github.shekohex.whisperpp.domain.dictation.DictationOptions
 import com.github.shekohex.whisperpp.domain.dictation.DictationSession
 import com.github.shekohex.whisperpp.domain.dictation.SessionEvent
 import com.github.shekohex.whisperpp.domain.dictation.SessionState
@@ -277,7 +278,11 @@ class WhisperInputService : InputMethodService() {
         )
         soundCues = SoundCues(this, serviceScope, repository.soundEffectsEnabled)
         serviceScope.launch { repository.tapToRecord.collect { tapToRecord.value = it } }
-        configLoader = RuntimeConfigLoader(dataStore, repository)
+        configLoader = RuntimeConfigLoader(
+            dataStore = dataStore,
+            repository = repository,
+            hasCredential = { !container.secretsStore.getProviderApiKey(it).isNullOrBlank() },
+        )
         disclosureGate = FirstUseDisclosureGate(dataStore, serviceScope)
         startPlanner = createStartPlanner()
         dictationDisclosureShown = dataStore.data
@@ -297,6 +302,7 @@ class WhisperInputService : InputMethodService() {
                 clock = SystemClock::elapsedRealtime,
                 scope = serviceScope,
                 postProcess = ::postProcessTranscript,
+                clipboardText = ::commandClipboardText,
                 history = container.historyRecorder,
             )
         )
@@ -442,9 +448,17 @@ class WhisperInputService : InputMethodService() {
             ?.forEach { it.delete() }
     }
 
-    /** Filter → word replacements (WP-2.4); the session adds the "Add trailing space" space afterwards. */
-    private fun postProcessTranscript(text: String): String {
-        val filtered = TranscriptFilter.apply(text, transcriptFilterOptions.value)
+    /**
+     * Filter → word replacements (WP-2.4) with the mode's formatting switches over the global ones; the
+     * session adds the "Add trailing space" space afterwards.
+     */
+    private fun postProcessTranscript(text: String, options: DictationOptions): String {
+        val global = transcriptFilterOptions.value
+        val filterOptions = global.copy(
+            removeFillers = options.removeFillers ?: global.removeFillers,
+            formatParagraphs = options.formatParagraphs ?: global.formatParagraphs,
+        )
+        val filtered = TranscriptFilter.apply(text, filterOptions)
         return wordReplacements.value.apply(filtered)
     }
 
@@ -510,6 +524,10 @@ class WhisperInputService : InputMethodService() {
                 performFeedback()
             }
             is SessionEvent.CommitBlockedByFocus -> performFeedback()
+            is SessionEvent.CopyToClipboard -> {
+                copyToClipboard(event.text)
+                showToast(getString(R.string.dictation_copied_mode))
+            }
             is SessionEvent.CommitFailed -> {
                 val message = when (event.reason) {
                     SessionEvent.CommitFailed.Reason.NO_FIELD -> R.string.dictation_copied_no_field
@@ -550,7 +568,8 @@ class WhisperInputService : InputMethodService() {
     private fun afterDictationCompleted(event: SessionEvent.Completed) {
         val focus = event.focus
         serviceScope.launch {
-            if (lastFocusKey == focus && shouldAutoSend(focus.packageName)) {
+            val autoSend = event.inserted && (event.autoSend ?: shouldAutoSend(focus.packageName))
+            if (lastFocusKey == focus && autoSend) {
                 delay(AutoSend.DELAY_MS)
                 val stillTarget = lastFocusKey == focus && session.latestRunId == event.runId && !session.isBusy
                 if (stillTarget && !shouldBlockExternalSend()) {
@@ -561,7 +580,7 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    /** The per-app override wins over the global switch. TODO(WP-3.10): resolve from the app's Mode. */
+    /** Fallback when the run carries no mode decision: the per-app override wins over the global switch. */
     private suspend fun shouldAutoSend(packageName: String): Boolean {
         val override = repository.appPromptMappings.first().find { it.packageName == packageName }?.autoSend
         return override ?: (dataStore.data.first()[AUTO_SEND_AFTER_INSERT] ?: false)

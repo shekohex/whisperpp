@@ -96,6 +96,26 @@ class TextCommitter(
 
     fun textBeforeCursor(maxChars: Int): String? = inputConnection()?.getTextBeforeCursor(maxChars, 0)?.toString()
 
+    /** The editor's non-empty selection, or null. */
+    fun selectedRange(): DictationUndoEntry.SelectionSnapshot? =
+        inputConnection()?.selectionSnapshot()?.takeIf { it.start != it.end }
+
+    fun selectedText(): String? = try {
+        inputConnection()?.getSelectedText(0)?.toString()?.takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Selects [range] again so the next [commit] replaces it (output mode REPLACE_SELECTION). */
+    fun select(range: DictationUndoEntry.SelectionSnapshot): Boolean {
+        val ic = inputConnection() ?: return false
+        return try {
+            ic.setSelection(minOf(range.start, range.end), maxOf(range.start, range.end))
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     /** Inserts [text] for [focus], replacing our composing partial if any, and records undo. */
     fun commit(focus: FocusKey, text: String): CommitResult {
         val ic = inputConnection()

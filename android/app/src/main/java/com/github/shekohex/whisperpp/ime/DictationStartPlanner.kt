@@ -3,7 +3,6 @@ package com.github.shekohex.whisperpp.ime
 import androidx.datastore.preferences.core.Preferences
 import com.github.shekohex.whisperpp.core.text.Vocabulary
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ADD_TRAILING_SPACE
-import com.github.shekohex.whisperpp.data.PreferenceKeys.LANGUAGE_CODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.POSTPROCESSING
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PROMPT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.REALTIME_STT_ENABLED
@@ -13,8 +12,10 @@ import com.github.shekohex.whisperpp.data.RuntimeConfigLoader
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.data.toNoticeText
 import com.github.shekohex.whisperpp.dictation.FocusKey
+import com.github.shekohex.whisperpp.domain.dictation.DictationOptions
 import com.github.shekohex.whisperpp.domain.dictation.StartDecision
 import com.github.shekohex.whisperpp.domain.dictation.StartPlan
+import com.github.shekohex.whisperpp.domain.modes.ModeResolution
 import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
 import com.github.shekohex.whisperpp.domain.providers.ScriptConversion
 import com.github.shekohex.whisperpp.domain.providers.StreamingTranscriptionSession
@@ -48,6 +49,8 @@ class DictationStartPlanner(private val deps: Deps) {
         val provider: ServiceProvider,
         val modelId: String,
         val warnings: String,
+        /** The session's mode (§4.10): language, output and per-run switches. */
+        val mode: ModeResolution,
     )
 
     suspend fun resolveStt(packageName: String?): SttSelection? {
@@ -55,7 +58,13 @@ class DictationStartPlanner(private val deps: Deps) {
         val provider = snapshot.provider(snapshot.effective.sttProviderId)
         val modelId = snapshot.effective.sttModelId
         if (provider == null || modelId.isBlank() || provider.models.none { it.id == modelId }) return null
-        return SttSelection(snapshot.prefs, provider, modelId, snapshot.effective.warnings.toNoticeText(RuntimeChannel.STT))
+        return SttSelection(
+            prefs = snapshot.prefs,
+            provider = provider,
+            modelId = modelId,
+            warnings = snapshot.effective.warnings.toNoticeText(RuntimeChannel.STT),
+            mode = snapshot.mode,
+        )
     }
 
     suspend fun plan(focus: FocusKey): StartDecision {
@@ -91,7 +100,7 @@ class DictationStartPlanner(private val deps: Deps) {
         val request = TranscriptionRequest(
             provider = provider,
             modelId = selection.modelId,
-            languageCode = prefs[LANGUAGE_CODE] ?: "auto",
+            languageCode = selection.mode.languageCode,
             prompt = if (acceptsVocabulary) Vocabulary.appendToPrompt(basePrompt, deps.vocabulary()) else basePrompt,
             temperature = provider.temperature,
             timeoutMs = provider.timeout.toLong(),
@@ -105,9 +114,21 @@ class DictationStartPlanner(private val deps: Deps) {
                 audioFile = deps.recordingFile(),
                 request = request,
                 streaming = openStreaming(transcription, request, prefs),
+                options = selection.mode.toOptions(),
             )
         )
     }
+
+    private fun ModeResolution.toOptions() = DictationOptions(
+        modeId = mode.id,
+        outputMode = outputMode,
+        enhancementEnabled = enhancementEnabled,
+        removeFillers = removeFillers,
+        formatParagraphs = formatParagraphs,
+        autoSend = autoSend,
+        contextSelectedText = contextSources.selectedText,
+        contextClipboard = contextSources.clipboard,
+    )
 
     /**
      * Streams when the model is flagged realtime (discovery or the user, never URL heuristics) and the

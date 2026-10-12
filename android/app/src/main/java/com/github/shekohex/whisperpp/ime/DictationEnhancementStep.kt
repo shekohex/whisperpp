@@ -47,12 +47,13 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
         get() = deps.context
 
     override suspend fun isEnabled(request: DictationEnhancer.Request): Boolean {
-        val enabled = deps.config.prefs()[ENHANCEMENT_ENABLED] ?: false
+        // The session's mode decides; without one, the global switch.
+        val enabled = request.options.enhancementEnabled ?: deps.config.prefs()[ENHANCEMENT_ENABLED] ?: false
         return enabled && !isBlankOrPunctuationOnly(request.rawText)
     }
 
     override suspend fun enhance(request: DictationEnhancer.Request): DictationEnhancer.Result {
-        val snapshot = deps.config.load(request.focus.packageName)
+        val snapshot = deps.config.load(request.focus.packageName, request.options.modeId)
         val textProviderId = snapshot.effective.textProviderId
         val textModelId = snapshot.effective.textModelId
         val provider = snapshot.provider(textProviderId)

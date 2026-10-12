@@ -4,7 +4,9 @@ import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.core.audio.AudioFocusController
 import com.github.shekohex.whisperpp.core.audio.AudioRecorder
 import com.github.shekohex.whisperpp.core.audio.SoundCues
+import com.github.shekohex.whisperpp.dictation.DictationUndoEntry
 import com.github.shekohex.whisperpp.dictation.FocusKey
+import com.github.shekohex.whisperpp.domain.modes.OutputMode
 import com.github.shekohex.whisperpp.domain.providers.StreamEvent
 import com.github.shekohex.whisperpp.domain.providers.StreamingTranscriptionSession
 import com.github.shekohex.whisperpp.domain.providers.Transcript
@@ -52,7 +54,9 @@ class DictationSession(private val deps: Deps) {
         val minRecordingMs: Long = MIN_RECORDING_MS,
         val partialThrottleMs: Long = PARTIAL_THROTTLE_MS,
         /** Transcript clean-up (filter, word replacements) applied once, before commit and enhancement. */
-        val postProcess: (String) -> String = { it },
+        val postProcess: (String, DictationOptions) -> String = { text, _ -> text },
+        /** Clipboard text for modes that add it to the enhancement context. */
+        val clipboardText: () -> String? = { null },
         /** Transcript history (§4.8); null disables it. */
         val history: HistoryRecorder? = null,
     )
@@ -72,6 +76,14 @@ class DictationSession(private val deps: Deps) {
         var lastPartialAt: Long? = null
         var composing = false
         var contextPrompt: String? = null
+
+        /** [contextPrompt] plus the mode's extra sources (selected text, clipboard); enhancement only. */
+        var enhancementContext: String? = null
+
+        /** Output mode REPLACE_SELECTION: the selection when recording started. */
+        var replaceRange: DictationUndoEntry.SelectionSnapshot? = null
+        val options: DictationOptions
+            get() = plan?.options ?: DictationOptions()
         var durationMs = 0L
         var rawText: String? = null
         var stoppedAt = 0L
@@ -208,6 +220,7 @@ class DictationSession(private val deps: Deps) {
         } else {
             null
         }
+        r.enhancementContext = enhancementContext(r, plan.options)
         _state.value = SessionState.Transcribing(r.focus, plan.audioFile, r.lastPartial)
         r.job = deps.scope.launch { transcribeAndCommit(r, plan) }
     }
@@ -308,6 +321,9 @@ class DictationSession(private val deps: Deps) {
             StartDecision.PermissionRequired -> return finish(r, SessionState.Idle)
         }
         r.plan = plan
+        if (plan.options.outputMode == OutputMode.REPLACE_SELECTION && currentFocus == r.focus) {
+            r.replaceRange = deps.committer.selectedRange()
+        }
         deps.focus.acquire()
         deps.cues(SoundCues.Cue.START)
         val onPcm = plan.streaming?.let { startStreaming(r, it) }
@@ -366,6 +382,8 @@ class DictationSession(private val deps: Deps) {
         val s = _state.value
         if (s !is SessionState.Recording && s !is SessionState.Transcribing) return
         if (currentFocus != r.focus || !deps.sendAllowed()) return
+        // Partials would overwrite the selection to replace, or touch a field that gets nothing.
+        if (r.options.outputMode != OutputMode.INSERT) return
         val now = deps.clock()
         val last = r.lastPartialAt
         if (last != null && now - last < deps.partialThrottleMs) return
@@ -474,7 +492,7 @@ class DictationSession(private val deps: Deps) {
     }
 
     private suspend fun commit(r: Run, transcript: String) {
-        val processed = deps.postProcess(transcript)
+        val processed = deps.postProcess(transcript, r.options)
         if (processed.isBlank()) {
             // Filtering removed everything: nothing to insert, enhance or send.
             emit(SessionEvent.TranscriptionEmpty)
@@ -488,6 +506,7 @@ class DictationSession(private val deps: Deps) {
         // A hidden keyboard holds the commit until the user is back (A-05).
         windowVisible.first { it }
         if (run !== r) return
+        if (r.options.outputMode == OutputMode.CLIPBOARD) return deliverToClipboard(r, raw)
 
         if (currentFocus != r.focus) {
             _pendingCommit.value = raw
@@ -498,6 +517,7 @@ class DictationSession(private val deps: Deps) {
             emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.BLOCKED))
             return finish(r, SessionState.Idle)
         }
+        r.replaceRange?.let(deps.committer::select)
         val result = deps.committer.commit(r.focus, raw)
         r.composing = false
         val segment = when (result) {
@@ -533,7 +553,18 @@ class DictationSession(private val deps: Deps) {
             enhancementModelId = r.enhancementModelId,
             enhancementLatencyMs = r.enhancementLatencyMs,
         )
-        emit(SessionEvent.Completed(raw, finalText, r.durationMs, r.focus, r.id, stats))
+        emit(
+            SessionEvent.Completed(
+                rawText = raw,
+                finalText = finalText,
+                durationMs = r.durationMs,
+                focus = r.focus,
+                runId = r.id,
+                stats = stats,
+                inserted = r.options.outputMode != OutputMode.CLIPBOARD,
+                autoSend = r.options.autoSend,
+            )
+        )
         deps.history?.record(
             HistoryRecorder.Entry(
                 rawText = raw,
@@ -547,26 +578,25 @@ class DictationSession(private val deps: Deps) {
         r.audioPath = null
     }
 
+    /** Output mode CLIPBOARD: enhance without touching the field, then hand the text to the clipboard. */
+    private suspend fun deliverToClipboard(r: Run, raw: String) {
+        r.rawText = raw
+        val finalText = when (val result = requestEnhancement(r, raw)) {
+            is DictationEnhancer.Result.Enhanced -> result.text
+            is DictationEnhancer.Result.Kept -> {
+                result.notice?.let { emit(SessionEvent.EnhancementNotice(it, result.isError)) }
+                raw
+            }
+            null -> raw
+        }
+        if (run !== r) return
+        emit(SessionEvent.CopyToClipboard(finalText))
+        complete(r, raw, finalText)
+        finish(r, SessionState.Idle)
+    }
+
     private suspend fun enhance(r: Run, raw: String, segment: TextCommitter.CapturedSegment): String {
-        val enhancer = deps.enhancer ?: return raw
-        val request = DictationEnhancer.Request(r.focus, raw, r.contextPrompt)
-        if (!enhancer.isEnabled(request)) return raw
-        if (run !== r) return raw
-        _state.value = SessionState.Enhancing(r.focus, raw)
-        val startedAt = deps.clock()
-        val result = try {
-            enhancer.enhance(request)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            DictationEnhancer.Result.Kept(e.message, isError = true)
-        }
-        if (run !== r) return raw
-        if (result is DictationEnhancer.Result.Enhanced) {
-            r.enhancementLatencyMs = (deps.clock() - startedAt).coerceAtLeast(0L)
-            r.enhancementProviderId = result.providerId
-            r.enhancementModelId = result.modelId
-        }
+        val result = requestEnhancement(r, raw) ?: return raw
         return when (result) {
             is DictationEnhancer.Result.Kept -> {
                 result.notice?.let { emit(SessionEvent.EnhancementNotice(it, result.isError)) }
@@ -582,6 +612,43 @@ class DictationSession(private val deps: Deps) {
                 }
             }
         }
+    }
+
+    /** Null when enhancement is off, absent, or the run ended meanwhile. */
+    private suspend fun requestEnhancement(r: Run, raw: String): DictationEnhancer.Result? {
+        val enhancer = deps.enhancer ?: return null
+        val request = DictationEnhancer.Request(r.focus, raw, r.enhancementContext, r.options)
+        if (!enhancer.isEnabled(request)) return null
+        if (run !== r) return null
+        _state.value = SessionState.Enhancing(r.focus, raw)
+        val startedAt = deps.clock()
+        val result = try {
+            enhancer.enhance(request)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            DictationEnhancer.Result.Kept(e.message, isError = true)
+        }
+        if (run !== r) return null
+        if (result is DictationEnhancer.Result.Enhanced) {
+            r.enhancementLatencyMs = (deps.clock() - startedAt).coerceAtLeast(0L)
+            r.enhancementProviderId = result.providerId
+            r.enhancementModelId = result.modelId
+        }
+        return result
+    }
+
+    /** Enhancement context: text before the cursor plus the mode's extra sources. */
+    private fun enhancementContext(r: Run, options: DictationOptions): String? {
+        val sameField = currentFocus == r.focus
+        val selected = if (options.contextSelectedText && sameField) deps.committer.selectedText() else null
+        val clipboard = if (options.contextClipboard) deps.clipboardText()?.takeIf { it.isNotBlank() } else null
+        val parts = listOfNotNull(
+            r.contextPrompt,
+            selected?.let { "Selected text:\n$it" },
+            clipboard?.let { "Clipboard:\n$it" },
+        )
+        return if (parts.isEmpty()) null else parts.joinToString(separator = "\n\n")
     }
 
     private fun pause(s: SessionState.Recording) {
@@ -610,7 +677,10 @@ class DictationSession(private val deps: Deps) {
         val r = run ?: return
         when (val s = _state.value) {
             // The raw text is already in the field; only the enhancement is abandoned.
-            is SessionState.Enhancing -> complete(r, s.raw, s.raw)
+            is SessionState.Enhancing -> {
+                if (r.options.outputMode == OutputMode.CLIPBOARD) emit(SessionEvent.CopyToClipboard(s.raw))
+                complete(r, s.raw, s.raw)
+            }
             is SessionState.Recording -> if (recordDiscard) emit(SessionEvent.Discarded(s.elapsedMs(deps.clock())))
             is SessionState.Transcribing,
             is SessionState.Committing,

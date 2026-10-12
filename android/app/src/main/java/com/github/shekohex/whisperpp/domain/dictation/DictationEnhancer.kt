@@ -4,7 +4,12 @@ import com.github.shekohex.whisperpp.dictation.FocusKey
 
 /** Optional post-commit enhancement step. Failure always keeps the raw text. */
 interface DictationEnhancer {
-    data class Request(val focus: FocusKey, val rawText: String, val contextPrompt: String?)
+    data class Request(
+        val focus: FocusKey,
+        val rawText: String,
+        val contextPrompt: String?,
+        val options: DictationOptions = DictationOptions(),
+    )
 
     sealed interface Result {
         /** [providerId]/[modelId] identify the text model for analytics and history. */

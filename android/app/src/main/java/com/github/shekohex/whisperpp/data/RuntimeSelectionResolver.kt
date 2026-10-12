@@ -24,11 +24,38 @@ object RuntimeSelectionResolver {
         basePrompt: String,
         profiles: List<PromptProfile>,
     ): EffectiveRuntimeConfig {
-        val warnings = mutableListOf<RuntimeWarning>()
         val normalizedPackageName = packageName?.trim().orEmpty()
         val mapping = normalizedPackageName.takeIf { it.isNotBlank() }?.let { pkg ->
             appMappings.firstOrNull { it.packageName == pkg }
         }
+        return resolveWithMapping(
+            mapping = mapping,
+            languageCode = languageCode,
+            providers = providers,
+            languageDefaults = languageDefaults,
+            globalSttProviderId = globalSttProviderId,
+            globalSttModelId = globalSttModelId,
+            globalTextProviderId = globalTextProviderId,
+            globalTextModelId = globalTextModelId,
+            basePrompt = basePrompt,
+            profiles = profiles,
+        )
+    }
+
+    /** Same as [resolve] with the app layer given directly (Modes build it from the resolved mode). */
+    fun resolveWithMapping(
+        mapping: AppPromptMapping?,
+        languageCode: String?,
+        providers: List<ServiceProvider>,
+        languageDefaults: List<LanguageProfile>,
+        globalSttProviderId: String,
+        globalSttModelId: String,
+        globalTextProviderId: String,
+        globalTextModelId: String,
+        basePrompt: String,
+        profiles: List<PromptProfile>,
+    ): EffectiveRuntimeConfig {
+        val warnings = mutableListOf<RuntimeWarning>()
 
         val normalizedLanguageCode = languageCode?.trim().orEmpty()
         val languageProfile = normalizedLanguageCode

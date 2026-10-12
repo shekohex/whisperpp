@@ -19,6 +19,8 @@ import com.github.shekohex.whisperpp.data.autolearn.AutoLearnPendingQueue
 import com.github.shekohex.whisperpp.data.autolearn.AutoLearnProposalStore
 import com.github.shekohex.whisperpp.data.autolearn.autoLearnDataStore
 import com.github.shekohex.whisperpp.data.dictionary.DictionaryRepository
+import com.github.shekohex.whisperpp.data.modes.LegacyModesMigration
+import com.github.shekohex.whisperpp.data.modes.ModesRepository
 import com.github.shekohex.whisperpp.data.history.DictationHistoryRecorder
 import com.github.shekohex.whisperpp.data.history.HistoryAudioStore
 import com.github.shekohex.whisperpp.data.history.TranscriptHistoryDatabase
@@ -66,6 +68,10 @@ class AppContainer(context: Context) {
     val secretsStore: SecretsStore by lazy { SecretsStore(appContext) }
     val sendPolicyRepository: SendPolicyRepository by lazy { SendPolicyRepository(settingsDataStore) }
     val dictionaryRepository: DictionaryRepository by lazy { DictionaryRepository(settingsDataStore) }
+    val modesRepository: ModesRepository by lazy { ModesRepository(settingsDataStore) }
+
+    /** One-way legacy → modes migration; the Modes UI previews it and asks for a backup first. */
+    val legacyModesMigration: LegacyModesMigration by lazy { LegacyModesMigration(settingsDataStore) }
     val backupStatusStore: BackupStatusStore = BackupStatusStore()
     val setupStatusChecker: SetupStatusChecker by lazy {
         SetupStatusChecker(
@@ -117,6 +123,7 @@ class AppContainer(context: Context) {
                 settingsRepository.migrateProviderSelectionsV2IfNeeded()
                 settingsRepository.migratePromptsProfilesSchemaV1IfNeeded()
                 settingsRepository.seedPromptLibraryIfNeeded()
+                legacyModesMigration.runIfNothingToMigrate()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

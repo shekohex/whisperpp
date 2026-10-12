@@ -9,4 +9,5 @@ data class StartPlan(
     val audioFile: File,
     val request: TranscriptionRequest,
     val streaming: StreamingTranscriptionSession? = null,
+    val options: DictationOptions = DictationOptions(),
 )

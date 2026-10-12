@@ -188,7 +188,7 @@ class DictationSessionTest {
                     clock = { test.testScheduler.currentTime },
                     scope = scope,
                     streamingDispatcher = dispatcher,
-                    postProcess = { postProcess(it) },
+                    postProcess = { text, _ -> postProcess(text) },
                     history = history,
                 ),
             ).also { session ->

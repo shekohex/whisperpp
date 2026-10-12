@@ -2,6 +2,7 @@ package com.github.shekohex.whisperpp.data
 
 import com.github.shekohex.whisperpp.data.dictionary.DictionaryBackup
 import com.github.shekohex.whisperpp.data.history.HistoryBackup
+import com.github.shekohex.whisperpp.domain.modes.Mode
 import com.google.gson.annotations.SerializedName
 
 const val SETTINGS_BACKUP_SCHEMA_VERSION = 1
@@ -16,6 +17,7 @@ const val SETTINGS_BACKUP_CATEGORY_KEYBOARD_BEHAVIOR = "keyboard_behavior"
 const val SETTINGS_BACKUP_CATEGORY_PRIVACY_SAFETY = "privacy_safety"
 const val SETTINGS_BACKUP_CATEGORY_ADVANCED_PREFERENCES = "advanced_preferences"
 const val SETTINGS_BACKUP_CATEGORY_DICTIONARY = "dictionary"
+const val SETTINGS_BACKUP_CATEGORY_MODES = "modes"
 const val SETTINGS_BACKUP_CATEGORY_HISTORY = "history"
 
 data class SettingsBackupCategoryManifestEntry(
@@ -63,8 +65,15 @@ data class SettingsBackupPayload(
     val advancedPreferences: AdvancedPreferencesBackup = AdvancedPreferencesBackup(),
     /** Absent in backups made before WP-2.4; such backups leave the dictionary untouched. */
     val dictionary: DictionaryBackup = DictionaryBackup(),
+    /** Absent before WP-3.10 and empty before the modes migration; such backups leave modes untouched. */
+    val modes: ModesBackup = ModesBackup(),
     /** Transcript text only (never audio); null (omitted) unless the user opted in on export. */
     val history: HistoryBackup? = null,
+)
+
+/** Provider and prompt ids are kept as is (like app mappings); missing ones make a mode Unavailable. */
+data class ModesBackup(
+    val modes: List<Mode> = emptyList(),
 )
 
 data class ProvidersModelsBackup(
@@ -275,6 +284,11 @@ val SETTINGS_BACKUP_CATEGORY_MANIFEST: List<SettingsBackupCategoryManifestEntry>
     SettingsBackupCategoryManifestEntry(
         id = SETTINGS_BACKUP_CATEGORY_DICTIONARY,
         label = "Dictionary",
+        containsSensitiveContent = false,
+    ),
+    SettingsBackupCategoryManifestEntry(
+        id = SETTINGS_BACKUP_CATEGORY_MODES,
+        label = "Modes",
         containsSensitiveContent = false,
     ),
     SettingsBackupCategoryManifestEntry(
