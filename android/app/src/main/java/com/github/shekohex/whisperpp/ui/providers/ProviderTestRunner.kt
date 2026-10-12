@@ -15,6 +15,8 @@ import com.github.shekohex.whisperpp.domain.providers.Credentials
 import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
 import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
 import com.github.shekohex.whisperpp.domain.providers.toProviderUserMessage
+import com.github.shekohex.whisperpp.providers.ModelClassifier
+import com.github.shekohex.whisperpp.providers.realtime.RealtimeHandshakeProbe
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -68,8 +70,17 @@ class ProviderTestRunner(
         }
     }
 
-    /** A successful listing proves auth + reachability; otherwise falls back to the model's verify(). */
+    /**
+     * A successful listing proves auth + reachability; otherwise falls back to the model's verify().
+     * When the provider also has a realtime model, the WebSocket handshake is checked as well.
+     */
     suspend fun connection(providerId: String, provider: ServiceProvider, credentials: Credentials): ProviderTestResult {
+        val base = reachability(providerId, provider, credentials)
+        if (base.error != null) return base
+        return realtimeHandshake(base, provider, credentials) ?: base
+    }
+
+    private suspend fun reachability(providerId: String, provider: ServiceProvider, credentials: Credentials): ProviderTestResult {
         val title = appContext.getString(R.string.provider_test_connection)
         val listing = providerFactory.discovery(provider, credentials)?.listModels()
         val listingMissing = (listing?.exceptionOrNull() as? NetworkError.Http)?.status in setOf(404, 405, 501)
@@ -86,6 +97,47 @@ class ProviderTestRunner(
             providerFactory.enhancement(provider, model, credentials).mapCatching { it.verify().getOrThrow() }
         }
         return toResult(title, verified.map { appContext.getString(R.string.provider_test_ok) })
+    }
+
+    /**
+     * Opens and closes the realtime socket of the first realtime-flagged model (OpenAI and gateways
+     * only), without audio. Null when the provider has no such model.
+     */
+    private suspend fun realtimeHandshake(
+        base: ProviderTestResult,
+        provider: ServiceProvider,
+        credentials: Credentials,
+    ): ProviderTestResult? {
+        if (!ModelClassifier.acceptsRealtimeFlag(provider.type)) return null
+        for (model in provider.models.filter { it.capabilities.stt }) {
+            val transcriber = providerFactory.transcription(provider, model, credentials).getOrNull() ?: continue
+            if (!transcriber.capabilities.realtime) continue
+            val request = TranscriptionRequest(
+                provider = provider,
+                modelId = model.id,
+                languageCode = provider.languageCode,
+                timeoutMs = STT_TEST_TIMEOUT_MS,
+            )
+            val session = transcriber.openStream(request) ?: continue
+            val outcome = RealtimeHandshakeProbe.probe(session)
+            val error = outcome.exceptionOrNull()
+                ?: return base.copy(body = appContext.getString(R.string.provider_test_realtime_ok, base.body, model.name))
+            return ProviderTestResult(
+                title = base.title,
+                status = (error as? NetworkError.Http)?.status,
+                body = "",
+                error = appContext.getString(R.string.provider_test_realtime_failed, model.name, realtimeFailure(error)),
+            )
+        }
+        return null
+    }
+
+    private fun realtimeFailure(error: Throwable): String = when (RealtimeHandshakeProbe.classify(error)) {
+        RealtimeHandshakeProbe.Problem.UNAUTHORIZED -> appContext.getString(R.string.provider_test_realtime_unauthorized)
+        RealtimeHandshakeProbe.Problem.NO_ENDPOINT ->
+            appContext.getString(R.string.provider_test_realtime_no_endpoint, (error as NetworkError.Http).status)
+        RealtimeHandshakeProbe.Problem.TIMEOUT -> appContext.getString(R.string.provider_test_realtime_timeout)
+        RealtimeHandshakeProbe.Problem.OTHER -> error.toProviderUserMessage(appContext)
     }
 
     /** Result shown when a test is started without a model id. */

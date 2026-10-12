@@ -231,6 +231,11 @@
     <string name="model_discovery_not_found">Not found in provider list</string>
     <string name="provider_test_connection">Test connection</string>
     <string name="provider_test_connection_ok_models">Connected. Models listed: %1$d</string>
+    <string name="provider_test_realtime_ok">%1$s\nRealtime (WebSocket) is working for %2$s.</string>
+    <string name="provider_test_realtime_failed">Connected, but realtime (WebSocket) for %1$s failed: %2$s</string>
+    <string name="provider_test_realtime_unauthorized">the server rejected the API key on /v1/realtime.</string>
+    <string name="provider_test_realtime_no_endpoint">the server has no /v1/realtime endpoint (HTTP %1$d). Check that your gateway exposes the Realtime API, or turn off Realtime for this model.</string>
+    <string name="provider_test_realtime_timeout">the server accepted the connection but never confirmed the session in time.</string>
     <string name="provider_test_connection_no_model">Add a model first, or use a provider with a model list.</string>
     <string name="enhancement_unknown_provider">Unknown provider</string>
     <string name="enhancement_unknown_model">Unknown model</string>

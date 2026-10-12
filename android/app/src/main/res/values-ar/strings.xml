@@ -239,6 +239,11 @@
     <string name="model_discovery_not_found">غير موجود في قائمة المزوّد</string>
     <string name="provider_test_connection">اختبار الاتصال</string>
     <string name="provider_test_connection_ok_models">تم الاتصال. عدد النماذج المتاحة: %1$d</string>
+    <string name="provider_test_realtime_ok">%1$s\nالوقت الفعلي (WebSocket) يعمل مع %2$s.</string>
+    <string name="provider_test_realtime_failed">تم الاتصال، لكن الوقت الفعلي (WebSocket) لـ %1$s فشل: %2$s</string>
+    <string name="provider_test_realtime_unauthorized">رفض الخادم مفتاح API على /v1/realtime.</string>
+    <string name="provider_test_realtime_no_endpoint">لا توجد نقطة نهاية /v1/realtime على الخادم (HTTP %1$d). تأكد من أن بوابتك توفّر واجهة Realtime، أو عطّل الوقت الفعلي لهذا النموذج.</string>
+    <string name="provider_test_realtime_timeout">قبل الخادم الاتصال لكنه لم يؤكد الجلسة في الوقت المناسب.</string>
     <string name="provider_test_connection_no_model">أضف نموذجًا أولًا، أو استخدم مزوّدًا يوفّر قائمة نماذج.</string>
     <string name="enhancement_unknown_provider">مزوّد غير معروف</string>
     <string name="enhancement_unknown_model">نموذج غير معروف</string>
