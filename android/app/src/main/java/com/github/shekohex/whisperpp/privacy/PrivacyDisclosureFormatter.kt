@@ -150,6 +150,11 @@ object PrivacyDisclosureFormatter {
                     ProviderType.WHISPER_ASR -> basePath
                     ProviderType.DEEPGRAM -> appendPath(basePath, "/listen")
                     ProviderType.ELEVENLABS -> appendPath(basePath, "/speech-to-text")
+                    ProviderType.SONIOX -> appendPath(basePath, "/transcribe-websocket")
+                    ProviderType.SPEECHMATICS -> appendPath(basePath, "/v2")
+                    ProviderType.ASSEMBLYAI -> appendPath(basePath, "/v3/ws")
+                    ProviderType.XAI -> appendPath(basePath, "/stt")
+                    ProviderType.CARTESIA -> appendPath(basePath, "/stt/turns/websocket")
                     else -> appendPath(basePath, "/audio/transcriptions")
                 }
             }

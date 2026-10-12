@@ -8,7 +8,9 @@ import org.json.JSONObject
 
 /** Small helpers shared by the dialects. */
 internal object RealtimeText {
-    private val AUTH_KINDS = setOf("auth_error", "unauthorized", "invalid_api_key", "authentication_error", "forbidden", "401", "403")
+    private val AUTH_KINDS = setOf(
+        "auth_error", "unauthorized", "invalid_api_key", "authentication_error", "forbidden", "not_authorised", "not_authorized", "401", "403",
+    )
     private val RATE_KINDS = setOf(
         "quota_exceeded", "rate_limited", "resource_exhausted", "rate_limit_exceeded", "too_many_requests", "429",
     )

@@ -80,7 +80,40 @@ object Presets {
         models = listOf("voxtral-mini-latest" to "Voxtral Mini"),
     )
 
-    val AllPresets = listOf(OpenAIWhisper, OpenAIChat, GoogleGemini, WhisperASR, Deepgram, ElevenLabs, Mistral)
+    val Soniox = cloudSttPreset(
+        type = ProviderType.SONIOX,
+        endpoint = "https://stt-rt.soniox.com",
+        models = listOf("stt-async-v5" to "Soniox v5"),
+    )
+
+    val Speechmatics = cloudSttPreset(
+        type = ProviderType.SPEECHMATICS,
+        endpoint = "https://eu2.rt.speechmatics.com",
+        models = listOf("speechmatics-enhanced" to "Speechmatics Enhanced"),
+    )
+
+    val AssemblyAI = cloudSttPreset(
+        type = ProviderType.ASSEMBLYAI,
+        endpoint = "https://streaming.assemblyai.com",
+        models = listOf("universal-3-6-pro" to "Universal 3.6 Pro", "universal-3-5-pro" to "Universal 3.5 Pro"),
+    )
+
+    val Xai = cloudSttPreset(
+        type = ProviderType.XAI,
+        endpoint = "https://api.x.ai/v1",
+        models = listOf("grok-voice-transcribe-2.0" to "Grok Voice Transcribe 2.0"),
+    )
+
+    val Cartesia = cloudSttPreset(
+        type = ProviderType.CARTESIA,
+        endpoint = "https://api.cartesia.ai",
+        models = listOf("ink-2" to "Ink 2"),
+    )
+
+    val AllPresets = listOf(
+        OpenAIWhisper, OpenAIChat, GoogleGemini, WhisperASR,
+        Deepgram, ElevenLabs, Mistral, Soniox, Speechmatics, AssemblyAI, Xai, Cartesia,
+    )
 
     /** A cloud realtime speech provider with its STT models (realtime and vocabulary included). */
     private fun cloudSttPreset(type: ProviderType, endpoint: String, models: List<Pair<String, String>>) = ServiceProvider(

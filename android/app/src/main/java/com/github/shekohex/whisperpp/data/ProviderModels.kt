@@ -5,7 +5,7 @@ import java.util.UUID
 
 enum class ProviderType {
     OPENAI, WHISPER_ASR, GEMINI, CUSTOM,
-    DEEPGRAM, ELEVENLABS, MISTRAL;
+    DEEPGRAM, ELEVENLABS, MISTRAL, SONIOX, SPEECHMATICS, ASSEMBLYAI, XAI, CARTESIA;
 
     override fun toString(): String {
         return when(this) {
@@ -16,6 +16,11 @@ enum class ProviderType {
             DEEPGRAM -> "Deepgram"
             ELEVENLABS -> "ElevenLabs"
             MISTRAL -> "Mistral"
+            SONIOX -> "Soniox"
+            SPEECHMATICS -> "Speechmatics"
+            ASSEMBLYAI -> "AssemblyAI"
+            XAI -> "xAI"
+            CARTESIA -> "Cartesia"
         }
     }
 }
@@ -23,7 +28,8 @@ enum class ProviderType {
 /** Cloud speech providers that dictate over their own WebSocket protocol (no on-device models). */
 val ProviderType.isCloudRealtime: Boolean
     get() = when (this) {
-        ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL -> true
+        ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL, ProviderType.SONIOX,
+        ProviderType.SPEECHMATICS, ProviderType.ASSEMBLYAI, ProviderType.XAI, ProviderType.CARTESIA -> true
         ProviderType.OPENAI, ProviderType.WHISPER_ASR, ProviderType.GEMINI, ProviderType.CUSTOM -> false
     }
 
@@ -32,7 +38,11 @@ val ProviderType.isCloudRealtime: Boolean
  * realtime transcription" setting says. Deepgram, ElevenLabs and Mistral also batch (fallback).
  */
 val ProviderType.isStreamingOnly: Boolean
-    get() = false
+    get() = when (this) {
+        ProviderType.SONIOX, ProviderType.SPEECHMATICS, ProviderType.ASSEMBLYAI, ProviderType.XAI,
+        ProviderType.CARTESIA -> true
+        else -> false
+    }
 
 enum class ThinkingType {
     BUDGET, LEVEL
@@ -130,8 +140,9 @@ data class ModelCapabilities(
 val ProviderType.acceptsTranscriptionPrompt: Boolean
     get() = when (this) {
         ProviderType.OPENAI, ProviderType.CUSTOM, ProviderType.GEMINI,
-        ProviderType.DEEPGRAM, ProviderType.ELEVENLABS -> true
-        ProviderType.WHISPER_ASR, ProviderType.MISTRAL -> false
+        ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.SONIOX, ProviderType.SPEECHMATICS,
+        ProviderType.ASSEMBLYAI, ProviderType.XAI -> true
+        ProviderType.WHISPER_ASR, ProviderType.MISTRAL, ProviderType.CARTESIA -> false
     }
 
 /** Gemini `generateContent` models (not embeddings) accept inline audio. */

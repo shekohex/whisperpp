@@ -3,6 +3,7 @@ package com.github.shekohex.whisperpp.providers
 import com.github.shekohex.whisperpp.data.ModelCapabilities
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.acceptsTranscriptionPrompt
+import com.github.shekohex.whisperpp.data.isCloudRealtime
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -122,7 +123,7 @@ class ModelClassifierTest {
 
     @Test
     fun cloudRealtimeProviders_streamEveryModelEnteredByHand() {
-        for (type in listOf(ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL)) {
+        for (type in ProviderType.entries.filter { it.isCloudRealtime }) {
             assertEquals(type.name, true, ModelClassifier.supportsRealtimeTranscription("any-model", type))
         }
         assertEquals(false, ModelClassifier.supportsRealtimeTranscription("whisper-large-v3", ProviderType.CUSTOM))

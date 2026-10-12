@@ -22,8 +22,8 @@ An Android keyboard that turns speech into text in any app, using the cloud spee
 
 - **Telegram-style recording**: hold to talk, slide left to cancel, slide up to lock hands-free, or tap to start (configurable). A live waveform follows your voice.
 - **Pauses your music** while recording and resumes it afterwards (can be turned off).
-- **Providers**: OpenAI and any OpenAI-compatible API (Groq, self-hosted Whisper ASR webservice, NVIDIA NIM, ...), plus Google Gemini. Add a key, tap **Test connection**, and pull the model list straight from the provider.
-- **Realtime transcription**: partial text appears while you speak (OpenAI Realtime), with an automatic fall back to normal transcription.
+- **Providers**: OpenAI and any OpenAI-compatible API (Groq, self-hosted Whisper ASR webservice, NVIDIA NIM, ...), plus Google Gemini and the cloud speech providers Deepgram, ElevenLabs, Mistral (Voxtral), Soniox, Speechmatics, AssemblyAI, xAI and Cartesia. Add a key, tap **Test connection**, and pull the model list straight from the provider.
+- **Realtime transcription**: partial text appears while you speak (OpenAI Realtime, Deepgram, ElevenLabs, Mistral, Soniox, Speechmatics, AssemblyAI, xAI, Cartesia), with an automatic fall back to normal transcription where the provider offers it (Deepgram, ElevenLabs, Mistral and the OpenAI-compatible providers). Soniox, Speechmatics, AssemblyAI, xAI and Cartesia are realtime only.
 - **Enhancement**: clean up, punctuate and rewrite the transcript with an LLM (OpenAI-compatible or Gemini). If enhancement fails you still get your raw text.
 - **Modes**: bundle language, models, prompt and output behaviour, and assign modes to apps. Switch modes from the keyboard.
 - **Dictionary**: word replacements and custom vocabulary. Optional **Auto-Learn** (off by default) proposes new entries from the corrections you make by hand.

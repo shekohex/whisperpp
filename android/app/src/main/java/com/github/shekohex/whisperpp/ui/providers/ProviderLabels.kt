@@ -17,6 +17,11 @@ internal fun ProviderType.labelRes(): Int = when (this) {
     ProviderType.DEEPGRAM -> R.string.provider_type_deepgram
     ProviderType.ELEVENLABS -> R.string.provider_type_elevenlabs
     ProviderType.MISTRAL -> R.string.provider_type_mistral
+    ProviderType.SONIOX -> R.string.provider_type_soniox
+    ProviderType.SPEECHMATICS -> R.string.provider_type_speechmatics
+    ProviderType.ASSEMBLYAI -> R.string.provider_type_assemblyai
+    ProviderType.XAI -> R.string.provider_type_xai
+    ProviderType.CARTESIA -> R.string.provider_type_cartesia
 }
 
 @StringRes

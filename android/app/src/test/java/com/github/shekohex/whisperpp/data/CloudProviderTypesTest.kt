@@ -60,6 +60,11 @@ class CloudProviderTypesTest {
         assertEquals("Deepgram", ProviderType.DEEPGRAM.toString())
         assertEquals("ElevenLabs", ProviderType.ELEVENLABS.toString())
         assertEquals("Mistral", ProviderType.MISTRAL.toString())
+        assertEquals(
+            listOf("Soniox", "Speechmatics", "AssemblyAI", "xAI", "Cartesia"),
+            listOf(ProviderType.SONIOX, ProviderType.SPEECHMATICS, ProviderType.ASSEMBLYAI, ProviderType.XAI, ProviderType.CARTESIA)
+                .map { it.toString() },
+        )
     }
 
     @Test
@@ -67,6 +72,10 @@ class CloudProviderTypesTest {
         assertEquals(ModelCapabilities(stt = true, realtime = true, vocabulary = true), ModelCapabilities.stt(ProviderType.DEEPGRAM))
         assertEquals(ModelCapabilities(stt = true, realtime = true, vocabulary = true), ModelCapabilities.stt(ProviderType.ELEVENLABS))
         assertEquals(ModelCapabilities(stt = true, realtime = true, vocabulary = false), ModelCapabilities.stt(ProviderType.MISTRAL))
+        assertEquals(ModelCapabilities(stt = true, realtime = true, vocabulary = false), ModelCapabilities.stt(ProviderType.CARTESIA))
+        for (type in listOf(ProviderType.SONIOX, ProviderType.SPEECHMATICS, ProviderType.ASSEMBLYAI, ProviderType.XAI)) {
+            assertEquals(type.name, ModelCapabilities(stt = true, realtime = true, vocabulary = true), ModelCapabilities.stt(type))
+        }
         // Existing providers are unchanged.
         assertEquals(ModelCapabilities(stt = true, realtime = false, vocabulary = true), ModelCapabilities.stt(ProviderType.OPENAI))
         assertFalse(ModelCapabilities.stt(ProviderType.WHISPER_ASR).realtime)
@@ -78,6 +87,11 @@ class CloudProviderTypesTest {
             Triple(Presets.Deepgram, ProviderType.DEEPGRAM, "nova-3"),
             Triple(Presets.ElevenLabs, ProviderType.ELEVENLABS, "scribe_v2"),
             Triple(Presets.Mistral, ProviderType.MISTRAL, "voxtral-mini-latest"),
+            Triple(Presets.Soniox, ProviderType.SONIOX, "stt-async-v5"),
+            Triple(Presets.Speechmatics, ProviderType.SPEECHMATICS, "speechmatics-enhanced"),
+            Triple(Presets.AssemblyAI, ProviderType.ASSEMBLYAI, "universal-3-6-pro"),
+            Triple(Presets.Xai, ProviderType.XAI, "grok-voice-transcribe-2.0"),
+            Triple(Presets.Cartesia, ProviderType.CARTESIA, "ink-2"),
         )) {
             assertTrue(type.name, preset in Presets.AllPresets)
             assertEquals(type, preset.type)

@@ -14,6 +14,14 @@ import com.github.shekohex.whisperpp.providers.mistral.MistralTranscription
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleChat
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleDiscovery
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleTranscription
+import com.github.shekohex.whisperpp.providers.realtime.AssemblyAiDialect
+import com.github.shekohex.whisperpp.providers.realtime.CartesiaDialect
+import com.github.shekohex.whisperpp.providers.realtime.SonioxDialect
+import com.github.shekohex.whisperpp.providers.realtime.SpeechmaticsDialect
+import com.github.shekohex.whisperpp.providers.realtime.StreamingConfig
+import com.github.shekohex.whisperpp.providers.realtime.StreamingDialect
+import com.github.shekohex.whisperpp.providers.realtime.StreamingOnlyTranscription
+import com.github.shekohex.whisperpp.providers.realtime.XaiDialect
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import java.io.File
@@ -44,6 +52,11 @@ class ProviderFactory(
             ProviderType.DEEPGRAM -> Result.success(DeepgramTranscription(client, provider, model, credentials))
             ProviderType.ELEVENLABS -> Result.success(ElevenLabsTranscription(client, provider, model, credentials))
             ProviderType.MISTRAL -> Result.success(MistralTranscription(client, provider, model, credentials))
+            ProviderType.SONIOX -> streamingOnly(provider, model, credentials, ::SonioxDialect)
+            ProviderType.SPEECHMATICS -> streamingOnly(provider, model, credentials, ::SpeechmaticsDialect)
+            ProviderType.ASSEMBLYAI -> streamingOnly(provider, model, credentials, ::AssemblyAiDialect)
+            ProviderType.XAI -> streamingOnly(provider, model, credentials, ::XaiDialect)
+            ProviderType.CARTESIA -> streamingOnly(provider, model, credentials, ::CartesiaDialect)
         }
     }
 
@@ -63,8 +76,9 @@ class ProviderFactory(
                 Result.success(OpenAiCompatibleChat(client, provider, model, credentials))
             ProviderType.GEMINI -> Result.success(GeminiChat(client, provider, model, credentials))
             // Speech providers have no chat endpoint here.
-            ProviderType.WHISPER_ASR, ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL ->
-                unsupported(Problem.UNSUPPORTED_PROVIDER_TYPE)
+            ProviderType.WHISPER_ASR, ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL,
+            ProviderType.SONIOX, ProviderType.SPEECHMATICS, ProviderType.ASSEMBLYAI, ProviderType.XAI,
+            ProviderType.CARTESIA -> unsupported(Problem.UNSUPPORTED_PROVIDER_TYPE)
         }
     }
 
@@ -87,9 +101,17 @@ class ProviderFactory(
             }
             ProviderType.GEMINI -> GeminiDiscovery(client, provider, credentials)
             // No listing endpoint worth using: models are entered by hand.
-            ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL -> null
+            ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL, ProviderType.SONIOX,
+            ProviderType.SPEECHMATICS, ProviderType.ASSEMBLYAI, ProviderType.XAI, ProviderType.CARTESIA -> null
         }
     }
+
+    private fun streamingOnly(
+        provider: ServiceProvider,
+        model: ModelConfig,
+        credentials: Credentials,
+        dialect: (StreamingConfig) -> StreamingDialect,
+    ): Result<TranscriptionProvider> = Result.success(StreamingOnlyTranscription(client, provider, model, credentials, dialect))
 
     private fun hasOpenAiStyleBase(provider: ServiceProvider): Boolean =
         provider.endpoint.trim().toHttpUrlOrNull()?.pathSegments?.contains("v1") == true

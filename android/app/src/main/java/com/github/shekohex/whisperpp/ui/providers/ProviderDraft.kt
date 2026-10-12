@@ -99,6 +99,11 @@ data class ProviderDraft(
             ProviderType.DEEPGRAM -> "https://api.deepgram.com/v1"
             ProviderType.ELEVENLABS -> "https://api.elevenlabs.io/v1"
             ProviderType.MISTRAL -> "https://api.mistral.ai/v1"
+            ProviderType.SONIOX -> "https://stt-rt.soniox.com"
+            ProviderType.SPEECHMATICS -> "https://eu2.rt.speechmatics.com"
+            ProviderType.ASSEMBLYAI -> "https://streaming.assemblyai.com"
+            ProviderType.XAI -> "https://api.x.ai/v1"
+            ProviderType.CARTESIA -> "https://api.cartesia.ai"
         }
 
         fun defaultAuthModeFor(type: ProviderType): ProviderAuthMode = when (type) {

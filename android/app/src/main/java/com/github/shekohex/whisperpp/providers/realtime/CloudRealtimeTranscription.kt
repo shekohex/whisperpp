@@ -11,6 +11,7 @@ import com.github.shekohex.whisperpp.domain.providers.BatchUnsupportedException
 import com.github.shekohex.whisperpp.domain.providers.Credentials
 import com.github.shekohex.whisperpp.domain.providers.ProviderConfigException
 import com.github.shekohex.whisperpp.domain.providers.ScriptConversion
+import com.github.shekohex.whisperpp.domain.providers.StreamEvent
 import com.github.shekohex.whisperpp.domain.providers.StreamingTranscriptionSession
 import com.github.shekohex.whisperpp.domain.providers.Transcript
 import com.github.shekohex.whisperpp.domain.providers.TranscriptionProvider
@@ -20,6 +21,11 @@ import com.github.shekohex.whisperpp.providers.VERIFY_TIMEOUT_MS
 import com.github.shekohex.whisperpp.providers.apiKeyOrThrow
 import com.github.shekohex.whisperpp.providers.baseUrlOrThrow
 import com.github.shekohex.whisperpp.providers.providerCall
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -70,16 +76,46 @@ internal abstract class CloudRealtimeTranscription(
         return WebSocketStreamingSession(sockets, req, { dialect(streamingConfig(req)) }, postProcess)
     }
 
-    /** Any answer below 500 other than 401/403/429 proves the server is reachable. */
+    /**
+     * Any answer below 500 other than 401/403/429 proves the server is reachable. Providers without
+     * a REST endpoint are checked by opening the stream and waiting for it to come up.
+     */
     override suspend fun verify(): Result<Unit> = providerCall {
         val apiKey = requireApiKey()
-        val request = verifyRequest(apiKey) ?: throw BatchUnsupportedException(provider.type.toString())
+        val request = verifyRequest(apiKey)
+        if (request == null) {
+            verifyOverSocket()
+            return@providerCall
+        }
         val response = client.executeRaw(request, VERIFY_TIMEOUT_MS)
         val host = request.url.host
         when {
             response.code == 401 || response.code == 403 -> throw NetworkError.Unauthorized(response.code, host)
             response.code == 429 -> throw NetworkError.RateLimited(host, null)
             response.code >= 500 -> throw NetworkError.Http(response.code, host, null)
+        }
+    }
+
+    private suspend fun verifyOverSocket() {
+        val session = openStream(TranscriptionRequest(provider = provider, modelId = model.id, timeoutMs = VERIFY_TIMEOUT_MS))
+        try {
+            val outcome = coroutineScope {
+                // Subscribe before start() so the first event cannot be missed.
+                val first = async(start = CoroutineStart.UNDISPATCHED) {
+                    withTimeoutOrNull(VERIFY_TIMEOUT_MS) {
+                        session.events.first { it is StreamEvent.Connected || it is StreamEvent.Error }
+                    }
+                }
+                session.start()
+                first.await()
+            }
+            when (outcome) {
+                null -> throw NetworkError.Timeout()
+                is StreamEvent.Error -> throw outcome.error
+                else -> Unit
+            }
+        } finally {
+            session.cancel()
         }
     }
 
