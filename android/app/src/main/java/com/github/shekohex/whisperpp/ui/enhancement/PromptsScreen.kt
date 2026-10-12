@@ -18,7 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -128,14 +127,6 @@ fun PromptsScreen(
                     onAdd = { onNavigate(Destination.PromptEdit(id = null)) },
                     onEdit = { onNavigate(Destination.PromptEdit(id = it.id)) },
                     onDelete = { pendingDeleteProfile = it },
-                )
-            }
-            SettingsGroup(title = "Per-app") {
-                ListItem(
-                    headlineContent = { Text("App mappings") },
-                    supportingContent = { Text("Map apps to a prompt profile") },
-                    leadingContent = { Icon(Icons.Default.Apps, null) },
-                    modifier = Modifier.clickable { onNavigate(Destination.AppMappings) }
                 )
             }
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))

@@ -19,7 +19,8 @@ import com.github.shekohex.whisperpp.ui.enhancement.PromptsScreen
 import com.github.shekohex.whisperpp.ui.history.HistoryDetailScreen
 import com.github.shekohex.whisperpp.ui.history.HistoryScreen
 import com.github.shekohex.whisperpp.ui.home.HomeScreen
-import com.github.shekohex.whisperpp.ui.modes.ModesHubScreen
+import com.github.shekohex.whisperpp.ui.modes.ModeEditScreen
+import com.github.shekohex.whisperpp.ui.modes.ModesScreen
 import com.github.shekohex.whisperpp.ui.more.MoreScreen
 import com.github.shekohex.whisperpp.ui.onboarding.OnboardingScreen
 import com.github.shekohex.whisperpp.ui.privacy.PrivacySafetyScreen
@@ -38,7 +39,10 @@ internal fun NavGraphBuilder.appGraph(
         OnboardingScreen(onNavigate = onNavigate, onFinished = onOnboardingFinished)
     }
     composable<Destination.Home> { HomeScreen(onNavigate = onNavigate) }
-    composable<Destination.Modes> { ModesHubScreen(onNavigate = onNavigate) }
+    composable<Destination.Modes> { ModesScreen(onNavigate = onNavigate) }
+    composable<Destination.ModeEdit> { entry ->
+        ModeEditScreen(modeId = entry.toRoute<Destination.ModeEdit>().id, onBack = onBack)
+    }
     composable<Destination.History> { HistoryScreen(onNavigate = onNavigate) }
     composable<Destination.HistoryDetail> { entry ->
         HistoryDetailScreen(entryId = entry.toRoute<Destination.HistoryDetail>().id, onBack = onBack)

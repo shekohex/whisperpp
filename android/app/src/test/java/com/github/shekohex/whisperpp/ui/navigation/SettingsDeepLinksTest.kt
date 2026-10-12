@@ -28,9 +28,9 @@ class SettingsDeepLinksTest {
             "privacy_safety" to Target(Destination.More, Destination.PrivacySafety),
             "backup_restore" to Target(Destination.More, Destination.BackupRestore),
             "analytics" to Target(Destination.More, Destination.Insights),
-            "presets" to Target(Destination.Modes, Destination.Presets),
-            "app_mappings" to Target(Destination.Modes, Destination.AppMappings),
-            "language_defaults" to Target(Destination.Modes, Destination.LanguageDefaults),
+            "presets" to Target(Destination.More, Destination.Presets),
+            "app_mappings" to Target(Destination.Modes),
+            "language_defaults" to Target(Destination.Modes),
         )
 
         expected.forEach { (raw, target) ->
@@ -59,10 +59,7 @@ class SettingsDeepLinksTest {
 
     @Test
     fun parameterizedRoutesDecodeArguments() {
-        assertEquals(
-            Target(Destination.Modes, Destination.AppMappingDetail("com.example.chat")),
-            SettingsDeepLinks.resolve("app_mapping_detail?packageName=com.example.chat"),
-        )
+        assertEquals(Target(Destination.Modes), SettingsDeepLinks.resolve("app_mapping_detail?packageName=com.example.chat"))
         assertEquals(
             Target(Destination.More, Destination.PromptEdit("profile 1")),
             SettingsDeepLinks.resolve("prompt_profile_edit?id=profile%201"),
@@ -79,10 +76,7 @@ class SettingsDeepLinksTest {
 
     @Test
     fun missingRequiredArgumentFallsBackToParentScreen() {
-        assertEquals(
-            Target(Destination.Modes, Destination.AppMappings),
-            SettingsDeepLinks.resolve("app_mapping_detail?packageName="),
-        )
+        assertEquals(Target(Destination.Modes), SettingsDeepLinks.resolve("app_mapping_detail?packageName="))
         assertEquals(
             Target(Destination.More, Destination.PromptEdit(id = null)),
             SettingsDeepLinks.resolve("prompt_profile_edit"),

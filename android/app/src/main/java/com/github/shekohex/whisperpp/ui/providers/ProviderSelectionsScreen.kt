@@ -1,6 +1,5 @@
 package com.github.shekohex.whisperpp.ui.providers
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -14,10 +13,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -68,17 +63,6 @@ fun ProviderSelectionsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
-            SettingsGroup(title = "Defaults") {
-                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                    ListItem(
-                        headlineContent = { Text("Per-language defaults") },
-                        supportingContent = { Text("Choose STT and text defaults per language") },
-                        leadingContent = { Icon(Icons.Default.Translate, null) },
-                        modifier = Modifier.clickable { onNavigate(Destination.LanguageDefaults) },
-                    )
-                }
-            }
 
             val (sttProviderId, sttModelId) = ids(Slot.STT)
             SettingsGroup(title = "Dictation (STT)") {

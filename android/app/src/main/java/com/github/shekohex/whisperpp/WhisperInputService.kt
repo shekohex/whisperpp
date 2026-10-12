@@ -38,6 +38,7 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -124,6 +125,7 @@ import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
 import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeStyle
 import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeUiState
+import com.github.shekohex.whisperpp.ui.keyboard.KeyboardModeController
 import com.github.shekohex.whisperpp.ui.keyboard.KeyboardScreen
 import com.github.shekohex.whisperpp.ui.keyboard.RecordIntent
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
@@ -246,6 +248,8 @@ class WhisperInputService : InputMethodService() {
     private var commandAudioFile: File? = null
 
     private val focusIdentity = FocusIdentity()
+    // Keyboard mode chip (§4.10); the explicit choice ends when the window hides or the app changes.
+    private lateinit var keyboardModes: KeyboardModeController
     private var lastFocusKey: FocusKey? = null
 
     override fun onCreate() {
@@ -284,6 +288,14 @@ class WhisperInputService : InputMethodService() {
             hasCredential = { !container.secretsStore.getProviderApiKey(it).isNullOrBlank() },
         )
         disclosureGate = FirstUseDisclosureGate(dataStore, serviceScope)
+        keyboardModes = KeyboardModeController(
+            repository = container.modesRepository,
+            providers = repository.providers,
+            profiles = repository.promptProfiles,
+            prefs = dataStore.data,
+            hasCredential = { !container.secretsStore.getProviderApiKey(it).isNullOrBlank() },
+            scope = serviceScope,
+        )
         startPlanner = createStartPlanner()
         dictationDisclosureShown = dataStore.data
             .map { it[DISCLOSURE_SHOWN_DICTATION_AUDIO] ?: false }
@@ -333,6 +345,7 @@ class WhisperInputService : InputMethodService() {
         logLifecycle("onStartInput restarting=$restarting")
         // The single place a focus identity is minted: once per editor, not per restart or view start.
         val focusKey = FocusKey.from(attribute, focusIdentity.onStartInput(restarting))
+        keyboardModes.onPackageChanged(attribute?.packageName)
         if (focusKey != lastFocusKey) {
             lastFocusKey = focusKey
             session.onFocusChanged(focusKey)
@@ -658,6 +671,8 @@ class WhisperInputService : InputMethodService() {
                         onOpenSettings = { launchMainActivity() },
                         onOpenSettingsDestination = { launchMainActivity(it) },
                         onLanguageClick = { showLanguageMenu(this) },
+                        modeState = keyboardModes.uiState.collectAsState().value,
+                        onModeSelected = { keyboardModes.select(it) },
                         onDismissHint = { showLongPressHint.value = false },
                         externalSendBlockedReason = externalSendBlockReason.value,
                         externalSendBlockedByAppPolicy = externalSendBlockedByAppPolicy.value,
@@ -1631,6 +1646,7 @@ class WhisperInputService : InputMethodService() {
     override fun onWindowHidden() {
         super.onWindowHidden()
         logLifecycle("onWindowHidden")
+        keyboardModes.onWindowHidden()
         disclosureGate.cancel()
         dictationDisclosureJob?.cancel()
         session.onWindowHidden()

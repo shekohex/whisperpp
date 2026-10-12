@@ -24,10 +24,12 @@ import com.github.shekohex.whisperpp.data.presetById
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isPaused
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
+import com.github.shekohex.whisperpp.ui.navigation.SettingsDeepLinks
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
 private const val PRIVACY_SAFETY_DESTINATION = "privacy_safety"
+private val StackedChipTouchTarget = 30.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +57,9 @@ fun KeyboardScreen(
     onOpenSettingsDestination: (String) -> Unit = {},
     onLanguageClick: () -> Unit,
     onDismissHint: () -> Unit,
+    /** Mode chip beside the language label; null hides it (modes not read yet). */
+    modeState: KeyboardModeUiState? = null,
+    onModeSelected: (String) -> Unit = {},
     externalSendBlockedReason: SecureFieldDetector.Reason? = null,
     externalSendBlockedByAppPolicy: Boolean = false,
     blockedPackageName: String? = null,
@@ -112,6 +117,7 @@ fun KeyboardScreen(
     val blockedExplanationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var showCommandPresetPicker by remember { mutableStateOf(false) }
+    var showModePicker by remember { mutableStateOf(false) }
 
     val commandPreset = remember(commandSelectedPresetId) {
         presetById(commandSelectedPresetId)
@@ -253,6 +259,22 @@ fun KeyboardScreen(
         )
     }
 
+    if (showModePicker && modeState != null) {
+        KeyboardModePickerSheet(
+            state = modeState,
+            overlayMaxHeight = overlayMaxHeight,
+            onSelect = { modeId ->
+                onModeSelected(modeId)
+                showModePicker = false
+            },
+            onManage = {
+                showModePicker = false
+                onOpenSettingsDestination(SettingsDeepLinks.MODES)
+            },
+            onDismiss = { showModePicker = false },
+        )
+    }
+
     val showBlockedExplanationAction: () -> Unit = {
         onBlockedAction()
         if (canShowBlockedExplanation) {
@@ -339,7 +361,7 @@ fun KeyboardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 // Left Cluster
-                Box(modifier = Modifier.width(100.dp), contentAlignment = Alignment.CenterStart) {
+                Box(modifier = Modifier.widthIn(min = 100.dp), contentAlignment = Alignment.CenterStart) {
                     AnimatedContent(
                         targetState = state,
                         transitionSpec = {
@@ -369,17 +391,24 @@ fun KeyboardScreen(
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    Surface(
-                                        onClick = onLanguageClick,
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = MaterialTheme.colorScheme.secondaryContainer
-                                    ) {
-                                        Text(
-                                            text = languageLabel,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
+                                    // Two stacked pills must fit the 64 dp bar, so their touch targets shrink to 30 dp.
+                                    val chipTouchTarget = if (modeState != null) StackedChipTouchTarget else LocalMinimumInteractiveComponentSize.current
+                                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides chipTouchTarget) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Surface(
+                                                onClick = onLanguageClick,
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = MaterialTheme.colorScheme.secondaryContainer
+                                            ) {
+                                                Text(
+                                                    text = languageLabel,
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                )
+                                            }
+                                            modeState?.let { KeyboardModeChip(state = it, onClick = { showModePicker = true }) }
+                                        }
                                     }
                                 }
                             }

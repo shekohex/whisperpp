@@ -62,19 +62,14 @@ object SettingsDeepLinks {
             BACKUP_RESTORE -> more(Destination.BackupRestore)
             ANALYTICS -> more(Destination.Insights)
             ABOUT -> more(Destination.About)
-            PRESETS -> modes(Destination.Presets)
-            APP_MAPPINGS -> modes(Destination.AppMappings)
-            LANGUAGE_DEFAULTS -> modes(Destination.LanguageDefaults)
-            APP_MAPPING_DETAIL -> query["packageName"]
-                ?.let { modes(Destination.AppMappingDetail(it)) }
-                ?: modes(Destination.AppMappings)
+            // Transform presets stay a global enhancement setting; the per-app/language rules became modes.
+            PRESETS -> more(Destination.Presets)
+            APP_MAPPINGS, LANGUAGE_DEFAULTS, APP_MAPPING_DETAIL -> Target(Destination.Modes)
             else -> HOME
         }
     }
 
     private fun more(destination: Destination) = Target(Destination.More, destination)
-
-    private fun modes(destination: Destination) = Target(Destination.Modes, destination)
 
     /** Decodes `a=b&c=d`; blank values are dropped so `id=` means "no id". */
     private fun parseQuery(query: String): Map<String, String> {

@@ -16,6 +16,10 @@ sealed interface Destination {
     @Serializable
     data object Modes : Destination
 
+    /** Create (no id) or edit a mode (§4.10). */
+    @Serializable
+    data class ModeEdit(val id: String? = null) : Destination
+
     @Serializable
     data object History : Destination
 
@@ -59,7 +63,7 @@ sealed interface Destination {
     @Serializable
     data object Presets : Destination
 
-    // Per-app and per-language rules.
+    // Pre-modes per-app and per-language rules; only reachable from Modes until the migration ran.
     @Serializable
     data object AppMappings : Destination
 
