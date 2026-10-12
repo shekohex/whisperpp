@@ -10,6 +10,7 @@ import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.domain.providers.Credentials
 import com.github.shekohex.whisperpp.domain.providers.ScriptConversion
+import com.github.shekohex.whisperpp.domain.providers.StreamingTranscriptionSession
 import com.github.shekohex.whisperpp.domain.providers.Transcript
 import com.github.shekohex.whisperpp.domain.providers.TranscriptionProvider
 import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
@@ -18,6 +19,7 @@ import com.github.shekohex.whisperpp.providers.VERIFY_TIMEOUT_MS
 import com.github.shekohex.whisperpp.providers.apiKeyOrThrow
 import com.github.shekohex.whisperpp.providers.baseUrlOrThrow
 import com.github.shekohex.whisperpp.providers.providerCall
+import com.github.shekohex.whisperpp.providers.realtime.OpenAiRealtimeSession
 import com.github.shekohex.whisperpp.providers.withPathSuffix
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -28,6 +30,7 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 /**
  * Multipart `/audio/transcriptions` (OpenAI, Groq, NIM, custom) and the Whisper ASR webservice
@@ -51,6 +54,15 @@ class OpenAiCompatibleTranscription(
         val response = client.executeForBody(request, req.timeoutMs, apiKey, callTimeoutMs = 0)
         val text = parseText(response)
         Transcript(text = postProcess(text, req.scriptConversion))
+    }
+
+    /** OpenAI Realtime transcription for models flagged realtime; the Whisper ASR webservice has none. */
+    override fun openStream(req: TranscriptionRequest): StreamingTranscriptionSession? {
+        if (!capabilities.realtime || provider.type == ProviderType.WHISPER_ASR) return null
+        val sockets = client.newBuilder()
+            .pingInterval(OpenAiRealtimeSession.PING_INTERVAL_SECONDS, TimeUnit.SECONDS)
+            .build()
+        return OpenAiRealtimeSession(sockets, provider, model, credentials, req, postProcess)
     }
 
     /** Any answer below 500 other than 401/403/429 proves the server is reachable. */

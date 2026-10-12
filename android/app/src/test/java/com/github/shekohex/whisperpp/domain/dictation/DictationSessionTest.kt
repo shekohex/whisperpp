@@ -25,6 +25,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -65,8 +66,10 @@ class DictationSessionTest {
             get() = stops + cancels
 
         val startedFiles = mutableListOf<File>()
+        var onPcm: ((ByteArray) -> Unit)? = null
 
         override suspend fun start(file: File, onPcm: ((ByteArray) -> Unit)?): Result<Unit> {
+            this.onPcm = onPcm
             starts += 1
             startedFiles += file
             this.file = file
@@ -102,13 +105,23 @@ class DictationSessionTest {
         override val events = MutableSharedFlow<StreamEvent>(extraBufferCapacity = 8)
         var commits = 0
         var cancels = 0
+        val sent = mutableListOf<ByteArray>()
+        var sentAtCommit = -1
+        var startFailure: Exception? = null
 
-        override suspend fun start() = Unit
+        override suspend fun start() {
+            startFailure?.let { throw it }
+        }
 
-        override suspend fun sendAudio(pcm16: ByteArray) = Unit
+        override suspend fun sendAudio(pcm16: ByteArray) {
+            // Suspends like a real network send, so an undrained channel would lose the tail.
+            yield()
+            sent += pcm16
+        }
 
         override suspend fun commit(): Result<Transcript> {
             commits += 1
+            sentAtCommit = sent.size
             return committed?.let { Result.success(Transcript(it)) } ?: Result.failure(IllegalStateException("none"))
         }
 
@@ -421,16 +434,94 @@ class DictationSessionTest {
     }
 
     @Test
-    fun healthyStream_isFallbackWhenBatchFails() = sessionTest { h ->
+    fun healthyStream_isPrimary_andBatchIsNotSent() = sessionTest { h ->
         val streaming = FakeStreaming(committed = "streamed")
         h.streaming = streaming
-        h.transcript = { Result.failure(java.io.IOException("offline")) }
         h.recordFor(1_000)
         h.session.onPressRelease()
         advanceUntilIdle()
 
         assertEquals(1, streaming.commits)
+        assertTrue(h.requests.isEmpty())
         assertTrue(h.events.contains(SessionEvent.Committed("streamed")))
+        assertEquals("prefix streamed", h.ic.getText())
+        assertFalse(h.audioFile.exists())
+    }
+
+    @Test
+    fun streamCommitFailure_fallsBackToBatchWithTheSameFile() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = null)
+        h.streaming = streaming
+        h.recordFor(1_000)
+        streaming.events.emit(StreamEvent.Partial("hel"))
+        runCurrent()
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        assertEquals(1, streaming.commits)
+        assertEquals(1, h.requests.size)
+        // The partial is replaced, never kept next to the batch text.
+        assertEquals("prefix hello", h.ic.getText())
+        assertTrue(h.events.contains(SessionEvent.Committed("hello")))
+    }
+
+    @Test
+    fun streamAndBatchFailure_reportsBatchError_withoutUsingPartials() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = null)
+        h.streaming = streaming
+        h.transcript = { Result.failure(java.io.IOException("offline")) }
+        h.recordFor(1_000)
+        streaming.events.emit(StreamEvent.Partial("stale partial"))
+        runCurrent()
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        assertTrue(h.events.contains(SessionEvent.TranscriptionFailed("offline")))
+        assertFalse(h.events.any { it is SessionEvent.Committed })
+        assertEquals("prefix ", h.ic.getText())
+    }
+
+    @Test
+    fun brokenStreamStart_skipsCommit_andUsesBatch() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = "streamed").apply { startFailure = java.io.IOException("refused") }
+        h.streaming = streaming
+        h.recordFor(1_000)
+        h.recorder.onPcm!!(byteArrayOf(1, 2))
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        assertEquals(0, streaming.commits)
+        assertTrue(h.events.contains(SessionEvent.Committed("hello")))
+    }
+
+    @Test
+    fun queuedPcm_isDrainedIntoTheStream_beforeCommit() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = "streamed")
+        h.streaming = streaming
+        h.recordFor(1_000)
+        val onPcm = h.recorder.onPcm!!
+        // Captured right before the release; the sender has not run yet.
+        repeat(5) { onPcm(byteArrayOf(it.toByte(), 0)) }
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        assertEquals(5, streaming.sent.size)
+        assertEquals(5, streaming.sentAtCommit)
+        assertEquals(listOf(0, 1, 2, 3, 4), streaming.sent.map { it[0].toInt() })
+    }
+
+    @Test
+    fun droppedPcm_usesBatchOnly() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = "streamed")
+        h.streaming = streaming
+        h.recorder.droppedChunks = 1
+        h.recordFor(1_000)
+        h.session.onPressRelease()
+        advanceUntilIdle()
+
+        assertEquals(0, streaming.commits)
+        assertEquals(1, h.requests.size)
+        assertTrue(h.events.contains(SessionEvent.Committed("hello")))
     }
 
     @Test

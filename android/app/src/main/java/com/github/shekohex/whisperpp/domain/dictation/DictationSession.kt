@@ -12,13 +12,10 @@ import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -63,6 +60,10 @@ class DictationSession(private val deps: Deps) {
         var recorderLive = false
         var streaming: StreamingTranscriptionSession? = null
         var pcm: Channel<ByteArray>? = null
+        var pcmSender: Job? = null
+
+        // Set on the streaming dispatcher; read after joining [pcmSender].
+        @Volatile var streamBroken = false
         var lastPartial: String? = null
         var lastPartialAt: Long? = null
         var composing = false
@@ -316,16 +317,20 @@ class DictationSession(private val deps: Deps) {
         r.auxJobs += deps.scope.launch {
             streaming.events.collect { onStreamEvent(r, it) }
         }
-        r.auxJobs += deps.scope.launch(deps.streamingDispatcher) {
+        val sender = deps.scope.launch(deps.streamingDispatcher) {
             try {
                 streaming.start()
                 for (chunk in channel) streaming.sendAudio(chunk)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                // Batch stays authoritative; a broken stream only loses partials.
+                // The WAV is complete regardless; the stop path falls back to batch.
+                r.streamBroken = true
+                channel.cancel()
             }
         }
+        r.pcmSender = sender
+        r.auxJobs += sender
         return { chunk -> channel.trySend(chunk) }
     }
 
@@ -361,6 +366,7 @@ class DictationSession(private val deps: Deps) {
             return finish(r, SessionState.Error(SessionState.ErrorKind.RECORDING_FAILED, recoverable = true))
         }
         deps.cues(SoundCues.Cue.STOP)
+        // No more chunks; the sender drains what is queued before the stream is committed.
         r.pcm?.close()
         // The editor may have become blocked while the recorder was stopping; nothing leaves the device then.
         if (!deps.sendAllowed()) {
@@ -372,14 +378,17 @@ class DictationSession(private val deps: Deps) {
         val streaming = r.streaming?.takeIf { recording.droppedChunks == 0 }
         if (streaming == null) {
             r.lastPartial = null
+            r.pcmSender?.cancel()
             r.streaming?.let(::cancelStreaming)
         }
 
+        // A healthy stream is primary; the WAV is kept so batch can always take over (§4.5.1).
         val outcome = try {
-            coroutineScope {
-                val streamed = streaming?.let { async { it.commit() } }
-                val batch = transcribe(recording.file, plan.request.copy(contextPrompt = r.contextPrompt))
-                resolveOutcome(r, batch, streamed)
+            val streamed = streaming?.let { commitStream(r, it) }?.getOrNull()?.text?.takeIf { it.isNotBlank() }
+            if (streamed != null) {
+                Outcome.Text(streamed)
+            } else {
+                batchOutcome(transcribe(recording.file, plan.request.copy(contextPrompt = r.contextPrompt)))
             }
         } finally {
             recording.file.delete()
@@ -408,16 +417,25 @@ class DictationSession(private val deps: Deps) {
         }
     }
 
-    /** Batch is authoritative; the stream (if healthy) is the fallback, snapshotted before cleanup (G-02). */
-    private suspend fun resolveOutcome(r: Run, batch: Result<String>, streamed: Deferred<Result<Transcript>>?): Outcome {
-        val batchText = batch.getOrNull()
-        if (!batchText.isNullOrBlank()) {
-            streamed?.cancel()
-            return Outcome.Text(batchText)
+    /**
+     * Waits until every captured chunk was handed to the stream, then commits it. The stream's own
+     * final is the only accepted result; partials never stand in for it.
+     */
+    private suspend fun commitStream(r: Run, streaming: StreamingTranscriptionSession): Result<Transcript> {
+        r.pcmSender?.join()
+        if (r.streamBroken) return Result.failure(IllegalStateException("stream broken"))
+        return try {
+            streaming.commit()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        val streamedText = streamed?.await()?.getOrNull()?.text?.takeIf { it.isNotBlank() }
-        val fallback = streamedText ?: r.lastPartial?.takeIf { r.streaming != null }
-        if (!fallback.isNullOrBlank()) return Outcome.Text(fallback)
+    }
+
+    private fun batchOutcome(batch: Result<String>): Outcome {
+        val text = batch.getOrNull()
+        if (!text.isNullOrBlank()) return Outcome.Text(text)
         return batch.exceptionOrNull()
             ?.let { Outcome.Failed(it.message?.takeIf(String::isNotBlank) ?: it::class.java.simpleName) }
             ?: Outcome.Empty

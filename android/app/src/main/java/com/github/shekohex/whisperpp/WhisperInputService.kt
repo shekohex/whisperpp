@@ -110,7 +110,6 @@ import com.github.shekohex.whisperpp.ime.showLanguagePopup
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isRecording
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
-import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
 import com.github.shekohex.whisperpp.ui.keyboard.EnhancementNoticeStyle
@@ -164,7 +163,6 @@ class WhisperInputService : InputMethodService() {
     
     private lateinit var repository: SettingsRepository
     private lateinit var analyticsRepository: AnalyticsRepository
-    private lateinit var secretsStore: SecretsStore
     private lateinit var sendPolicyRepository: SendPolicyRepository
 
     // Owners for the current input view only; replaced on every onCreateInputView().
@@ -242,7 +240,6 @@ class WhisperInputService : InputMethodService() {
         val container = appContainer
         repository = container.settingsRepository
         analyticsRepository = container.analyticsRepository
-        secretsStore = container.secretsStore
         sendPolicyRepository = container.sendPolicyRepository
         sendPolicyRules = sendPolicyRepository.getAllRulesFlow()
             .stateIn(serviceScope, SharingStarted.Eagerly, null)
@@ -368,8 +365,6 @@ class WhisperInputService : InputMethodService() {
     private fun createStartPlanner() = DictationStartPlanner(
         DictationStartPlanner.Deps(
             config = configLoader,
-            secretsStore = secretsStore,
-            okHttpClient = appContainer.okHttpClient,
             providers = providerFactory,
             awaitMigrations = { appContainer.awaitMigrations(MIGRATIONS_WAIT_MS) },
             awaitSendPolicy = { sendPolicyRules.first { it != null } },

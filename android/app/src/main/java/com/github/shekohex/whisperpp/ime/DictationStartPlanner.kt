@@ -5,31 +5,26 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.ADD_TRAILING_SPACE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.LANGUAGE_CODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.POSTPROCESSING
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PROMPT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.REALTIME_STT_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
-import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.RuntimeChannel
 import com.github.shekohex.whisperpp.data.RuntimeConfigLoader
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.data.toNoticeText
 import com.github.shekohex.whisperpp.dictation.FocusKey
-import com.github.shekohex.whisperpp.dictation.OpenAiRealtimeSttClient
-import com.github.shekohex.whisperpp.dictation.OpenAiRealtimeStreamingSession
 import com.github.shekohex.whisperpp.domain.dictation.StartDecision
 import com.github.shekohex.whisperpp.domain.dictation.StartPlan
 import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
 import com.github.shekohex.whisperpp.domain.providers.ScriptConversion
 import com.github.shekohex.whisperpp.domain.providers.StreamingTranscriptionSession
+import com.github.shekohex.whisperpp.domain.providers.TranscriptionProvider
 import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
-import com.github.shekohex.whisperpp.privacy.SecretsStore
-import okhttp3.OkHttpClient
 import java.io.File
 
 /** Platform-side pre-start checks and config resolution for a dictation run. Never waits on the user. */
 class DictationStartPlanner(private val deps: Deps) {
     class Deps(
         val config: RuntimeConfigLoader,
-        val secretsStore: SecretsStore,
-        val okHttpClient: OkHttpClient,
         val providers: ProviderFactory,
         val awaitMigrations: suspend () -> Boolean,
         val awaitSendPolicy: suspend () -> Unit,
@@ -81,7 +76,7 @@ class DictationStartPlanner(private val deps: Deps) {
         if (!deps.checkMicPermission()) return StartDecision.PermissionRequired
 
         // Unsupported provider/model combinations never reach the network (G-04).
-        if (deps.providers.transcription(selection.provider, selection.modelId).isFailure) {
+        val transcription = deps.providers.transcription(selection.provider, selection.modelId).getOrElse {
             deps.onSetupRequired()
             return StartDecision.Abort
         }
@@ -104,25 +99,23 @@ class DictationStartPlanner(private val deps: Deps) {
             StartPlan(
                 audioFile = deps.recordingFile(),
                 request = request,
-                streaming = createStreamingSession(provider, selection.modelId),
+                streaming = openStreaming(transcription, request, prefs),
             )
         )
     }
 
-    /** Realtime partials for models flagged for streaming; batch stays authoritative (G-11, WP-2.5). */
-    private fun createStreamingSession(provider: ServiceProvider, modelId: String): StreamingTranscriptionSession? {
-        val model = provider.models.find { it.id == modelId }
-        if (model?.capabilities?.realtime != true) return null
-        val apiKey = deps.secretsStore.getProviderApiKey(provider.id).orEmpty()
-        val request = if (provider.type == ProviderType.OPENAI && apiKey.isNotBlank()) {
-            OpenAiRealtimeSttClient.buildRequest(provider.endpoint, modelId, apiKey)
-        } else {
-            null
-        }
-        if (request == null) {
-            deps.onStreamingUnsupported()
-            return null
-        }
-        return OpenAiRealtimeStreamingSession(deps.okHttpClient, request)
+    /**
+     * Streams when the model is flagged realtime (discovery or the user, never URL heuristics) and the
+     * user keeps "Use realtime transcription" on (§4.5.1). The session falls back to batch on failure.
+     */
+    private fun openStreaming(
+        transcription: TranscriptionProvider,
+        request: TranscriptionRequest,
+        prefs: Preferences,
+    ): StreamingTranscriptionSession? {
+        if (!transcription.capabilities.realtime || prefs[REALTIME_STT_ENABLED] == false) return null
+        val session = transcription.openStream(request)
+        if (session == null) deps.onStreamingUnsupported()
+        return session
     }
 }

@@ -78,6 +78,7 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import com.github.shekohex.whisperpp.data.PreferenceKeys.REALTIME_STT_ENABLED
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -1918,6 +1919,12 @@ fun ProviderSelectionsScreen(dataStore: DataStore<Preferences>, navController: N
                             }
                         }
                     }
+                SettingsToggle(
+                    icon = Icons.Default.GraphicEq,
+                    title = stringResource(R.string.settings_realtime_stt_enabled),
+                    checked = settingsState?.get(REALTIME_STT_ENABLED) ?: true,
+                    onCheckedChange = { scope.launch { dataStore.edit { s -> s[REALTIME_STT_ENABLED] = it } } }
+                )
                 }
             }
 

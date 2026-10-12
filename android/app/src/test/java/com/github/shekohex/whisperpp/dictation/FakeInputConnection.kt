@@ -10,6 +10,12 @@ import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputContentInfo
 
+/**
+ * In-memory editor with the platform's composing-region semantics: [setComposingText] and
+ * [commitText] replace the composing region when there is one (else the selection), the selection
+ * sits after composed text, [setSelection] keeps the region, and [finishComposingText] /
+ * [setComposingRegion] end or mark it without editing text.
+ */
 class FakeInputConnection : InputConnection {
     private val buffer = StringBuilder()
     private var selectionStart: Int = 0
@@ -42,6 +48,9 @@ class FakeInputConnection : InputConnection {
     fun getText(): String = buffer.toString()
 
     fun getSelection(): Pair<Int, Int> = selectionStart to selectionEnd
+
+    /** Composing text, or null when nothing is composing. */
+    fun composingText(): String? = composingRegion()?.let { (a, b) -> buffer.substring(a, b) }
 
     fun replaceRange(start: Int, end: Int, replacement: String) {
         val s = start.coerceIn(0, buffer.length)
@@ -83,13 +92,14 @@ class FakeInputConnection : InputConnection {
         return buffer.substring(a, b)
     }
 
+    /** Replaces the composing region (or the selection when there is none) and ends composing. */
     override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
         if (rejectInserts) return false
+        val replacement = text?.toString().orEmpty()
+        val a = if (composingStart >= 0) composingStart else minOf(selectionStart, selectionEnd)
+        val b = if (composingStart >= 0) composingEnd else maxOf(selectionStart, selectionEnd)
         composingStart = -1
         composingEnd = -1
-        val replacement = text?.toString().orEmpty()
-        val a = minOf(selectionStart, selectionEnd)
-        val b = maxOf(selectionStart, selectionEnd)
         if (a < 0 || b < 0) return false
         if (a > buffer.length || b > buffer.length) return false
         buffer.replace(a, b, replacement)
@@ -158,8 +168,18 @@ class FakeInputConnection : InputConnection {
         return deleteSurroundingText(beforeLength, afterLength)
     }
 
+    /** Marks existing text as composing; the text and the selection are unchanged. */
     override fun setComposingRegion(start: Int, end: Int): Boolean {
-        return setSelection(start, end)
+        val a = minOf(start, end).coerceIn(0, buffer.length)
+        val b = maxOf(start, end).coerceIn(0, buffer.length)
+        if (a == b) {
+            composingStart = -1
+            composingEnd = -1
+        } else {
+            composingStart = a
+            composingEnd = b
+        }
+        return true
     }
 
     override fun commitCompletion(text: CompletionInfo?): Boolean = true

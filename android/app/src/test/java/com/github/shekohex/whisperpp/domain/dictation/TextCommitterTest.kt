@@ -134,4 +134,50 @@ class TextCommitterTest {
         assertEquals("prefix suffix", ic.getText())
         assertFalse(committer.isUndoAvailable(focus))
     }
+
+    // region G-03: composing regions never corrupt the captured segment
+
+    @Test
+    fun partialThenFinal_capturedSegmentAndUndoTargetExactlyTheCommittedText() {
+        assertTrue(committer.setComposing(focus, "hel"))
+        assertTrue(committer.setComposing(focus, "hello wor"))
+        assertEquals("hello wor", ic.composingText())
+
+        val segment = commitRaw("hello world")
+
+        assertEquals("prefix hello worldsuffix", ic.getText())
+        assertNull(ic.composingRegion())
+        val start = "prefix ".length
+        assertEquals(TextCommitter.CapturedSegment(focus, start, start + "hello world".length, "hello world"), segment)
+
+        assertTrue(committer.replaceSegment(segment, "Hello, world.", focus))
+        assertEquals("prefix Hello, world.suffix", ic.getText())
+        // The undo entry starts where the partial started, not after it.
+        assertTrue(committer.undoLastInsertion(focus))
+        assertEquals("prefix suffix", ic.getText())
+    }
+
+    @Test
+    fun foreignComposingRegion_isFinishedBeforeCapture_andKeptOutOfTheSegment() {
+        // Another composer (e.g. a spell checker) marked "suf" as composing.
+        ic.setComposingRegion("prefix ".length, "prefix suf".length)
+
+        val segment = commitRaw("RAW")
+
+        assertEquals("prefix RAWsuffix", ic.getText())
+        assertEquals("RAW", ic.getText().substring(segment.start, segment.endAtInsert))
+    }
+
+    @Test
+    fun replaceSegment_withForeignComposingRegion_replacesOnlyTheSegment() {
+        val segment = commitRaw("RAW")
+        val end = ic.getText().length
+        ic.setComposingRegion(end - "fix".length, end)
+
+        assertTrue(committer.replaceSegment(segment, "ENHANCED", focus))
+
+        assertEquals("prefix ENHANCEDsuffix", ic.getText())
+    }
+
+    // endregion
 }

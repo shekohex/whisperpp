@@ -36,6 +36,9 @@ object PreferenceKeys {
     val PROMPT = stringPreferencesKey("prompt")
     val USE_CONTEXT = booleanPreferencesKey("use-context")
 
+    /** Stream audio to realtime-capable STT models (§4.5.1); batch remains the fallback. Default true. */
+    val REALTIME_STT_ENABLED = booleanPreferencesKey("realtime-stt-enabled")
+
     val ENHANCEMENT_PRESET_ID = stringPreferencesKey("enhancement-preset-id")
     val COMMAND_PRESET_ID = stringPreferencesKey("command-preset-id")
 
@@ -96,6 +99,7 @@ object PreferenceKeys {
         ENHANCEMENT_PRESET_ID,
         COMMAND_PRESET_ID,
         ENHANCEMENT_ENABLED,
+        REALTIME_STT_ENABLED,
         ENHANCEMENT_BACKEND,
         ENHANCEMENT_ENDPOINT,
         ENHANCEMENT_API_KEY,

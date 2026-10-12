@@ -311,6 +311,7 @@
     <string name="recording_interrupted">Recording paused: audio interrupted</string>
     <string name="settings_pause_media_while_recording">Pause media while recording</string>
     <string name="settings_tap_to_record">Tap to record (hands-free)</string>
+    <string name="settings_realtime_stt_enabled">Use realtime transcription when available</string>
 
     <!-- Dictation session (WP-1.2) -->
     <string name="dictation_paused">Dictation paused</string>
@@ -319,7 +320,7 @@
     <string name="dictation_copied_no_field">No field focused; copied to clipboard</string>
     <string name="dictation_copied_blocked">Sending blocked here; transcript copied</string>
     <string name="dictation_undo_unavailable">Can\'t undo here</string>
-    <string name="dictation_streaming_unsupported">Streaming partials not supported for this provider</string>
+    <string name="dictation_streaming_unsupported">Realtime transcription is not supported for this provider; using batch</string>
     <string name="dictation_pending_commit_title">Transcript for another field</string>
     <string name="dictation_pending_commit_insert">Insert here</string>
     <string name="dictation_pending_commit_copy">Copy</string>

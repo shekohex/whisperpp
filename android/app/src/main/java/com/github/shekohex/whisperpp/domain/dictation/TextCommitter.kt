@@ -106,7 +106,7 @@ class TextCommitter(
         val ownsComposing = composingOwner == focus
         if (!ownsComposing) dropComposing()
         val selectionBefore = captureSelectionBeforeInsert(ic, ownsComposing)
-        val insertionStart = composingStart ?: selectionBefore?.let { minOf(it.start, it.end) }
+        val insertionStart = selectionBefore?.let { minOf(it.start, it.end) }
         dropComposing()
         enhancementUndoEntry = null
 
@@ -193,9 +193,17 @@ class TextCommitter(
         return true
     }
 
-    // Our composing partial is about to be replaced, so only a foreign composing region is finished.
+    /**
+     * Where the insert begins, as if nothing were composing (G-03). The editor's selection sits after
+     * a composing region, so our own partial (about to be replaced) is located by its tracked start
+     * (unknown → no segment), and a foreign one is finished first so it cannot shift the range.
+     */
     private fun captureSelectionBeforeInsert(ic: InputConnection, ownsComposing: Boolean): DictationUndoEntry.SelectionSnapshot? {
-        if (!ownsComposing) ic.finishComposingText()
+        if (ownsComposing) {
+            val start = composingStart ?: return null
+            return DictationUndoEntry.SelectionSnapshot(start, start)
+        }
+        ic.finishComposingText()
         return ic.selectionSnapshot()
     }
 
@@ -203,6 +211,8 @@ class TextCommitter(
         val cursor = start + text.length
         beginBatchEdit()
         return try {
+            // commitText would replace a live composing region instead of the selection.
+            finishForeignComposing(this)
             if (setSelection(start, end) && commitText(text, 1)) {
                 setSelection(cursor, cursor)
                 true
@@ -237,6 +247,7 @@ class TextCommitter(
         val end = start + entry.insertedText.length
         ic.beginBatchEdit()
         return try {
+            finishForeignComposing(ic)
             if (!ic.setSelection(start, end)) return false
             if (ic.getSelectedText(0)?.toString() != entry.insertedText) return false
             if (!ic.commitText("", 1)) return false
@@ -247,6 +258,11 @@ class TextCommitter(
         } finally {
             ic.endBatchEdit()
         }
+    }
+
+    // Our own partial is never frozen into the text; only another composer's region is finished.
+    private fun finishForeignComposing(ic: InputConnection) {
+        if (composingOwner == null) ic.finishComposingText()
     }
 
     private fun InputConnection.selectionSnapshot(): DictationUndoEntry.SelectionSnapshot? {
