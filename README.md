@@ -53,6 +53,14 @@ The microphone permission is requested only when you ask for it, either in the f
 - **HTTPS is required** for all servers. Plain `http://` is only allowed for local-network servers
   (`localhost`, `10.x.x.x`, `172.16-31.x.x`, `192.168.x.x`, link-local, or `*.local`), e.g. `http://192.168.1.10:9000/asr`.
 
+### Using a gateway (LiteLLM etc.) for realtime
+Realtime dictation (text while you speak) works with any OpenAI-compatible gateway that exposes the Realtime API over WebSocket at `/v1/realtime`, for example LiteLLM.
+1. Add a **Custom** provider with your gateway as the base URL (`https://litellm.example.com`, `https://litellm.example.com/v1` or `https://host/litellm/v1`; a LAN address such as `http://192.168.1.10:4000` is fine).
+2. Add the transcription model exactly as the gateway names it (the `model_name` in your LiteLLM config) and tick **Realtime (WebSocket)** on it. OpenAI's own `whisper-1` and `*-transcribe` models stream without the checkbox.
+3. Tap **Test connection**. For a realtime model it also opens the WebSocket and reports whether the key was rejected, the gateway has no `/v1/realtime` (HTTP 404/426), or the session was never confirmed.
+
+The app connects to `wss://<gateway>/v1/realtime?model=<model>&intent=transcription` and uses the current (GA) session format; if the gateway rejects it, it retries once with the older beta format. If realtime fails for any reason, the recording is transcribed normally instead. The **Use realtime transcription when available** switch in Dictation settings turns it off globally.
+
 ### Enhancement
 Turn on **Enhancement** and pick a text model (OpenAI-compatible or Gemini). Prompts and presets are editable, and each mode can use its own.
 
