@@ -562,7 +562,7 @@ Order within a phase is flexible unless a dependency is noted. Commit per WP wit
 - `ime/PermissionRequestActivity.kt` (translucent), inline "Allow microphone" chip, remove `MainActivity.checkPermissions()`, `requiredPermissions = RECORD_AUDIO`.
 - Accept: fresh install → first press shows rationale chip → grant → recording starts without leaving the host app.
 
-### Phase 2 — Providers & pipeline — DONE (6995498…35db9b5)
+### Phase 2 — Providers & pipeline — DONE (6995498…35db9b5; review fixes WP-2.7 796d956)
 
 **WP-2.1 Provider interfaces + OpenAI-compatible impls** — I-02, G-01, G-04, G-08, G-09, G-10, L-04
 - `domain/providers/*`, `providers/openai/*`, `providers/realtime/*`; `WhisperTranscriber`/`SmartFixer` → thin adapters then deleted. Rename "SmartFix" → "Enhancement" in code and strings.
@@ -587,6 +587,8 @@ Order within a phase is flexible unless a dependency is noted. Commit per WP wit
 **WP-2.4 Pipeline extras from VoiceInk** — §5 items 3–5, 11
 - `core/text/TranscriptFilter.kt`, `WordReplacements.kt`, vocabulary in prompt/provider, prompt library seeds, backoff policy, auto-send option.
 - Accept: unit tests for replacements/filter; prompts visible in Enhancement screen.
+
+**WP-2.7 Phase 2 review fixes** — 15 findings from the Phase 2 review (realtime trailing-audio acknowledgement + grace window, auto-send bound to insertion focus/run id, classifier: `*realtime*` ignored / `*-transcribe*` + `whisper-1` realtime-capable, Gemini realtime=false and bidi-only ignored, shared `fromLegacy` for `MULTIMODAL`, `response_format=json` for `gpt-*-transcribe`, `WebSocket.cancel()` on abort, Gemini 14 MB base64-aware cap + typed block errors, empty post-process → `TranscriptionEmpty`, reasoning-model params, `DiscoveryIdentity` cache key, `IME_FLAG_NO_ENTER_ACTION`, Arabic fillers trimmed, trailing space in shared path). DONE (796d956).
 
 ### Phase 3 — App UI rework
 
