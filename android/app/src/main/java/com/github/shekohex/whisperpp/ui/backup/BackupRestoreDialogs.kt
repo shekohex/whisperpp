@@ -11,12 +11,10 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,21 +32,16 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.RestoreMode
-
-// TODO(WP-3.6): move the restore wizard steps into BackupRestoreViewModel with a sealed RestoreStage.
+import com.github.shekohex.whisperpp.ui.components.SecureTextField
 
 /** Password + confirmation for a new encrypted export; [onConfirm] receives the password. */
 @Composable
 internal fun ExportPasswordDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
-    var visible by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<Int?>(null) }
 
     AlertDialog(
@@ -60,18 +53,25 @@ internal fun ExportPasswordDialog(onDismiss: () -> Unit, onConfirm: (String) -> 
                     text = stringResource(R.string.backup_export_password_message),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                PasswordField(password, stringResource(R.string.backup_password_label), visible) {
-                    password = it
-                    error = null
-                }
-                PasswordField(confirmation, stringResource(R.string.backup_password_confirm_label), visible) {
-                    confirmation = it
-                    error = null
-                }
+                SecureTextField(
+                    value = password,
+                    onValueChange = {
+                        password = it
+                        error = null
+                    },
+                    label = stringResource(R.string.backup_password_label),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SecureTextField(
+                    value = confirmation,
+                    onValueChange = {
+                        confirmation = it
+                        error = null
+                    },
+                    label = stringResource(R.string.backup_password_confirm_label),
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 error?.let { ErrorText(stringResource(it)) }
-                TextButton(onClick = { visible = !visible }) {
-                    Text(stringResource(if (visible) R.string.backup_hide_password else R.string.backup_show_password))
-                }
             }
         },
         confirmButton = {
@@ -104,7 +104,6 @@ internal fun ImportPasswordDialog(
     onErrorCleared: () -> Unit,
 ) {
     var password by remember { mutableStateOf("") }
-    var visible by rememberSaveable { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -115,14 +114,17 @@ internal fun ImportPasswordDialog(
                     text = stringResource(R.string.backup_import_password_message),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                PasswordField(password, stringResource(R.string.backup_password_label), visible) {
-                    password = it
-                    onErrorCleared()
-                }
+                SecureTextField(
+                    value = password,
+                    onValueChange = {
+                        password = it
+                        onErrorCleared()
+                    },
+                    label = stringResource(R.string.backup_password_label),
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = error != null,
+                )
                 error?.let { ErrorText(stringResource(it)) }
-                TextButton(onClick = { visible = !visible }) {
-                    Text(stringResource(if (visible) R.string.backup_hide_password else R.string.backup_show_password))
-                }
             }
         },
         confirmButton = {
@@ -181,25 +183,6 @@ private fun ErrorText(text: String) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.error,
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-    )
-}
-
-// TODO(WP-3.7): adopt shared components (SecureTextField).
-@Composable
-private fun PasswordField(
-    value: String,
-    label: String,
-    visible: Boolean,
-    onValueChange: (String) -> Unit,
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(label) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
     )
 }
 

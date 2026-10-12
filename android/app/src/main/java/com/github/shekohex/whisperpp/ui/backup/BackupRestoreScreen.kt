@@ -1,13 +1,11 @@
 package com.github.shekohex.whisperpp.ui.backup
 
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,12 +24,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -41,7 +38,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
-import com.github.shekohex.whisperpp.data.RestoreMode
 import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_MANIFEST
 import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS
 import com.github.shekohex.whisperpp.ui.backup.BackupNotice.Tone
@@ -68,29 +64,22 @@ fun BackupRestoreScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val toast: (Int) -> Unit = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
 
-    var showExportPasswordDialog by rememberSaveable { mutableStateOf(false) }
-    var pendingExport by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var pendingImportUri by rememberSaveable { mutableStateOf<Uri?>(null) }
-    var pendingImportMode by rememberSaveable { mutableStateOf<RestoreMode?>(null) }
-    var showRestoreModeSheet by rememberSaveable { mutableStateOf(false) }
-    var showImportPasswordDialog by rememberSaveable { mutableStateOf(false) }
-    var importPasswordError by rememberSaveable { mutableStateOf<Int?>(null) }
-
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
-        val request = pendingExport
-        pendingExport = null
-        if (uri == null || request == null) {
-            viewModel.onExportCancelled()
-        } else {
-            viewModel.export(uri, password = request.first, exportedAtUtc = request.second, onMessage = toast)
-        }
+        viewModel.onExportDestinationPicked(uri, onMessage = toast)
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        pendingImportUri = uri
-        pendingImportMode = null
-        viewModel.resetImport()
-        showRestoreModeSheet = true
+        if (uri != null) viewModel.onImportFilePicked(uri)
+    }
+
+    // The picker is a one-shot side effect of reaching ChoosingDestination.
+    // Remembered across recreation so a rotation does not reopen the picker.
+    val exportStage = state.exportStage
+    var launchedExportAt by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(exportStage) {
+        if (exportStage is ExportStage.ChoosingDestination && launchedExportAt != exportStage.exportedAtUtc) {
+            launchedExportAt = exportStage.exportedAtUtc
+            exportLauncher.launch(buildBackupFileName(exportStage.exportedAtUtc))
+        }
     }
 
     PageScaffold(
@@ -118,7 +107,7 @@ fun BackupRestoreScreen(
                     includeHistory = state.includeHistory,
                     onIncludeHistoryChange = viewModel::setIncludeHistory,
                     enabled = !state.isBusy,
-                    onExport = { showExportPasswordDialog = true },
+                    onExport = viewModel::startExport,
                 )
             }
             item {
@@ -147,35 +136,12 @@ fun BackupRestoreScreen(
                                 importLauncher.launch(arrayOf("*/*"))
                             },
                         )
-                        val awaitingPassword = pendingImportUri != null && pendingImportMode != null &&
-                            state.importAnalysis == null && !showImportPasswordDialog && !state.isAnalyzingImport
-                        if (awaitingPassword) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                OutlinedButton(onClick = { showRestoreModeSheet = true }, modifier = Modifier.weight(1f)) {
-                                    Text(stringResource(R.string.backup_change_mode))
-                                }
-                                OutlinedButton(onClick = { showImportPasswordDialog = true }, modifier = Modifier.weight(1f)) {
-                                    Text(stringResource(R.string.backup_enter_password))
-                                }
-                            }
-                        }
                         state.importAnalysis?.let { analysis ->
                             ImportPreviewCard(
                                 analysis = analysis,
                                 selectedMergeCategories = state.selectedMergeCategories,
                                 onToggleCategory = viewModel::toggleCategory,
-                                onConfirmRestore = {
-                                    viewModel.applyImport(
-                                        onApplied = {
-                                            pendingImportUri = null
-                                            pendingImportMode = null
-                                        },
-                                        onMessage = toast,
-                                    )
-                                },
+                                onConfirmRestore = { viewModel.applyImport(onMessage = toast) },
                                 isApplyingImport = state.isApplyingImport,
                             )
                         }
@@ -188,57 +154,26 @@ fun BackupRestoreScreen(
         }
     }
 
-    if (showRestoreModeSheet) {
-        RestoreModeSheet(
-            onDismiss = {
-                showRestoreModeSheet = false
-                pendingImportUri = null
-            },
-            onSelect = { mode ->
-                pendingImportMode = mode
-                showRestoreModeSheet = false
-                showImportPasswordDialog = true
-            },
+    when (val stage = state.restoreStage) {
+        is RestoreStage.ChoosingMode -> RestoreModeSheet(
+            onDismiss = viewModel::cancelRestoreWizard,
+            onSelect = viewModel::onRestoreModeChosen,
         )
+        is RestoreStage.EnteringPassword -> ImportPasswordDialog(
+            error = stage.error,
+            onDismiss = viewModel::cancelRestoreWizard,
+            onErrorCleared = viewModel::clearPasswordError,
+            onConfirm = viewModel::submitImportPassword,
+        )
+        RestoreStage.Idle, is RestoreStage.Analyzing -> Unit
     }
 
-    if (showExportPasswordDialog) {
+    if (exportStage == ExportStage.EnteringPassword) {
         ExportPasswordDialog(
-            onDismiss = { showExportPasswordDialog = false },
+            onDismiss = viewModel::dismissExportPassword,
             onConfirm = { password ->
                 val exportedAtUtc = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString()
-                pendingExport = password to exportedAtUtc
-                showExportPasswordDialog = false
-                viewModel.onExportStarted()
-                exportLauncher.launch(buildBackupFileName(exportedAtUtc))
-            },
-        )
-    }
-
-    if (showImportPasswordDialog) {
-        ImportPasswordDialog(
-            error = importPasswordError,
-            onDismiss = {
-                showImportPasswordDialog = false
-                importPasswordError = null
-                pendingImportUri = null
-                pendingImportMode = null
-            },
-            onErrorCleared = { importPasswordError = null },
-            onConfirm = { password ->
-                val uri = pendingImportUri
-                val mode = pendingImportMode
-                when {
-                    password.isBlank() -> importPasswordError = R.string.backup_error_import_password_blank
-                    uri == null || mode == null -> importPasswordError = R.string.backup_error_no_file
-                    else -> {
-                        showImportPasswordDialog = false
-                        viewModel.analyze(uri, mode, password) { error ->
-                            importPasswordError = error
-                            showImportPasswordDialog = error != null
-                        }
-                    }
-                }
+                viewModel.onExportPasswordConfirmed(password, exportedAtUtc)
             },
         )
     }

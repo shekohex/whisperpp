@@ -18,14 +18,10 @@
     <string name="backup_restore_flow_message">اختر ملفًا أولًا. ثم اختر الاستبدال أو الدمج، وأدخل كلمة المرور، وعاين التغييرات، ثم أكّد الاستعادة.</string>
     <string name="backup_choose_file">اختيار ملف النسخة الاحتياطية</string>
     <string name="backup_decrypting">جارٍ فك تشفير النسخة الاحتياطية…</string>
-    <string name="backup_change_mode">تغيير الطريقة</string>
-    <string name="backup_enter_password">إدخال كلمة المرور</string>
     <string name="backup_export_password_title">احمِ النسخة الاحتياطية بكلمة مرور</string>
     <string name="backup_export_password_message">كل تصدير مشفّر. قد تتضمّن النسخة بيانات اعتماد المزوّدين، لذا لا يوجد تصدير غير مشفّر.</string>
     <string name="backup_password_label">كلمة مرور النسخة الاحتياطية</string>
     <string name="backup_password_confirm_label">تأكيد كلمة المرور</string>
-    <string name="backup_show_password">إظهار كلمة المرور</string>
-    <string name="backup_hide_password">إخفاء كلمة المرور</string>
     <string name="backup_continue">متابعة</string>
     <string name="backup_import_password_title">فتح معاينة النسخة الاحتياطية</string>
     <string name="backup_import_password_message">أدخل كلمة المرور قبل معاينة أي شيء من هذه النسخة الاحتياطية أو تطبيقه.</string>

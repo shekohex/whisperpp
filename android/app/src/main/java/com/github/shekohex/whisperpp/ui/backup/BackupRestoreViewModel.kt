@@ -27,7 +27,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Export / preview / apply for encrypted backups. Owns the [SettingsBackupRepository] so screens no
- * longer build repositories. The restore wizard's dialog steps stay in the screen until WP-3.6.
+ * longer build repositories. The export / restore wizards are driven by [ExportStage] / [RestoreStage].
  */
 class BackupRestoreViewModel(
     container: AppContainer,
@@ -36,6 +36,8 @@ class BackupRestoreViewModel(
 ) : ViewModel() {
 
     data class UiState(
+        val exportStage: ExportStage = ExportStage.Idle,
+        val restoreStage: RestoreStage = RestoreStage.Idle,
         val exportNotice: BackupNotice? = null,
         val importNotice: BackupNotice? = null,
         val importAnalysis: ImportAnalysis? = null,
@@ -68,11 +70,27 @@ class BackupRestoreViewModel(
 
     fun setIncludeHistory(include: Boolean) = _state.update { it.copy(includeHistory = include) }
 
-    fun onExportStarted() = _state.update { it.copy(isExporting = true) }
+    fun startExport() = _state.update { it.copy(exportStage = ExportStage.EnteringPassword) }
 
-    fun onExportCancelled() = _state.update { it.copy(isExporting = false) }
+    fun dismissExportPassword() = _state.update { it.copy(exportStage = ExportStage.Idle) }
 
-    fun export(uri: Uri, password: String, exportedAtUtc: String, onMessage: (Int) -> Unit) {
+    /** Password accepted: the screen should now launch the "save as" picker. */
+    fun onExportPasswordConfirmed(password: String, exportedAtUtc: String) = _state.update {
+        it.copy(
+            exportStage = ExportStage.ChoosingDestination(password, exportedAtUtc),
+            isExporting = true,
+        )
+    }
+
+    /** The picker returned: write the file, or abandon the export when [uri] is null. */
+    fun onExportDestinationPicked(uri: Uri?, onMessage: (Int) -> Unit) {
+        val stage = _state.value.exportStage as? ExportStage.ChoosingDestination
+        _state.update { it.copy(exportStage = ExportStage.Idle, isExporting = uri != null && stage != null) }
+        if (uri == null || stage == null) return
+        export(uri, stage.password, stage.exportedAtUtc, onMessage)
+    }
+
+    private fun export(uri: Uri, password: String, exportedAtUtc: String, onMessage: (Int) -> Unit) {
         val includeHistory = _state.value.includeHistory
         viewModelScope.launch {
             try {
@@ -121,14 +139,48 @@ class BackupRestoreViewModel(
         }
     }
 
-    /** Clears the previous preview/summary before a new file is picked. */
+    /** Clears the previous preview/summary and any half-finished wizard before a new file is picked. */
     fun resetImport() = _state.update {
-        it.copy(importAnalysis = null, restoreSummary = null, selectedMergeCategories = emptySet(), importNotice = null)
+        it.copy(
+            restoreStage = RestoreStage.Idle,
+            importAnalysis = null,
+            restoreSummary = null,
+            selectedMergeCategories = emptySet(),
+            importNotice = null,
+        )
     }
 
-    /** Decrypts and previews [uri]; [onResult] gets `null` on success or the error message to show. */
-    fun analyze(uri: Uri, mode: RestoreMode, password: String, onResult: (Int?) -> Unit) {
-        _state.update { it.copy(isAnalyzingImport = true) }
+    /** A file was picked: ask how to restore it. */
+    fun onImportFilePicked(uri: Uri) {
+        resetImport()
+        _state.update { it.copy(restoreStage = RestoreStage.ChoosingMode(uri)) }
+    }
+
+    fun onRestoreModeChosen(mode: RestoreMode) = _state.update {
+        val stage = it.restoreStage as? RestoreStage.ChoosingMode ?: return@update it
+        it.copy(restoreStage = RestoreStage.EnteringPassword(stage.uri, mode))
+    }
+
+    fun clearPasswordError() = _state.update {
+        val stage = it.restoreStage as? RestoreStage.EnteringPassword ?: return@update it
+        if (stage.error == null) it else it.copy(restoreStage = stage.copy(error = null))
+    }
+
+    /** Leaves the wizard (sheet or dialog dismissed). */
+    fun cancelRestoreWizard() = _state.update { it.copy(restoreStage = RestoreStage.Idle) }
+
+    /** Validates [password] and, if usable, decrypts and previews the picked file. */
+    fun submitImportPassword(password: String) {
+        val stage = _state.value.restoreStage as? RestoreStage.EnteringPassword ?: return
+        if (password.isBlank()) {
+            _state.update { it.copy(restoreStage = stage.copy(error = R.string.backup_error_import_password_blank)) }
+            return
+        }
+        analyze(stage.uri, stage.mode, password)
+    }
+
+    private fun analyze(uri: Uri, mode: RestoreMode, password: String) {
+        _state.update { it.copy(isAnalyzingImport = true, restoreStage = RestoreStage.Analyzing(uri, mode)) }
         viewModelScope.launch {
             try {
                 val raw = withContext(Dispatchers.IO) {
@@ -141,6 +193,7 @@ class BackupRestoreViewModel(
                     it.copy(
                         importAnalysis = analysis,
                         restoreSummary = null,
+                        restoreStage = RestoreStage.Idle,
                         selectedMergeCategories = analysis.categoryPreviews
                             .filter { preview -> preview.selectable && preview.includedByDefault }
                             .map { preview -> preview.categoryId }
@@ -152,7 +205,6 @@ class BackupRestoreViewModel(
                         ),
                     )
                 }
-                onResult(null)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -160,6 +212,7 @@ class BackupRestoreViewModel(
                 val message = importErrorMessage(e)
                 _state.update {
                     it.copy(
+                        restoreStage = RestoreStage.EnteringPassword(uri, mode, error = message),
                         importNotice = BackupNotice(
                             title = R.string.backup_preview_failed_title,
                             message = message,
@@ -167,7 +220,6 @@ class BackupRestoreViewModel(
                         ),
                     )
                 }
-                onResult(message)
             } finally {
                 _state.update { it.copy(isAnalyzingImport = false) }
             }
@@ -179,8 +231,8 @@ class BackupRestoreViewModel(
         it.copy(selectedMergeCategories = if (categoryId in selected) selected - categoryId else selected + categoryId)
     }
 
-    /** Applies the current preview; [onApplied] runs after success so the screen can clear its wizard. */
-    fun applyImport(onApplied: () -> Unit, onMessage: (Int) -> Unit) {
+    /** Applies the current preview. */
+    fun applyImport(onMessage: (Int) -> Unit) {
         val current = _state.value
         val analysis = current.importAnalysis ?: return
         _state.update { it.copy(isApplyingImport = true) }
@@ -218,7 +270,6 @@ class BackupRestoreViewModel(
                         },
                     )
                 }
-                onApplied()
                 onMessage(if (repairCount > 0) R.string.backup_toast_restored_with_repairs else R.string.backup_toast_restored)
             } catch (e: CancellationException) {
                 throw e

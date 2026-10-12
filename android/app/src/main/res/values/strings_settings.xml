@@ -19,8 +19,6 @@
     <string name="backup_restore_flow_message">Choose a file first. Then select Overwrite or Merge, enter the password, preview the changes and confirm the restore.</string>
     <string name="backup_choose_file">Choose backup file</string>
     <string name="backup_decrypting">Decrypting backup…</string>
-    <string name="backup_change_mode">Change mode</string>
-    <string name="backup_enter_password">Enter password</string>
     <string name="backup_notice_with_extra" translatable="false">%1$s %2$s</string>
 
     <!-- Backup: dialogs and restore mode sheet -->
@@ -28,8 +26,6 @@
     <string name="backup_export_password_message">Every export is encrypted. Provider credentials can be included, so there is no unencrypted export.</string>
     <string name="backup_password_label">Backup password</string>
     <string name="backup_password_confirm_label">Confirm password</string>
-    <string name="backup_show_password">Show password</string>
-    <string name="backup_hide_password">Hide password</string>
     <string name="backup_continue">Continue</string>
     <string name="backup_import_password_title">Unlock backup preview</string>
     <string name="backup_import_password_message">Enter the password before previewing or applying anything from this backup.</string>
