@@ -24,6 +24,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -32,17 +33,25 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isPaused
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
+/**
+ * Main record button: one gesture handler (§4.1) plus accessibility actions mapped to the same intents (H-15).
+ *
+ * RTL decision (WP-3.7): the bar is laid out with the locale's direction, so in RTL the record button
+ * sits at the physical LEFT edge. "Slide to cancel" therefore follows the layout, not the screen: it
+ * always moves toward the START side (left in LTR, right in RTL), i.e. away from the edge the button is
+ * on — a physical-left gesture would run off-screen in RTL. [CancelHint]'s auto-mirrored arrow and
+ * travel direction match this; "slide up to lock" is direction-neutral.
+ */
 @Composable
 fun MainActionButton(
     state: KeyboardState,
@@ -131,6 +140,15 @@ fun MainActionButton(
             }
         }
     )
+    val stateLabel = stringResource(
+        when (state) {
+            KeyboardState.Ready -> R.string.keyboard_record_state_idle
+            KeyboardState.Recording -> R.string.keyboard_record_state_recording
+            KeyboardState.RecordingLocked -> R.string.keyboard_record_state_locked
+            KeyboardState.Paused, KeyboardState.PausedLocked -> R.string.keyboard_record_state_paused
+            KeyboardState.Transcribing, KeyboardState.Enhancing -> R.string.keyboard_record_state_processing
+        }
+    )
     val startLabel = stringResource(R.string.record_action_start)
     val sendLabel = stringResource(R.string.record_action_send)
     val lockLabel = stringResource(R.string.record_action_lock)
@@ -159,6 +177,7 @@ fun MainActionButton(
     }
     val a11yModifier = Modifier.semantics(mergeDescendants = true) {
         contentDescription = description
+        stateDescription = stateLabel
         role = Role.Button
         if (externalSendingBlocked) {
             onClick { currentOnBlockedAction(); true }
@@ -219,27 +238,6 @@ fun MainActionButton(
         modifier = Modifier.size(64.dp),
         contentAlignment = Alignment.Center
     ) {
-        if (showLongPressHint && !externalSendingBlocked) {
-            Popup(
-                alignment = Alignment.BottomCenter,
-                offset = androidx.compose.ui.unit.IntOffset(-110, -160),
-                properties = PopupProperties(clippingEnabled = false)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.inverseSurface,
-                    shadowElevation = 8.dp
-                ) {
-                    Text(
-                        text = stringResource(R.string.long_press_hint),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.inverseOnSurface
-                    )
-                }
-            }
-        }
-
         Box(
             modifier = Modifier
                 .size(size)
@@ -307,27 +305,7 @@ fun BackspaceButton(onDeleteAction: () -> Unit) {
 
 @Composable
 fun WhimsicalStatus() {
-    val whimsicalWords = listOf(
-        "Polishing", "Refining", "Synthesizing", "De-umm-ing", "Structuring",
-        "Articulating", "Grammarizing", "Decrypting", "Unscrambling", "Enhancing",
-        "Harmonizing", "Orchestrating", "Decoding", "Calibrating", "Interpreting",
-        "Clarifying", "Perfecting", "Stylizing", "Flowing", "Connecting",
-        "Analyzing", "Processing", "Distilling", "Capturing", "Translating",
-        "Echoing", "Vocalizing", "Resonating", "Balancing", "Filtering",
-        "Reconstructing", "Smoothing", "Fine-tuning", "Adapting", "Reshaping",
-        "Aligning", "Synchronizing", "Optimizing", "Gleaning", "Extracting",
-        "Transcribing", "Enunciating", "Projecting", "Symphonizing", "Detecting",
-        "Listening", "Composing", "Crafting", "Mending", "Rectifying",
-        "Mapping", "Weaving", "Sculpting", "Whispering", "Thinking",
-        "Untangling", "Crystallizing", "Illuminating", "Channeling", "Parsing",
-        "Braiding", "Conjuring", "Manifesting", "Transmuting", "Awakening",
-        "Brewing", "Curating", "Deciphering", "Elevating", "Forging",
-        "Germinating", "Harvesting", "Infusing", "Kindling", "Layering",
-        "Marinating", "Nurturing", "Orchestrating", "Percolating", "Quickening",
-        "Radiating", "Simmering", "Tempering", "Unveiling", "Ventilating",
-        "Wrangling", "Yielding", "Zeroing", "Assembling", "Blending",
-        "Condensing", "Digesting", "Embroidering", "Funneling", "Galvanizing"
-    )
+    val whimsicalWords = stringArrayResource(R.array.keyboard_enhancing_words)
     val glyphs = listOf("·", "✻", "✽", "✶", "✳", "✢")
     
     var word by remember { mutableStateOf(whimsicalWords.random()) }

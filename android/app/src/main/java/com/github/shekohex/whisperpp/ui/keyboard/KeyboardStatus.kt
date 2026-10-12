@@ -17,9 +17,13 @@ import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.github.shekohex.whisperpp.R
@@ -76,8 +80,23 @@ fun PausedControlsCenter(
 
 @Composable
 fun StatusContent(state: KeyboardState, level: () -> Float, recordingTimeMs: () -> Long) {
+    val statusLabel = stringResource(
+        when (state) {
+            KeyboardState.Ready -> R.string.input_ready
+            KeyboardState.Recording -> R.string.input_recording
+            KeyboardState.RecordingLocked -> R.string.keyboard_status_recording_locked
+            KeyboardState.Paused, KeyboardState.PausedLocked -> R.string.input_paused
+            KeyboardState.Transcribing -> R.string.input_transcribing
+            KeyboardState.Enhancing -> R.string.input_enhancing
+        }
+    )
+    // TalkBack announces state changes once ("Recording", "Transcribing"…) instead of the animated content.
     AnimatedContent(
         targetState = state,
+        modifier = Modifier.clearAndSetSemantics {
+            contentDescription = statusLabel
+            liveRegion = LiveRegionMode.Polite
+        },
         transitionSpec = {
             fadeIn() + scaleIn() togetherWith fadeOut() + scaleOut()
         },
@@ -88,7 +107,9 @@ fun StatusContent(state: KeyboardState, level: () -> Float, recordingTimeMs: () 
                 Text(
                     stringResource(R.string.input_ready),
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             KeyboardState.Recording -> {
@@ -175,7 +196,7 @@ private fun StatusWaveform(level: () -> Float) {
     // 48 bars at 3 dp + 2 dp gap; a narrower parent just shows fewer (newest) bars.
     LiveWaveform(
         level = level,
-        modifier = Modifier.width(238.dp).height(32.dp),
+        modifier = Modifier.widthIn(max = 238.dp).fillMaxWidth().height(32.dp),
     )
 }
 
@@ -224,4 +245,3 @@ internal suspend fun AwaitPointerEventScope.trackRecordPointer(
     }
 }
 
-/** Main record button: one gesture handler (§4.1) plus accessibility actions mapped to the same intents (H-15). */

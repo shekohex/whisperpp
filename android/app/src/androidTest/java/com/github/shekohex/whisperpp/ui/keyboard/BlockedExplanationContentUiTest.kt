@@ -59,7 +59,6 @@ class BlockedExplanationContentUiTest {
                         onOpenSettings = {},
                         onClose = {},
                         onDontShowAgain = {},
-                        showCloseAction = false,
                     )
                 }
             }
@@ -100,7 +99,6 @@ class BlockedExplanationContentUiTest {
                         onOpenSettings = {},
                         onClose = {},
                         onDontShowAgain = {},
-                        showCloseAction = true,
                     )
                 }
             }

@@ -5,4 +5,9 @@
     <color name="theme_rich_black">#FF001A23</color>
     <color name="ic_launcher_background">#FFFFFF</color>
     <color name="ic_launcher_circle">#EEEEEE</color>
+    <!-- WhisperTheme brand fallback palette (keep in sync with ui/theme/Color.kt). -->
+    <color name="brand_primary">#FF0B57D0</color>
+    <color name="brand_on_primary">#FFFFFFFF</color>
+    <color name="brand_surface">#FFFAF9FD</color>
+    <color name="brand_on_surface">#FF1A1B20</color>
 </resources>

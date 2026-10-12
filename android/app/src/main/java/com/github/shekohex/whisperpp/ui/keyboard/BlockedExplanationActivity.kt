@@ -72,7 +72,6 @@ class BlockedExplanationActivity : ComponentActivity() {
                             }
                             finish()
                         },
-                        showCloseAction = true,
                     )
                 }
             }

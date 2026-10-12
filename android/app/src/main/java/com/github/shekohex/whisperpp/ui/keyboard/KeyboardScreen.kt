@@ -1,37 +1,39 @@
 package com.github.shekohex.whisperpp.ui.keyboard
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.gestures.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.unit.dp
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.command.CommandStage
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
 import com.github.shekohex.whisperpp.data.presetById
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
-import com.github.shekohex.whisperpp.keyboard.isPaused
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import com.github.shekohex.whisperpp.ui.navigation.SettingsDeepLinks
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeoutOrNull
 
 private const val PRIVACY_SAFETY_DESTINATION = "privacy_safety"
-private val StackedChipTouchTarget = 30.dp
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** In-keyboard sheets, highest priority first; at most one is shown at a time. */
+private enum class KeyboardSheet { Disclosure, CancelConfirmation, Blocked, Clipboard, Presets, LanguageMode }
+
 @Composable
 fun KeyboardScreen(
     state: KeyboardState,
@@ -55,9 +57,12 @@ fun KeyboardScreen(
     onDismissEnhancementNotice: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenSettingsDestination: (String) -> Unit = {},
-    onLanguageClick: () -> Unit,
+    /** Pickable dictation languages and the stored choice ("auto" or a language code). */
+    languageOptions: List<KeyboardLanguageOption> = emptyList(),
+    selectedLanguage: String = "auto",
+    onLanguageSelected: (String) -> Unit = {},
     onDismissHint: () -> Unit,
-    /** Mode chip beside the language label; null hides it (modes not read yet). */
+    /** Mode shown in the language·mode pill; null shows the language only (modes not read yet). */
     modeState: KeyboardModeUiState? = null,
     onModeSelected: (String) -> Unit = {},
     externalSendBlockedReason: SecureFieldDetector.Reason? = null,
@@ -76,6 +81,12 @@ fun KeyboardScreen(
     onPendingCommitInsert: () -> Unit = {},
     onPendingCommitCopy: () -> Unit = {},
     onPendingCommitDiscard: () -> Unit = {},
+    /** "Discard this recording?" is open (in-keyboard sheet, H-14). */
+    cancelConfirmationVisible: Boolean = false,
+    onCancelConfirmed: () -> Unit = {},
+    onCancelConfirmDismissed: () -> Unit = {},
+    /** Receives the Back action of the topmost in-keyboard sheet, or null when none is open. */
+    onOverlayBackChanged: ((() -> Unit)?) -> Unit = {},
 
     commandModeActive: Boolean = false,
     commandStage: CommandStage = CommandStage.WAITING,
@@ -100,11 +111,8 @@ fun KeyboardScreen(
     val context = LocalContext.current
     val overlayMaxHeight = keyboardOverlayMaxHeight()
     var gestureUi by remember { mutableStateOf(GestureUi.Idle) }
-    val isPausedState = state.isPaused
     val externalSendingBlocked = externalSendBlockedReason != null || externalSendBlockedByAppPolicy
     val canShowBlockedExplanation = externalSendingBlocked && (externalSendBlockedByAppPolicy || showSecureFieldExplanation)
-    val showUndoAction = undoAvailable && undoQuickActionVisible
-    val showEnhancementUndoAction = enhancementUndoAvailable
     val copy = remember(externalSendBlockedReason, externalSendBlockedByAppPolicy, blockedPackageName) {
         blockedExplanationCopySpec(
             externalSendBlockedReason = externalSendBlockedReason,
@@ -113,166 +121,44 @@ fun KeyboardScreen(
         )
     }
     var showBlockedExplanation by remember { mutableStateOf(false) }
-    var showBlockedExplanationFallback by remember { mutableStateOf(false) }
-    val blockedExplanationSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
     var showCommandPresetPicker by remember { mutableStateOf(false) }
-    var showModePicker by remember { mutableStateOf(false) }
+    var showContextSheet by remember { mutableStateOf(false) }
 
-    val commandPreset = remember(commandSelectedPresetId) {
-        presetById(commandSelectedPresetId)
-    }
+    val commandPreset = remember(commandSelectedPresetId) { presetById(commandSelectedPresetId) }
     val commandPresetLabel = commandPreset?.let { stringResource(it.titleRes) }
         ?: stringResource(R.string.command_preset_unknown)
     val showCommandOverlay = commandModeActive || commandStage != CommandStage.WAITING
-    val commandStageLabel = when (commandStage) {
-        CommandStage.WAITING -> stringResource(R.string.command_stage_waiting)
-        CommandStage.CLIPBOARD_CONFIRM -> stringResource(R.string.command_stage_clipboard_confirm)
-        CommandStage.LISTENING -> stringResource(R.string.command_stage_listening)
-        CommandStage.PROCESSING -> stringResource(R.string.command_stage_processing)
-        CommandStage.DONE -> stringResource(R.string.command_stage_done)
-        CommandStage.ERROR -> stringResource(R.string.command_stage_error)
-    }
+    val commandStageLabel = stringResource(commandStage.labelRes())
 
     LaunchedEffect(externalSendingBlocked) {
-        if (!externalSendingBlocked) {
-            showBlockedExplanation = false
-            showBlockedExplanationFallback = false
+        if (!externalSendingBlocked) showBlockedExplanation = false
+    }
+
+    val activeSheet = when {
+        firstUseDisclosure != null -> KeyboardSheet.Disclosure
+        cancelConfirmationVisible -> KeyboardSheet.CancelConfirmation
+        showBlockedExplanation && canShowBlockedExplanation -> KeyboardSheet.Blocked
+        commandModeActive && commandStage == CommandStage.CLIPBOARD_CONFIRM -> KeyboardSheet.Clipboard
+        showCommandPresetPicker && commandModeActive -> KeyboardSheet.Presets
+        showContextSheet && state == KeyboardState.Ready -> KeyboardSheet.LanguageMode
+        else -> null
+    }
+    val dismissActiveSheet: () -> Unit = {
+        when (activeSheet) {
+            KeyboardSheet.Disclosure -> onFirstUseDisclosureCancel()
+            KeyboardSheet.CancelConfirmation -> onCancelConfirmDismissed()
+            KeyboardSheet.Blocked -> showBlockedExplanation = false
+            KeyboardSheet.Clipboard -> onCommandCancel()
+            KeyboardSheet.Presets -> showCommandPresetPicker = false
+            KeyboardSheet.LanguageMode -> showContextSheet = false
+            null -> Unit
         }
     }
-
-    LaunchedEffect(showBlockedExplanation, canShowBlockedExplanation) {
-        if (!showBlockedExplanation || !canShowBlockedExplanation) {
-            showBlockedExplanationFallback = false
-            if (blockedExplanationSheetState.isVisible) {
-                blockedExplanationSheetState.hide()
-            }
-            return@LaunchedEffect
-        }
-
-        showBlockedExplanationFallback = false
-        val expanded = withTimeoutOrNull(300) {
-            blockedExplanationSheetState.show()
-            while (blockedExplanationSheetState.currentValue != SheetValue.Expanded) {
-                delay(16)
-            }
-            true
-        } == true
-
-        if (!expanded) {
-            blockedExplanationSheetState.hide()
-            showBlockedExplanationFallback = true
-        }
-    }
-
-    if (showBlockedExplanation && canShowBlockedExplanation && !showBlockedExplanationFallback) {
-        ModalBottomSheet(
-            onDismissRequest = { showBlockedExplanation = false },
-            sheetState = blockedExplanationSheetState,
-            contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
-        ) {
-            BlockedExplanationContent(
-                modifier = Modifier.heightIn(max = overlayMaxHeight),
-                copy = copy,
-                onOpenSettings = {
-                    showBlockedExplanation = false
-                    showBlockedExplanationFallback = false
-                    onOpenSettingsDestination(PRIVACY_SAFETY_DESTINATION)
-                },
-                onClose = {
-                    showBlockedExplanation = false
-                    showBlockedExplanationFallback = false
-                },
-                onDontShowAgain = {
-                    onDontShowSecureFieldExplanationAgain()
-                    showBlockedExplanation = false
-                    showBlockedExplanationFallback = false
-                },
-                showCloseAction = false,
-            )
-        }
-    }
-
-    if (showBlockedExplanation && canShowBlockedExplanation && showBlockedExplanationFallback) {
-        KeyboardOverlayPopup(
-            maxHeight = overlayMaxHeight,
-            onDismissRequest = {
-                showBlockedExplanation = false
-                showBlockedExplanationFallback = false
-            },
-        ) {
-            BlockedExplanationContent(
-                copy = copy,
-                onOpenSettings = {
-                    showBlockedExplanation = false
-                    showBlockedExplanationFallback = false
-                    onOpenSettingsDestination(PRIVACY_SAFETY_DESTINATION)
-                },
-                onClose = {
-                    showBlockedExplanation = false
-                    showBlockedExplanationFallback = false
-                },
-                onDontShowAgain = {
-                    onDontShowSecureFieldExplanationAgain()
-                    showBlockedExplanation = false
-                    showBlockedExplanationFallback = false
-                },
-                showCloseAction = true,
-            )
-        }
-    }
-
-    if (firstUseDisclosure != null) {
-        KeyboardOverlayPopup(maxHeight = overlayMaxHeight, onDismissRequest = onFirstUseDisclosureCancel) {
-            FirstUseDisclosureContent(
-                disclosure = firstUseDisclosure,
-                onContinue = onFirstUseDisclosureContinue,
-                onOpenPrivacySafety = onFirstUseDisclosureOpenPrivacySafety,
-                onCancel = onFirstUseDisclosureCancel,
-            )
-        }
-    }
-
-    if (commandModeActive && commandStage == CommandStage.CLIPBOARD_CONFIRM) {
-        CommandClipboardSheet(
-            overlayMaxHeight = overlayMaxHeight,
-            unavailableReason = commandClipboardUnavailableReason,
-            preview = commandClipboardPreview,
-            charCount = commandClipboardCharCount,
-            isLarge = commandClipboardIsLarge,
-            attemptsRemaining = commandClipboardAttemptsRemaining,
-            onContinue = onCommandClipboardContinue,
-            onRetry = onCommandClipboardRetry,
-            onCancel = onCommandCancel,
-        )
-    }
-
-    if (showCommandPresetPicker && commandModeActive) {
-        CommandPresetPickerSheet(
-            overlayMaxHeight = overlayMaxHeight,
-            selectedPresetId = commandSelectedPresetId,
-            onSelect = { presetId ->
-                onCommandPresetSelected(presetId)
-                showCommandPresetPicker = false
-            },
-            onDismiss = { showCommandPresetPicker = false },
-        )
-    }
-
-    if (showModePicker && modeState != null) {
-        KeyboardModePickerSheet(
-            state = modeState,
-            overlayMaxHeight = overlayMaxHeight,
-            onSelect = { modeId ->
-                onModeSelected(modeId)
-                showModePicker = false
-            },
-            onManage = {
-                showModePicker = false
-                onOpenSettingsDestination(SettingsDeepLinks.MODES)
-            },
-            onDismiss = { showModePicker = false },
-        )
+    val currentDismiss by rememberUpdatedState(dismissActiveSheet)
+    val currentOnOverlayBackChanged by rememberUpdatedState(onOverlayBackChanged)
+    DisposableEffect(activeSheet != null) {
+        currentOnOverlayBackChanged(if (activeSheet != null) ({ currentDismiss() }) else null)
+        onDispose { currentOnOverlayBackChanged(null) }
     }
 
     val showBlockedExplanationAction: () -> Unit = {
@@ -284,10 +170,7 @@ fun KeyboardScreen(
                 externalSendBlockedByAppPolicy = externalSendBlockedByAppPolicy,
                 blockedPackageName = blockedPackageName,
             )
-            if (!openedDetached) {
-                showBlockedExplanation = true
-                showBlockedExplanationFallback = false
-            }
+            if (!openedDetached) showBlockedExplanation = true
         }
     }
 
@@ -342,213 +225,132 @@ fun KeyboardScreen(
             )
         }
 
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = KeyboardMetrics.barBottomGap)
-                .height(KeyboardMetrics.baseHeight)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            shape = RoundedCornerShape(36.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 8.dp,
-            shadowElevation = 4.dp
+        AnimatedVisibility(
+            visible = showLongPressHint && !externalSendingBlocked,
+            enter = fadeIn(),
+            exit = fadeOut(),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Left Cluster
-                Box(modifier = Modifier.widthIn(min = 100.dp), contentAlignment = Alignment.CenterStart) {
-                    AnimatedContent(
-                        targetState = state,
-                        transitionSpec = {
-                            fadeIn() + slideInHorizontally() togetherWith fadeOut() + slideOutHorizontally()
-                        },
-                        label = "LeftClusterTransition"
-                    ) { targetState ->
-                        when (targetState) {
-                            KeyboardState.Recording, KeyboardState.RecordingLocked -> {
-                                RecordingTimer(recordingTimeMs)
-                            }
-                            KeyboardState.Paused, KeyboardState.PausedLocked -> {
-                                IconButton(onClick = onCancelAction) {
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        contentDescription = stringResource(R.string.record_action_cancel),
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                            KeyboardState.Ready, KeyboardState.Transcribing, KeyboardState.Enhancing -> {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(onClick = onOpenSettings) {
-                                        Icon(
-                                            Icons.Default.Settings,
-                                            contentDescription = stringResource(R.string.btn_settings_hint),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    // Two stacked pills must fit the 64 dp bar, so their touch targets shrink to 30 dp.
-                                    val chipTouchTarget = if (modeState != null) StackedChipTouchTarget else LocalMinimumInteractiveComponentSize.current
-                                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides chipTouchTarget) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Surface(
-                                                onClick = onLanguageClick,
-                                                shape = RoundedCornerShape(16.dp),
-                                                color = MaterialTheme.colorScheme.secondaryContainer
-                                            ) {
-                                                Text(
-                                                    text = languageLabel,
-                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                                )
-                                            }
-                                            modeState?.let { KeyboardModeChip(state = it, onClick = { showModePicker = true }) }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Center Status
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AnimatedContent(
-                        targetState = centerContentFor(state, gestureUi),
-                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "CenterContentTransition"
-                    ) { content ->
-                        when (content) {
-                            CenterContent.CancelHint -> CancelHint(
-                                progress = gestureUi.cancelProgress,
-                                committed = gestureUi.phase == GesturePhase.Cancelled,
-                            )
-                            CenterContent.LockHint -> LockHint(
-                                progress = gestureUi.lockProgress,
-                                locked = gestureUi.phase == GesturePhase.Locked,
-                            )
-                            CenterContent.Status -> if (isPausedState) {
-                                PausedControlsCenter(
-                                    state = state,
-                                    recordingTimeMs = recordingTimeMs,
-                                    onResume = if (externalSendingBlocked) {
-                                        showBlockedExplanationAction
-                                    } else {
-                                        { onRecordIntent(RecordIntent.Resume) }
-                                    },
-                                )
-                            } else if (micPermissionMissing && state == KeyboardState.Ready) {
-                                MicPermissionBanner(onAllow = onAllowMicPermission)
-                            } else {
-                                StatusContent(state, level, recordingTimeMs)
-                            }
-                        }
-                    }
-                }
-
-                // Right Cluster
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AnimatedVisibility(visible = showEnhancementUndoAction) {
-                        AssistChip(
-                            onClick = onEnhancementUndoAction,
-                            label = { Text(stringResource(R.string.undo)) },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.Undo,
-                                    null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            },
-                        )
-                    }
-
-                    AnimatedVisibility(visible = showUndoAction) {
-                        IconButton(onClick = onUndoAction) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.Undo,
-                                contentDescription = stringResource(R.string.undo),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    AnimatedVisibility(visible = state == KeyboardState.Ready) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            FilledTonalIconButton(
-                                onClick = {
-                                    if (externalSendingBlocked) {
-                                        showBlockedExplanationAction()
-                                    } else if (commandModeActive) {
-                                        onCommandCancel()
-                                    } else {
-                                        onCommandEnter()
-                                    }
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AutoFixHigh,
-                                    contentDescription = stringResource(R.string.command_key_hint),
-                                )
-                            }
-                            BackspaceButton(onDeleteAction)
-                        }
-                    }
-
-                    AnimatedVisibility(visible = state == KeyboardState.RecordingLocked) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = onCancelAction) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = stringResource(R.string.record_action_cancel),
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            IconButton(onClick = { onRecordIntent(RecordIntent.Pause) }) {
-                                Icon(
-                                    Icons.Default.Pause,
-                                    contentDescription = stringResource(R.string.record_action_pause),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-
-                    AnimatedVisibility(visible = state == KeyboardState.Transcribing || state == KeyboardState.Enhancing) {
-                        IconButton(onClick = onCancelAction) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = stringResource(R.string.cancel_processing),
-                                tint = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.width(8.dp))
-
-                    MainActionButton(
-                        state = state,
-                        externalSendingBlocked = externalSendingBlocked,
-                        showLongPressHint = showLongPressHint,
-                        tapToRecord = tapToRecord,
-                        isStarting = isStarting,
-                        onIntent = onRecordIntent,
-                        onUi = { gestureUi = it },
-                        onDismissHint = onDismissHint,
-                        onBlockedAction = showBlockedExplanationAction,
-                    )
-                }
-            }
+            LongPressHintBanner()
         }
+
+        when (activeSheet) {
+            KeyboardSheet.Disclosure -> firstUseDisclosure?.let { disclosure ->
+                FirstUseDisclosureSheet(
+                    disclosure = disclosure,
+                    maxHeight = overlayMaxHeight,
+                    onContinue = onFirstUseDisclosureContinue,
+                    onOpenPrivacySafety = onFirstUseDisclosureOpenPrivacySafety,
+                    onCancel = onFirstUseDisclosureCancel,
+                )
+            }
+            KeyboardSheet.CancelConfirmation -> CancelConfirmationSheet(
+                maxHeight = overlayMaxHeight,
+                onConfirm = onCancelConfirmed,
+                onDismiss = onCancelConfirmDismissed,
+            )
+            KeyboardSheet.Blocked -> BlockedExplanationSheet(
+                copy = copy,
+                maxHeight = overlayMaxHeight,
+                onOpenSettings = {
+                    showBlockedExplanation = false
+                    onOpenSettingsDestination(PRIVACY_SAFETY_DESTINATION)
+                },
+                onClose = { showBlockedExplanation = false },
+                onDontShowAgain = {
+                    onDontShowSecureFieldExplanationAgain()
+                    showBlockedExplanation = false
+                },
+            )
+            KeyboardSheet.Clipboard -> CommandClipboardSheet(
+                overlayMaxHeight = overlayMaxHeight,
+                unavailableReason = commandClipboardUnavailableReason,
+                preview = commandClipboardPreview,
+                charCount = commandClipboardCharCount,
+                isLarge = commandClipboardIsLarge,
+                attemptsRemaining = commandClipboardAttemptsRemaining,
+                onContinue = onCommandClipboardContinue,
+                onRetry = onCommandClipboardRetry,
+                onCancel = onCommandCancel,
+            )
+            KeyboardSheet.Presets -> CommandPresetPickerSheet(
+                overlayMaxHeight = overlayMaxHeight,
+                selectedPresetId = commandSelectedPresetId,
+                onSelect = { presetId ->
+                    onCommandPresetSelected(presetId)
+                    showCommandPresetPicker = false
+                },
+                onDismiss = { showCommandPresetPicker = false },
+            )
+            KeyboardSheet.LanguageMode -> KeyboardLanguageModeSheet(
+                languages = languageOptions,
+                selectedLanguage = selectedLanguage,
+                modeState = modeState,
+                maxHeight = overlayMaxHeight,
+                onLanguageSelected = { code ->
+                    onLanguageSelected(code)
+                    showContextSheet = false
+                },
+                onModeSelected = { modeId ->
+                    onModeSelected(modeId)
+                    showContextSheet = false
+                },
+                onManageModes = {
+                    showContextSheet = false
+                    onOpenSettingsDestination(SettingsDeepLinks.MODES)
+                },
+                onDismiss = { showContextSheet = false },
+            )
+            null -> Unit
+        }
+
+        KeyboardBar(
+            model = KeyboardBarModel(
+                state = state,
+                languageLabel = languageLabel,
+                modeState = modeState,
+                level = level,
+                recordingTimeMs = recordingTimeMs,
+                gestureUi = gestureUi,
+                externalSendingBlocked = externalSendingBlocked,
+                micPermissionMissing = micPermissionMissing,
+                showUndoAction = undoAvailable && undoQuickActionVisible,
+                showEnhancementUndoAction = enhancementUndoAvailable,
+                commandModeActive = commandModeActive,
+                showLongPressHint = showLongPressHint,
+                tapToRecord = tapToRecord,
+                isStarting = isStarting,
+            ),
+            actions = KeyboardBarActions(
+                onRecordIntent = onRecordIntent,
+                onGestureUi = { gestureUi = it },
+                onCancelAction = onCancelAction,
+                onDeleteAction = onDeleteAction,
+                onUndoAction = onUndoAction,
+                onEnhancementUndoAction = onEnhancementUndoAction,
+                onOpenSettings = onOpenSettings,
+                onOpenContextSheet = { showContextSheet = !showContextSheet },
+                onAllowMicPermission = onAllowMicPermission,
+                onBlockedAction = showBlockedExplanationAction,
+                onCommandToggle = {
+                    when {
+                        externalSendingBlocked -> showBlockedExplanationAction()
+                        commandModeActive -> onCommandCancel()
+                        else -> onCommandEnter()
+                    }
+                },
+                onDismissHint = onDismissHint,
+            ),
+            modifier = Modifier.padding(bottom = keyboardBarBottomGap()),
+        )
     }
+}
+
+@StringRes
+private fun CommandStage.labelRes(): Int = when (this) {
+    CommandStage.WAITING -> R.string.command_stage_waiting
+    CommandStage.CLIPBOARD_CONFIRM -> R.string.command_stage_clipboard_confirm
+    CommandStage.LISTENING -> R.string.command_stage_listening
+    CommandStage.PROCESSING -> R.string.command_stage_processing
+    CommandStage.DONE -> R.string.command_stage_done
+    CommandStage.ERROR -> R.string.command_stage_error
 }

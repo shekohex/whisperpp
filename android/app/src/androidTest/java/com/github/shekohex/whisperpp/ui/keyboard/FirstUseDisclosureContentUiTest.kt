@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.github.shekohex.whisperpp.R
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -46,8 +47,9 @@ class FirstUseDisclosureContentUiTest {
                         .requiredHeight(240.dp)
                         .requiredWidth(360.dp),
                 ) {
-                    FirstUseDisclosureContent(
+                    FirstUseDisclosureSheet(
                         disclosure = disclosure,
+                        maxHeight = 240.dp,
                         onContinue = {},
                         onOpenPrivacySafety = {},
                         onCancel = {},
@@ -56,13 +58,15 @@ class FirstUseDisclosureContentUiTest {
             }
         }
 
-        assertDisplayedWithScroll(disclosure.title)
+        // The sheet title is pinned above the scrolling body.
+        composeRule.onNodeWithText(disclosure.title).assertIsDisplayed()
         assertDisplayedWithScroll(disclosure.dataSent)
         disclosure.endpointLines.forEach(::assertDisplayedWithScroll)
         assertDisplayedWithScroll(disclosure.contextLine)
-        assertDisplayedWithScroll("Continue")
-        assertDisplayedWithScroll("Open Privacy & Safety")
-        assertDisplayedWithScroll("Cancel")
+        val context = composeRule.activity
+        assertDisplayedWithScroll(context.getString(R.string.keyboard_disclosure_continue))
+        assertDisplayedWithScroll(context.getString(R.string.keyboard_disclosure_open_privacy))
+        assertDisplayedWithScroll(context.getString(R.string.keyboard_disclosure_cancel))
     }
 
     private fun assertDisplayedWithScroll(text: String) {

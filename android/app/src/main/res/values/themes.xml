@@ -1,8 +1,12 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
+    <!-- Mirrors WhisperTheme's brand fallback palette (ui/theme/Color.kt) so window backgrounds, the splash
+         and View-based widgets match Compose before dynamic color kicks in. Night values: values-night/colors.xml. -->
     <style name="Base.Theme.WhisperToInput" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="colorOnPrimary">@color/brand_on_primary</item>
+        <item name="colorSurface">@color/brand_surface</item>
+        <item name="colorOnSurface">@color/brand_on_surface</item>
     </style>
 
     <style name="RegularImage">
@@ -108,6 +112,7 @@
 
     <!-- Launch theme: platform splash until startup migrations finish (H-02). -->
     <style name="Theme.WhisperToInput.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/brand_surface</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
         <item name="postSplashScreenTheme">@style/Theme.WhisperToInput</item>
     </style>

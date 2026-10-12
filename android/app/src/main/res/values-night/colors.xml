@@ -2,4 +2,9 @@
 <resources>
     <color name="ic_launcher_background">#1A1A1A</color>
     <color name="ic_launcher_circle">#333333</color>
+    <!-- WhisperTheme brand fallback palette (keep in sync with ui/theme/Color.kt). -->
+    <color name="brand_primary">#FFA8C7FA</color>
+    <color name="brand_on_primary">#FF062E6F</color>
+    <color name="brand_surface">#FF111318</color>
+    <color name="brand_on_surface">#FFE2E2E9</color>
 </resources>

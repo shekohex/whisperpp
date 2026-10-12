@@ -29,6 +29,7 @@ import android.inputmethodservice.InputMethodService
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.os.LocaleList
 import android.os.SystemClock
 import android.text.TextUtils
 import android.util.Log
@@ -119,8 +120,12 @@ import com.github.shekohex.whisperpp.ime.ImeViewLifecycle
 import com.github.shekohex.whisperpp.ime.MicPermissionBus
 import com.github.shekohex.whisperpp.ime.MicPermissionGate
 import com.github.shekohex.whisperpp.ime.PermissionRequestActivity
-import com.github.shekohex.whisperpp.ime.showCancelConfirmationDialog
-import com.github.shekohex.whisperpp.ime.showLanguagePopup
+import com.github.shekohex.whisperpp.ime.AUTO_LANGUAGE_CODE
+import com.github.shekohex.whisperpp.ime.keyboardLanguageCodes
+import com.github.shekohex.whisperpp.ime.keyboardLanguageDisplayName
+import com.github.shekohex.whisperpp.ime.keyboardLanguageShortLabel
+import com.github.shekohex.whisperpp.ime.runtimeWarningNotice
+import com.github.shekohex.whisperpp.ui.keyboard.KeyboardLanguageOption
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
 import com.github.shekohex.whisperpp.keyboard.isRecording
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
@@ -196,6 +201,12 @@ class WhisperInputService : InputMethodService() {
     // Compose State
     private var keyboardState = mutableStateOf(KeyboardState.Ready)
     private var languageLabel = mutableStateOf("")
+    private val selectedLanguage = mutableStateOf(AUTO_LANGUAGE_CODE)
+    private val languageOptions = mutableStateOf<List<KeyboardLanguageOption>>(emptyList())
+    // Confirm action of the open "discard recording?" sheet; null when it is closed.
+    private val pendingCancelConfirm = mutableStateOf<(() -> Unit)?>(null)
+    // Back closes the topmost in-keyboard sheet first (set by KeyboardScreen).
+    private var overlayBack: (() -> Unit)? = null
     private var micLevel = mutableStateOf(0f)
     private var shouldOfferImeSwitch = mutableStateOf(false)
     private var recordingTimeMs = mutableStateOf(0L)
@@ -292,7 +303,7 @@ class WhisperInputService : InputMethodService() {
             repository = repository,
             hasCredential = { !container.secretsStore.getProviderApiKey(it).isNullOrBlank() },
         )
-        disclosureGate = FirstUseDisclosureGate(dataStore, serviceScope)
+        disclosureGate = FirstUseDisclosureGate(resources, dataStore, serviceScope)
         keyboardModes = KeyboardModeController(
             repository = container.modesRepository,
             providers = repository.providers,
@@ -432,6 +443,7 @@ class WhisperInputService : InputMethodService() {
             audioMediaType = AUDIO_MEDIA_TYPE_WAV,
             onBlocked = ::handleBlockedExternalSendAction,
             onSetupRequired = ::showSetupRequiredToast,
+            describeWarnings = { warnings, channel -> runtimeWarningNotice(this, warnings, channel) },
             onNotice = { showEnhancementNotice(it, EnhancementNoticeStyle.INFO) },
             onStreamingUnsupported = { showToast(getString(R.string.dictation_streaming_unsupported)) },
             vocabulary = { dictionaryRepository.vocabulary.first() },
@@ -563,7 +575,7 @@ class WhisperInputService : InputMethodService() {
             )
             SessionEvent.EnhancementApplied -> refreshEnhancementUndoState()
             is SessionEvent.EnhancementKeptRaw -> showEnhancementNotice(
-                "Enhancement ready for ${event.label}, but focus changed; kept raw",
+                getString(R.string.keyboard_enhancement_kept_raw, event.label),
                 EnhancementNoticeStyle.INFO,
             )
             is SessionEvent.Completed -> {
@@ -672,13 +684,26 @@ class WhisperInputService : InputMethodService() {
                             val applied = textCommitter.applyEnhancementUndo(lastFocusKey)
                             refreshEnhancementUndoState()
                             if (!applied) {
-                                showEnhancementNotice("Can't undo enhancement here", EnhancementNoticeStyle.INFO)
+                                showEnhancementNotice(
+                                    getString(R.string.keyboard_enhancement_undo_unavailable),
+                                    EnhancementNoticeStyle.INFO,
+                                )
                             }
                         },
                         onDismissEnhancementNotice = { dismissEnhancementNotice() },
                         onOpenSettings = { launchMainActivity() },
                         onOpenSettingsDestination = { launchMainActivity(it) },
-                        onLanguageClick = { showLanguageMenu(this) },
+                        languageOptions = languageOptions.value,
+                        selectedLanguage = selectedLanguage.value,
+                        onLanguageSelected = { selectLanguage(it) },
+                        cancelConfirmationVisible = pendingCancelConfirm.value != null,
+                        onCancelConfirmed = {
+                            val confirm = pendingCancelConfirm.value
+                            pendingCancelConfirm.value = null
+                            confirm?.invoke()
+                        },
+                        onCancelConfirmDismissed = { pendingCancelConfirm.value = null },
+                        onOverlayBackChanged = { overlayBack = it },
                         modeState = keyboardModes.uiState.collectAsState().value,
                         onModeSelected = { keyboardModes.select(it) },
                         onDismissHint = { showLongPressHint.value = false },
@@ -742,8 +767,15 @@ class WhisperInputService : InputMethodService() {
 
     private fun updateLanguageLabel() {
         serviceScope.launch {
-            val languageCode = dataStore.data.map { it[LANGUAGE_CODE] ?: "auto" }.first()
-            languageLabel.value = if (languageCode == "auto") getString(R.string.language_auto_label) else languageCode.uppercase()
+            val languageCode = dataStore.data.map { it[LANGUAGE_CODE] ?: AUTO_LANGUAGE_CODE }.first()
+            val autoLabel = getString(R.string.language_auto_label)
+            selectedLanguage.value = languageCode
+            languageLabel.value = keyboardLanguageShortLabel(languageCode, autoLabel)
+            val systemLocales = LocaleList.getDefault()
+            val systemLanguages = (0 until systemLocales.size()).map { systemLocales.get(it).language }
+            languageOptions.value = keyboardLanguageCodes(systemLanguages).map { code ->
+                KeyboardLanguageOption(code, keyboardLanguageDisplayName(code, autoLabel))
+            }
         }
     }
 
@@ -830,7 +862,7 @@ class WhisperInputService : InputMethodService() {
 
     private fun blockedNotice(): String {
         return if (externalSendBlockedByAppPolicy.value) {
-            "External sending blocked for this app"
+            getString(R.string.keyboard_sending_blocked_app)
         } else {
             getString(R.string.secure_field_sending_stopped)
         }
@@ -906,7 +938,7 @@ class WhisperInputService : InputMethodService() {
 
     private fun copyToClipboard(text: String) {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("Whisper++", text))
+        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), text))
     }
 
     private fun copyPendingCommit() {
@@ -1591,7 +1623,7 @@ class WhisperInputService : InputMethodService() {
             if (dataStore.data.first()[CANCEL_CONFIRMATION] == false) {
                 onConfirm()
             } else {
-                showCancelConfirmationDialog(this@WhisperInputService, window?.window?.attributes?.token, onConfirm)
+                pendingCancelConfirm.value = onConfirm
             }
         }
     }
@@ -1632,15 +1664,10 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    private fun showLanguageMenu(anchor: View) {
+    private fun selectLanguage(code: String) {
         serviceScope.launch {
-            val current = dataStore.data.first()[LANGUAGE_CODE] ?: "auto"
-            showLanguagePopup(this@WhisperInputService, anchor, current) { selected ->
-                serviceScope.launch {
-                    dataStore.edit { it[LANGUAGE_CODE] = selected }
-                    updateLanguageLabel()
-                }
-            }
+            dataStore.edit { it[LANGUAGE_CODE] = code }
+            updateLanguageLabel()
         }
     }
 
@@ -1657,6 +1684,7 @@ class WhisperInputService : InputMethodService() {
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK && overlayBack != null) return true
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (keyboardState.value != KeyboardState.Ready) {
                 Log.d(TAG, "Intercepting Back Key Down: ${keyboardState.value}")
@@ -1667,6 +1695,11 @@ class WhisperInputService : InputMethodService() {
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        val closeOverlay = overlayBack
+        if (keyCode == KeyEvent.KEYCODE_BACK && closeOverlay != null) {
+            closeOverlay()
+            return true
+        }
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (keyboardState.value != KeyboardState.Ready) {
                 Log.d(TAG, "Intercepting Back Key Up: ${keyboardState.value}")
@@ -1695,6 +1728,7 @@ class WhisperInputService : InputMethodService() {
 
     override fun onWindowHidden() {
         super.onWindowHidden()
+        pendingCancelConfirm.value = null
         logLifecycle("onWindowHidden")
         keyboardModes.onWindowHidden()
         disclosureGate.cancel()
