@@ -29,6 +29,12 @@
 -keep class com.github.shekohex.whisperpp.data.** { *; }
 -keep class com.github.shekohex.whisperpp.updater.** { *; }
 -keep class com.github.shekohex.whisperpp.analytics.** { *; }
+# Model classes (de)serialised by Gson outside the data package: discovery cache,
+# modes, auto-learn queue/proposals, dictionary replacements, editor drafts.
+-keep class com.github.shekohex.whisperpp.domain.** { *; }
+-keep class com.github.shekohex.whisperpp.core.text.** { *; }
+-keep class com.github.shekohex.whisperpp.ui.providers.ProviderDraft { *; }
+-keep class com.github.shekohex.whisperpp.ui.providers.ProviderDraft$* { *; }
 
 -keepclassmembers,allowobfuscation class * {
     @com.google.gson.annotations.SerializedName <fields>;

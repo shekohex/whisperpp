@@ -801,7 +801,18 @@ internal fun parseDiscoveryCacheJson(json: String?, gson: Gson): Map<String, Dis
         // The cache is disposable: an unreadable one is rebuilt by the next refresh.
         null
     }
-    return parsed.orEmpty().mapNotNull { (providerId, cache) ->
+    // A cache written by a build with different (minified) field names, or a reflective
+    // mismatch, surfaces as ClassCastException while mapping. Treat it the same as unreadable.
+    return try {
+        mapDiscoveryCache(parsed.orEmpty())
+    } catch (e: RuntimeException) {
+        emptyMap()
+    }
+}
+
+@Suppress("SENSELESS_COMPARISON", "USELESS_ELVIS")
+private fun mapDiscoveryCache(parsed: Map<String, DiscoveredCache>): Map<String, DiscoveredCache> {
+    return parsed.mapNotNull { (providerId, cache) ->
         if (providerId == null || cache == null) return@mapNotNull null
         val models = (cache.models ?: emptyList()).mapNotNull { model ->
             val id = (model?.id ?: "").trim()
