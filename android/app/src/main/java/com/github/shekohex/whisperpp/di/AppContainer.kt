@@ -10,6 +10,7 @@ import com.github.shekohex.whisperpp.core.network.HttpClientFactory
 import com.github.shekohex.whisperpp.core.network.RedactingLoggingInterceptor
 import com.github.shekohex.whisperpp.data.SettingsRepository
 import com.github.shekohex.whisperpp.dataStore
+import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
 import io.ktor.client.HttpClient
@@ -45,6 +46,7 @@ class AppContainer(context: Context) {
     val httpLoggingInterceptor: RedactingLoggingInterceptor = RedactingLoggingInterceptor()
     val okHttpClient: OkHttpClient by lazy { HttpClientFactory.createOkHttpClient(httpLoggingInterceptor) }
     val updaterHttpClient: HttpClient by lazy { HttpClientFactory.createKtorClient(okHttpClient) }
+    val providerFactory: ProviderFactory by lazy { ProviderFactory(okHttpClient, secretsStore::getProviderApiKey) }
 
     /** Process-lifetime scope for app-level background work (never cancelled). */
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -61,6 +63,7 @@ class AppContainer(context: Context) {
         appScope.launch {
             try {
                 settingsRepository.migrateProviderSchemaV2IfNeeded(secretsStore)
+                settingsRepository.migrateProviderSchemaV3IfNeeded()
                 settingsRepository.migrateProviderSelectionsV2IfNeeded()
                 settingsRepository.migratePromptsProfilesSchemaV1IfNeeded()
             } catch (e: CancellationException) {

@@ -13,8 +13,8 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_PROVIDER_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.MODEL
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_BACKEND
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_MODEL
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_BACKEND
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_MODEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SPEECH_TO_TEXT_BACKEND
 
 class ProviderSelectionsMigrationTest {
@@ -24,8 +24,8 @@ class ProviderSelectionsMigrationTest {
         val prefs = mutablePreferencesOf(
             SPEECH_TO_TEXT_BACKEND to "sttProvider",
             MODEL to "sttModel",
-            SMART_FIX_BACKEND to "textProvider",
-            SMART_FIX_MODEL to "textModel",
+            ENHANCEMENT_BACKEND to "textProvider",
+            ENHANCEMENT_MODEL to "textModel",
         )
 
         migrateLegacySelectionsToV2(prefs)
@@ -45,8 +45,8 @@ class ProviderSelectionsMigrationTest {
             ACTIVE_STT_MODEL_ID to "alreadyModel",
             SPEECH_TO_TEXT_BACKEND to "legacySttProvider",
             MODEL to "legacySttModel",
-            SMART_FIX_BACKEND to "legacyTextProvider",
-            SMART_FIX_MODEL to "legacyTextModel",
+            ENHANCEMENT_BACKEND to "legacyTextProvider",
+            ENHANCEMENT_MODEL to "legacyTextModel",
         )
 
         migrateLegacySelectionsToV2(prefs)
@@ -65,7 +65,7 @@ class ProviderSelectionsMigrationTest {
                 name = "P1",
                 type = ProviderType.CUSTOM,
                 endpoint = "https://example.com/v1",
-                models = listOf(ModelConfig(id = "m1", name = "M1", kind = ModelKind.STT)),
+                models = listOf(ModelConfig(id = "m1", name = "M1", capabilities = ModelCapabilities.stt(ProviderType.OPENAI))),
             )
         )
 
@@ -92,7 +92,7 @@ class ProviderSelectionsMigrationTest {
                 name = "P1",
                 type = ProviderType.CUSTOM,
                 endpoint = "https://example.com/v1",
-                models = listOf(ModelConfig(id = "m1", name = "M1", kind = ModelKind.TEXT)),
+                models = listOf(ModelConfig(id = "m1", name = "M1", capabilities = ModelCapabilities.TEXT)),
             )
         )
 
@@ -119,7 +119,7 @@ class ProviderSelectionsMigrationTest {
                 name = "P1",
                 type = ProviderType.CUSTOM,
                 endpoint = "https://example.com/v1",
-                models = listOf(ModelConfig(id = "m1", name = "M1", kind = ModelKind.TEXT)),
+                models = listOf(ModelConfig(id = "m1", name = "M1", capabilities = ModelCapabilities.TEXT)),
             )
         )
 

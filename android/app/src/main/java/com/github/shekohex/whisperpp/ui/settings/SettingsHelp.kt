@@ -110,7 +110,7 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
             title = "Transform presets",
             summary = "Set the default preset for post-dictation enhancement and command mode transforms.",
             tips = listOf(
-                "Enhancement defaults apply after dictation when Smart Fix runs.",
+                "Enhancement defaults apply after dictation when enhancement runs.",
                 "Command defaults shape selected-text transforms before your spoken instruction adds detail.",
                 "Changing a preset affects the next run; nothing is rewritten retroactively.",
             ),
@@ -127,10 +127,10 @@ private fun settingsHelpContent(route: String): SettingsHelpContent {
         )
 
         SettingsScreen.PostProcessing.route -> SettingsHelpContent(
-            title = "Smart Fix",
-            summary = "Control legacy Smart Fix behavior and provider details used for post-processing.",
+            title = "Enhancement",
+            summary = "Control enhancement behavior and the provider used to clean up dictation.",
             tips = listOf(
-                "Enable Smart Fix only when you want automatic cleanup after dictation.",
+                "Enable enhancement only when you want automatic cleanup after dictation.",
                 "Custom prompt text should stay short and instruction-focused.",
                 "Provider selections is the primary place for the new shared text-model defaults.",
             ),

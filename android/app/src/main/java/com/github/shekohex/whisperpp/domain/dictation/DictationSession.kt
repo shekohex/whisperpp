@@ -8,6 +8,7 @@ import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.domain.providers.StreamEvent
 import com.github.shekohex.whisperpp.domain.providers.StreamingTranscriptionSession
 import com.github.shekohex.whisperpp.domain.providers.Transcript
+import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope

@@ -44,7 +44,7 @@ object RuntimeSelectionResolver {
             ),
             global = SelectionIds(providerId = globalSttProviderId.trim(), modelId = globalSttModelId.trim()),
             providers = providers,
-            allowedKinds = setOf(ModelKind.STT, ModelKind.MULTIMODAL),
+            isCompatible = { it.capabilities.stt },
             warnings = warnings,
         )
 
@@ -52,12 +52,12 @@ object RuntimeSelectionResolver {
             channel = RuntimeChannel.TEXT,
             override = mapping?.textOverride,
             language = SelectionIds(
-                providerId = languageProfile?.smartFixProviderId.orEmpty(),
-                modelId = languageProfile?.smartFixModelId.orEmpty(),
+                providerId = languageProfile?.enhancementProviderId.orEmpty(),
+                modelId = languageProfile?.enhancementModelId.orEmpty(),
             ),
             global = SelectionIds(providerId = globalTextProviderId.trim(), modelId = globalTextModelId.trim()),
             providers = providers,
-            allowedKinds = setOf(ModelKind.TEXT, ModelKind.MULTIMODAL),
+            isCompatible = { it.capabilities.text },
             warnings = warnings,
         )
 
@@ -127,7 +127,7 @@ object RuntimeSelectionResolver {
         language: SelectionIds,
         global: SelectionIds,
         providers: List<ServiceProvider>,
-        allowedKinds: Set<ModelKind>,
+        isCompatible: (ModelConfig) -> Boolean,
         warnings: MutableList<RuntimeWarning>,
     ): SelectionIds {
         val trimmedOverride = override?.let {
@@ -204,12 +204,12 @@ object RuntimeSelectionResolver {
                 return@forEach
             }
 
-            if (model.kind !in allowedKinds) {
+            if (!isCompatible(model)) {
                 warnings.add(
                     RuntimeWarning(
                         kind = RuntimeWarningKind.INCOMPATIBLE_MODEL_KIND,
                         channel = channel,
-                        message = "${channel.name}: Model '$modelId' kind '${model.kind}' is incompatible; falling back from ${candidate.source.name.lowercase()} defaults.",
+                        message = "${channel.name}: Model '$modelId' does not support ${channel.name}; falling back from ${candidate.source.name.lowercase()} defaults.",
                     )
                 )
                 return@forEach

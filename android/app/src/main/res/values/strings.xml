@@ -17,7 +17,7 @@
     <string name="input_transcribing">Transcribing</string>
     <string name="status_transcribing">Transcribing…</string>
     <string name="live_audio_level">Live audio level</string>
-    <string name="input_smart_fixing">Smart Fixing</string>
+    <string name="input_enhancing">Enhancing</string>
     <string name="toast_transcription_empty">Transcription was empty</string>
     <string name="toast_setup_required_stt">Setup required: select STT provider + model in Settings</string>
     <string name="cancel_confirmation_title">Cancel recording?</string>
@@ -65,7 +65,7 @@
     <string name="generate_logcat">Generate Recent Logcat</string>
     <string name="secure_field_sending_stopped">Secure field: sending stopped</string>
     <string name="secure_field_sheet_title">External sending is disabled</string>
-    <string name="secure_field_sheet_description">Whisper++ blocks dictation and Smart Fix in this field to protect private input.</string>
+    <string name="secure_field_sheet_description">Whisper++ blocks dictation and enhancement in this field to protect private input.</string>
     <string name="secure_field_reason_password">Reason: password-like field</string>
     <string name="secure_field_reason_otp">Reason: one-time code field</string>
     <string name="secure_field_reason_no_personalized_learning">Reason: field requested no personalized learning</string>
@@ -122,7 +122,7 @@
 
     <!-- Warning and Error Messages -->
     <string name="error_endpoint_unset">Error: Endpoint is not set in settings.</string>
-    <string name="error_apikey_unset">Error: OpenAI API Key is not set in settings.</string>
+    <string name="error_apikey_unset">Error: The API key is not set for this provider.</string>
     <string name="error_insecure_http_endpoint">Error: Insecure HTTP is only allowed for local-network servers. Use an https:// endpoint.</string>
     <string name="provider_url_insecure_http_local_only">Insecure HTTP is only allowed for local-network servers</string>
 
@@ -172,30 +172,30 @@
     <string name="settings_use_context">Use Input Context</string>
     <string name="settings_use_context_desc">Append text before cursor to the prompt for better continuity.</string>
 
-    <!-- Smart Fix -->
-    <string name="settings_smart_fix_title">Smart Fix (Post-processing)</string>
-    <string name="settings_smart_fix_enabled">Enable Smart Fix</string>
-    <string name="settings_smart_fix_enabled_desc">Clean up transcription using an LLM (OpenAI or Gemini).</string>
-    <string name="settings_smart_fix_backend">Smart Fix Backend</string>
-    <string name="settings_smart_fix_backend_openai">OpenAI Format</string>
-    <string name="settings_smart_fix_backend_google">Google Gemini Format</string>
-    <string-array name="settings_smart_fix_backend_array">
-        <item>@string/settings_smart_fix_backend_openai</item>
-        <item>@string/settings_smart_fix_backend_google</item>
+    <!-- Enhancement -->
+    <string name="settings_enhancement_title">Enhancement</string>
+    <string name="settings_enhancement_enabled">Enable enhancement</string>
+    <string name="settings_enhancement_enabled_desc">Clean up transcription using an LLM (OpenAI or Gemini).</string>
+    <string name="settings_enhancement_backend">Enhancement backend</string>
+    <string name="settings_enhancement_backend_openai">OpenAI Format</string>
+    <string name="settings_enhancement_backend_google">Google Gemini Format</string>
+    <string-array name="settings_enhancement_backend_array">
+        <item>@string/settings_enhancement_backend_openai</item>
+        <item>@string/settings_enhancement_backend_google</item>
     </string-array>
-    <string name="settings_smart_fix_endpoint">Smart Fix Endpoint</string>
-    <string name="settings_smart_fix_endpoint_hint">e.g., https://api.openai.com/v1/chat/completions</string>
-    <string name="settings_smart_fix_api_key">Smart Fix API Key</string>
-    <string name="settings_smart_fix_openai_default_endpoint">https://api.openai.com/v1/chat/completions</string>
-    <string name="settings_smart_fix_openai_default_model">gpt-4o-mini</string>
-    <string name="settings_smart_fix_google_default_endpoint">https://generativelanguage.googleapis.com/v1beta</string>
-    <string name="settings_smart_fix_google_default_model">gemini-2.5-flash-lite</string>
-    <string name="settings_smart_fix_model">Smart Fix Model</string>
-    <string name="settings_smart_fix_model_hint">e.g., gpt-4o-mini or gemini-1.5-flash</string>
-    <string name="settings_smart_fix_temperature">Temperature</string>
-    <string name="settings_smart_fix_prompt">Smart Fix Prompt</string>
-    <string name="settings_smart_fix_prompt_desc">The instruction prompt for the LLM. Leave empty to use default.</string>
-    <string name="settings_smart_fix_prompt_hint">Customize the cleanup rules…</string>
+    <string name="settings_enhancement_endpoint">Enhancement endpoint</string>
+    <string name="settings_enhancement_endpoint_hint">e.g., https://api.openai.com/v1/chat/completions</string>
+    <string name="settings_enhancement_api_key">Enhancement API key</string>
+    <string name="settings_enhancement_openai_default_endpoint">https://api.openai.com/v1/chat/completions</string>
+    <string name="settings_enhancement_openai_default_model">gpt-4o-mini</string>
+    <string name="settings_enhancement_google_default_endpoint">https://generativelanguage.googleapis.com/v1beta</string>
+    <string name="settings_enhancement_google_default_model">gemini-2.5-flash-lite</string>
+    <string name="settings_enhancement_model">Enhancement model</string>
+    <string name="settings_enhancement_model_hint">e.g., gpt-4o-mini or gemini-1.5-flash</string>
+    <string name="settings_enhancement_temperature">Temperature</string>
+    <string name="settings_enhancement_prompt">Enhancement prompt</string>
+    <string name="settings_enhancement_prompt_desc">The instruction prompt for the LLM. Leave empty to use default.</string>
+    <string name="settings_enhancement_prompt_hint">Customize the cleanup rules…</string>
 
     <string name="settings_transform_presets_title">Transform presets</string>
     <string name="settings_transform_presets_subtitle">Defaults for enhancement and command mode</string>
@@ -329,4 +329,26 @@
     <string name="dictation_insert_failed">Couldn\'t insert the transcript; use Insert here or Copy</string>
     <string name="command_error_transcription_failed">Couldn\'t transcribe the instruction: %1$s</string>
 
+    <!-- Provider errors -->
+    <string name="network_error_unauthorized">Authentication failed for %1$s. Check the API key.</string>
+    <string name="network_error_rate_limited">Rate limited by %1$s. Try again shortly.</string>
+    <string name="network_error_timeout">The request timed out.</string>
+    <string name="network_error_http">Request failed (HTTP %1$d, host: %2$s)</string>
+    <string name="network_error_offline">Can\'t reach the server. Check your connection.</string>
+    <string name="network_error_invalid_response">The provider returned an unexpected response.</string>
+    <string name="provider_error_invalid_endpoint">Error: The endpoint URL is invalid.</string>
+    <string name="provider_error_missing_model">Error: No model is selected for this provider.</string>
+    <string name="provider_error_unsupported_type">This provider type doesn\'t support this task.</string>
+    <string name="provider_error_model_lacks_stt">The selected model doesn\'t support speech-to-text.</string>
+    <string name="provider_error_model_lacks_text">The selected model doesn\'t support text.</string>
+    <string name="provider_error_unknown">Unknown error</string>
+    <string name="provider_test_ok">OK</string>
+    <string name="enhancement_unknown_provider">Unknown provider</string>
+    <string name="enhancement_unknown_model">Unknown model</string>
+    <string name="enhancement_skipped">Enhancement skipped for %1$s: %2$s</string>
+    <string name="enhancement_skipped_blocked">Enhancement skipped for %1$s (%2$s): %3$s</string>
+    <string name="enhancement_unavailable">Enhancement unavailable for %1$s (%2$s)</string>
+    <string name="enhancement_unavailable_reason">Enhancement unavailable for %1$s: %2$s</string>
+    <string name="enhancement_timed_out">Enhancement timed out for %1$s</string>
+    <string name="enhancement_failed">Enhancement failed for %1$s: %2$s</string>
 </resources>

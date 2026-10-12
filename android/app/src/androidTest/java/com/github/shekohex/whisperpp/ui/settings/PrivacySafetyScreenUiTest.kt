@@ -15,7 +15,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.shekohex.whisperpp.data.ModelConfig
-import com.github.shekohex.whisperpp.data.ModelKind
+import com.github.shekohex.whisperpp.data.ModelCapabilities
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.data.SettingsRepository
@@ -141,21 +141,21 @@ class PrivacySafetyScreenUiTest {
                 name = "STT",
                 type = ProviderType.OPENAI,
                 endpoint = "https://stt.example.com/v1",
-                models = listOf(ModelConfig(id = "whisper-1", name = "Whisper 1", kind = ModelKind.STT)),
+                models = listOf(ModelConfig(id = "whisper-1", name = "Whisper 1", capabilities = ModelCapabilities.stt(ProviderType.OPENAI))),
             ),
             ServiceProvider(
                 id = "text",
                 name = "Text",
                 type = ProviderType.OPENAI,
                 endpoint = "https://text.example.com/v1",
-                models = listOf(ModelConfig(id = "gpt-4o-mini", name = "GPT-4o mini", kind = ModelKind.TEXT)),
+                models = listOf(ModelConfig(id = "gpt-4o-mini", name = "GPT-4o mini", capabilities = ModelCapabilities.TEXT)),
             ),
             ServiceProvider(
                 id = "command",
                 name = "Gemini",
                 type = ProviderType.GEMINI,
                 endpoint = "https://generativelanguage.googleapis.com/v1beta",
-                models = listOf(ModelConfig(id = "gemini-1.5-pro", name = "Gemini 1.5 Pro", kind = ModelKind.MULTIMODAL)),
+                models = listOf(ModelConfig(id = "gemini-1.5-pro", name = "Gemini 1.5 Pro", capabilities = ModelCapabilities.TEXT)),
             ),
         )
     }

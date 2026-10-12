@@ -60,5 +60,5 @@ fun SessionState.toKeyboardState(): KeyboardState = when (this) {
     is SessionState.Transcribing,
     is SessionState.Committing,
     -> KeyboardState.Transcribing
-    is SessionState.Enhancing -> KeyboardState.SmartFixing
+    is SessionState.Enhancing -> KeyboardState.Enhancing
 }

@@ -22,9 +22,10 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.PROMPT_PROFILES_JSON
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDERS_JSON
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDER_API_KEY_MIGRATION_DONE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDER_SCHEMA_V2_MIGRATION_DONE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDER_SCHEMA_V3_MIGRATION_DONE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDER_SELECTIONS_V2_MIGRATION_DONE
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_BACKEND
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_MODEL
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_BACKEND
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_MODEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SPEECH_TO_TEXT_BACKEND
 import com.google.gson.Gson
 import com.google.gson.JsonArray
@@ -67,10 +68,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             PreferenceKeys.MODEL,
             PreferenceKeys.POSTPROCESSING,
             PreferenceKeys.PROMPT,
-            PreferenceKeys.SMART_FIX_BACKEND,
-            PreferenceKeys.SMART_FIX_ENDPOINT,
-            PreferenceKeys.SMART_FIX_MODEL,
-            PreferenceKeys.SMART_FIX_PROMPT,
+            PreferenceKeys.ENHANCEMENT_BACKEND,
+            PreferenceKeys.ENHANCEMENT_ENDPOINT,
+            PreferenceKeys.ENHANCEMENT_MODEL,
+            PreferenceKeys.ENHANCEMENT_PROMPT,
             PreferenceKeys.UPDATE_CHANNEL
         )
         private val EXPORTABLE_BOOLEAN_KEYS = listOf(
@@ -80,14 +81,14 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             PreferenceKeys.CANCEL_CONFIRMATION,
             PreferenceKeys.ADD_TRAILING_SPACE,
             PreferenceKeys.USE_CONTEXT,
-            PreferenceKeys.SMART_FIX_ENABLED,
+            PreferenceKeys.ENHANCEMENT_ENABLED,
             PreferenceKeys.HAPTIC_FEEDBACK_ENABLED,
             PreferenceKeys.SOUND_EFFECTS_ENABLED,
             PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING,
             PreferenceKeys.TAP_TO_RECORD
         )
         private val EXPORTABLE_INT_KEYS = listOf(PreferenceKeys.TIMEOUT)
-        private val EXPORTABLE_FLOAT_KEYS = listOf(PreferenceKeys.SMART_FIX_TEMPERATURE)
+        private val EXPORTABLE_FLOAT_KEYS = listOf(PreferenceKeys.ENHANCEMENT_TEMPERATURE)
     }
     
     val soundEffectsEnabled: Flow<Boolean> = dataStore.data
@@ -117,14 +118,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                     val safeType = (provider.type as? ProviderType) ?: ProviderType.CUSTOM
                     val safeEndpoint = (provider.endpoint as? String) ?: ""
                     val safeModels = ((provider.models as? List<ModelConfig>) ?: emptyList()).map { model ->
-                        val inferredKind = (model.kind as? ModelKind)
-                            ?: inferModelKindFromLegacyEndpoint(safeType, safeEndpoint)
-                        model.copy(
+                        ModelConfig(
                             id = (model.id as? String) ?: "",
                             name = (model.name as? String) ?: "",
-                            isThinking = (model.isThinking as? Boolean) ?: false,
-                            kind = inferredKind,
-                            streamingPartialsSupported = (model.streamingPartialsSupported as? Boolean) ?: false,
+                            capabilities = sanitizeCapabilities(model, safeType, safeEndpoint),
                         )
                     }
                     val safeAuthMode = (provider.authMode as? ProviderAuthMode) ?: when (safeType) {
@@ -295,6 +292,30 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                 mutablePrefs[PROVIDERS_JSON] = migratedJson
             }
             mutablePrefs[PROVIDER_SCHEMA_V2_MIGRATION_DONE] = true
+        }
+    }
+
+    /** Fills `capabilities` on every model from the legacy kind/flags (schema v3). */
+    suspend fun migrateProviderSchemaV3IfNeeded() {
+        val prefs = dataStore.data.first()
+        if (prefs[PROVIDER_SCHEMA_V3_MIGRATION_DONE] == true) {
+            return
+        }
+        val migratedJson = prefs[PROVIDERS_JSON]
+            ?.takeIf { it.isNotBlank() }
+            ?.let { raw ->
+                try {
+                    migrateProvidersJsonToSchemaV3(raw)
+                } catch (_: Exception) {
+                    // Unreadable JSON: leave it; the providers flow already degrades to an empty list.
+                    return
+                }
+            }
+        dataStore.edit { mutablePrefs ->
+            if (!migratedJson.isNullOrBlank()) {
+                mutablePrefs[PROVIDERS_JSON] = migratedJson
+            }
+            mutablePrefs[PROVIDER_SCHEMA_V3_MIGRATION_DONE] = true
         }
     }
 
@@ -519,8 +540,8 @@ internal fun migrateLegacySelectionsToV2(prefs: MutablePreferences) {
 
     val legacySttProviderId = prefs[SPEECH_TO_TEXT_BACKEND]?.trim().orEmpty()
     val legacySttModelId = prefs[MODEL]?.trim().orEmpty()
-    val legacyTextProviderId = prefs[SMART_FIX_BACKEND]?.trim().orEmpty()
-    val legacyTextModelId = prefs[SMART_FIX_MODEL]?.trim().orEmpty()
+    val legacyTextProviderId = prefs[ENHANCEMENT_BACKEND]?.trim().orEmpty()
+    val legacyTextModelId = prefs[ENHANCEMENT_MODEL]?.trim().orEmpty()
 
     if (legacySttProviderId.isNotEmpty()) {
         prefs[ACTIVE_STT_PROVIDER_ID] = legacySttProviderId
@@ -878,3 +899,80 @@ internal fun migrateProvidersJsonToSchemaV2(rawProvidersJson: String): String? {
         null
     }
 }
+
+/**
+ * Gson leaves fields that are missing from older JSON as null, so every value is re-checked here.
+ * Models stored before schema v3 have no `capabilities`; derive them from the legacy fields.
+ */
+@Suppress("DEPRECATION", "USELESS_CAST", "SENSELESS_COMPARISON")
+private fun sanitizeCapabilities(model: ModelConfig, providerType: ProviderType, endpoint: String): ModelCapabilities {
+    (model.capabilities as? ModelCapabilities)?.let { return it }
+    return ModelCapabilities.fromLegacy(
+        kind = (model.kind as? ModelKind) ?: inferModelKindFromLegacyEndpoint(providerType, endpoint),
+        isThinking = (model.isThinking as? Boolean) ?: false,
+        streamingPartialsSupported = (model.streamingPartialsSupported as? Boolean) ?: false,
+        providerType = providerType,
+    )
+}
+
+/**
+ * Schema v3: adds `capabilities` to every model that lacks it (from `kind`, `isThinking`,
+ * `streamingPartialsSupported`) and rewrites those legacy fields as mirrors of the result.
+ * Returns null when nothing changed.
+ */
+internal fun migrateProvidersJsonToSchemaV3(rawProvidersJson: String): String? {
+    val rootElement = JsonParser.parseString(rawProvidersJson)
+    val providerArray = extractProviderArray(rootElement) ?: return null
+    val gson = Gson()
+    var changed = false
+
+    providerArray.forEach providerLoop@ { providerElement ->
+        if (!providerElement.isJsonObject) {
+            return@providerLoop
+        }
+        val providerObject = providerElement.asJsonObject
+        val providerType = providerObject.stringOrNull("type")
+            ?.let { raw -> runCatching { ProviderType.valueOf(raw) }.getOrNull() }
+            ?: ProviderType.CUSTOM
+        val endpoint = providerObject.stringOrNull("endpoint").orEmpty()
+        val modelsElement = providerObject.get("models")
+        if (modelsElement == null || !modelsElement.isJsonArray) {
+            return@providerLoop
+        }
+        modelsElement.asJsonArray.forEach modelLoop@ { modelElement ->
+            if (!modelElement.isJsonObject) {
+                return@modelLoop
+            }
+            val modelObject = modelElement.asJsonObject
+            if (modelObject.get("capabilities")?.isJsonObject == true) {
+                return@modelLoop
+            }
+            val kind = modelObject.stringOrNull("kind")
+                ?.let { raw -> runCatching { ModelKind.valueOf(raw) }.getOrNull() }
+                ?: inferModelKindFromLegacyEndpoint(providerType, endpoint)
+            val capabilities = ModelCapabilities.fromLegacy(
+                kind = kind,
+                isThinking = modelObject.booleanOrNull("isThinking") ?: false,
+                streamingPartialsSupported = modelObject.booleanOrNull("streamingPartialsSupported") ?: false,
+                providerType = providerType,
+            )
+            modelObject.add("capabilities", gson.toJsonTree(capabilities))
+            modelObject.addProperty("kind", capabilities.legacyKind.name)
+            modelObject.addProperty("isThinking", capabilities.thinking)
+            modelObject.addProperty("streamingPartialsSupported", capabilities.realtime)
+            changed = true
+        }
+    }
+
+    return if (changed) gson.toJson(rootElement) else null
+}
+
+private fun JsonObject.stringOrNull(key: String): String? = get(key)
+    ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+    ?.asString
+    ?.trim()
+    ?.takeIf { it.isNotBlank() }
+
+private fun JsonObject.booleanOrNull(key: String): Boolean? = get(key)
+    ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }
+    ?.asBoolean

@@ -1,7 +1,7 @@
 package com.github.shekohex.whisperpp.privacy
 
 import com.github.shekohex.whisperpp.data.ModelConfig
-import com.github.shekohex.whisperpp.data.ModelKind
+import com.github.shekohex.whisperpp.data.ModelCapabilities
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import org.junit.Assert.assertEquals
@@ -17,7 +17,7 @@ class PrivacyDisclosureFormatterTest {
             name = "OpenAI",
             type = ProviderType.OPENAI,
             endpoint = "https://api.openai.com/v1",
-            models = listOf(ModelConfig(id = "whisper-1", name = "Whisper 1", kind = ModelKind.STT)),
+            models = listOf(ModelConfig(id = "whisper-1", name = "Whisper 1", capabilities = ModelCapabilities.stt(ProviderType.OPENAI))),
         )
 
         val dictation = PrivacyDisclosureFormatter.disclosureForDictation(
@@ -44,7 +44,7 @@ class PrivacyDisclosureFormatterTest {
             name = "Gemini",
             type = ProviderType.GEMINI,
             endpoint = "https://generativelanguage.googleapis.com/v1beta",
-            models = listOf(ModelConfig(id = "gemini-1.5-pro", name = "Gemini 1.5 Pro", kind = ModelKind.MULTIMODAL)),
+            models = listOf(ModelConfig(id = "gemini-1.5-pro", name = "Gemini 1.5 Pro", capabilities = ModelCapabilities.TEXT)),
         )
 
         val enhancement = PrivacyDisclosureFormatter.disclosureForEnhancement(
@@ -63,7 +63,7 @@ class PrivacyDisclosureFormatterTest {
             name = "Local OpenAI",
             type = ProviderType.OPENAI,
             endpoint = "http://localhost:8080/v1",
-            models = listOf(ModelConfig(id = "gpt-4o", name = "GPT-4o", kind = ModelKind.TEXT)),
+            models = listOf(ModelConfig(id = "gpt-4o", name = "GPT-4o", capabilities = ModelCapabilities.TEXT)),
         )
 
         val enhancement = PrivacyDisclosureFormatter.disclosureForEnhancement(
@@ -82,14 +82,14 @@ class PrivacyDisclosureFormatterTest {
             name = "STT",
             type = ProviderType.OPENAI,
             endpoint = "https://stt.example.com/v1",
-            models = listOf(ModelConfig(id = "whisper-1", name = "Whisper 1", kind = ModelKind.STT)),
+            models = listOf(ModelConfig(id = "whisper-1", name = "Whisper 1", capabilities = ModelCapabilities.stt(ProviderType.OPENAI))),
         )
         val textProvider = ServiceProvider(
             id = "text",
             name = "Gemini",
             type = ProviderType.GEMINI,
             endpoint = "https://generativelanguage.googleapis.com/v1beta",
-            models = listOf(ModelConfig(id = "gemini-1.5-pro", name = "Gemini 1.5 Pro", kind = ModelKind.MULTIMODAL)),
+            models = listOf(ModelConfig(id = "gemini-1.5-pro", name = "Gemini 1.5 Pro", capabilities = ModelCapabilities.TEXT)),
         )
 
         val disclosure = PrivacyDisclosureFormatter.disclosureForCommand(
@@ -120,7 +120,7 @@ class PrivacyDisclosureFormatterTest {
             name = "Broken",
             type = ProviderType.OPENAI,
             endpoint = "not a url",
-            models = listOf(ModelConfig(id = "gpt-4o", name = "GPT-4o", kind = ModelKind.TEXT)),
+            models = listOf(ModelConfig(id = "gpt-4o", name = "GPT-4o", capabilities = ModelCapabilities.TEXT)),
         )
 
         val disclosure = PrivacyDisclosureFormatter.disclosureForCommand(

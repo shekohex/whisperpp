@@ -98,7 +98,7 @@ class SettingsBackupRepositoryExportTest {
         assertEquals("model-gpt", payload.activeSelections.commandTextModelId)
         assertEquals("en-US", payload.languageDefaults.profiles.single().languageCode)
         assertTrue(payload.keyboardBehavior.hapticFeedbackEnabled)
-        assertTrue(payload.privacySafety.smartFixEnabled)
+        assertTrue(payload.privacySafety.enhancementEnabled)
         assertTrue(payload.privacySafety.useContext)
         assertTrue(payload.privacySafety.disclosureShownCommandText)
         assertEquals("nightly", payload.advancedPreferences.updateChannel)
@@ -124,13 +124,12 @@ class SettingsBackupRepositoryExportTest {
                             ModelConfig(
                                 id = "model-whisper",
                                 name = "Whisper",
-                                kind = ModelKind.STT,
-                                streamingPartialsSupported = true,
+                                capabilities = ModelCapabilities.stt(ProviderType.OPENAI, realtime = true),
                             ),
                             ModelConfig(
                                 id = "model-gpt",
                                 name = "GPT",
-                                kind = ModelKind.TEXT,
+                                capabilities = ModelCapabilities.TEXT,
                             ),
                         ),
                     )
@@ -142,8 +141,8 @@ class SettingsBackupRepositoryExportTest {
                         languageCode = "en-US",
                         transcriptionProviderId = "provider-openai",
                         transcriptionModelId = "model-whisper",
-                        smartFixProviderId = "provider-openai",
-                        smartFixModelId = "model-gpt",
+                        enhancementProviderId = "provider-openai",
+                        enhancementModelId = "model-gpt",
                     )
                 )
             ),
@@ -189,7 +188,7 @@ class SettingsBackupRepositoryExportTest {
             PreferenceKeys.ADD_TRAILING_SPACE to true,
             PreferenceKeys.HAPTIC_FEEDBACK_ENABLED to true,
             PreferenceKeys.SOUND_EFFECTS_ENABLED to false,
-            PreferenceKeys.SMART_FIX_ENABLED to true,
+            PreferenceKeys.ENHANCEMENT_ENABLED to true,
             PreferenceKeys.USE_CONTEXT to true,
             PreferenceKeys.PER_APP_SEND_POLICY_JSON to gson.toJson(mapOf("com.example.blocked" to true)),
             PreferenceKeys.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN to true,

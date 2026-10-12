@@ -202,7 +202,7 @@ class SettingsBackupImportAnalysisTest {
                 ModelConfig(
                     id = modelId,
                     name = modelId,
-                    kind = ModelKind.TEXT,
+                    capabilities = ModelCapabilities.TEXT,
                 )
             ),
         )

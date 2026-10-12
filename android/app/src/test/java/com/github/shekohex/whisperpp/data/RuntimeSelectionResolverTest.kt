@@ -9,11 +9,11 @@ class RuntimeSelectionResolverTest {
     @Test
     fun resolve_appliesAppThenLanguageThenGlobal_precedence_independentlyPerChannel() {
         val providers = listOf(
-            provider(id = "appP", models = listOf(ModelConfig(id = "appStt", name = "appStt", kind = ModelKind.STT))),
-            provider(id = "langP", models = listOf(ModelConfig(id = "langText", name = "langText", kind = ModelKind.TEXT))),
+            provider(id = "appP", models = listOf(ModelConfig(id = "appStt", name = "appStt", capabilities = ModelCapabilities.stt(ProviderType.OPENAI)))),
+            provider(id = "langP", models = listOf(ModelConfig(id = "langText", name = "langText", capabilities = ModelCapabilities.TEXT))),
             provider(id = "globP", models = listOf(
-                ModelConfig(id = "globStt", name = "globStt", kind = ModelKind.STT),
-                ModelConfig(id = "globText", name = "globText", kind = ModelKind.TEXT),
+                ModelConfig(id = "globStt", name = "globStt", capabilities = ModelCapabilities.stt(ProviderType.OPENAI)),
+                ModelConfig(id = "globText", name = "globText", capabilities = ModelCapabilities.TEXT),
             )),
         )
 
@@ -22,8 +22,8 @@ class RuntimeSelectionResolverTest {
                 languageCode = "en",
                 transcriptionProviderId = "globP",
                 transcriptionModelId = "globStt",
-                smartFixProviderId = "langP",
-                smartFixModelId = "langText",
+                enhancementProviderId = "langP",
+                enhancementModelId = "langText",
             )
         )
 
@@ -57,9 +57,9 @@ class RuntimeSelectionResolverTest {
     @Test
     fun resolve_partialOverrideCascadesMissingFields_andFallsBackWhenInvalid() {
         val providers = listOf(
-            provider(id = "appP", models = listOf(ModelConfig(id = "appOnly", name = "appOnly", kind = ModelKind.STT))),
-            provider(id = "langP", models = listOf(ModelConfig(id = "langStt", name = "langStt", kind = ModelKind.STT))),
-            provider(id = "globP", models = listOf(ModelConfig(id = "globStt", name = "globStt", kind = ModelKind.STT))),
+            provider(id = "appP", models = listOf(ModelConfig(id = "appOnly", name = "appOnly", capabilities = ModelCapabilities.stt(ProviderType.OPENAI)))),
+            provider(id = "langP", models = listOf(ModelConfig(id = "langStt", name = "langStt", capabilities = ModelCapabilities.stt(ProviderType.OPENAI)))),
+            provider(id = "globP", models = listOf(ModelConfig(id = "globStt", name = "globStt", capabilities = ModelCapabilities.stt(ProviderType.OPENAI)))),
         )
 
         val languageDefaults = listOf(
@@ -67,8 +67,8 @@ class RuntimeSelectionResolverTest {
                 languageCode = "en",
                 transcriptionProviderId = "langP",
                 transcriptionModelId = "langStt",
-                smartFixProviderId = "",
-                smartFixModelId = "",
+                enhancementProviderId = "",
+                enhancementModelId = "",
             )
         )
 
@@ -99,10 +99,10 @@ class RuntimeSelectionResolverTest {
     }
 
     @Test
-    fun resolve_invalidModelKind_fallsBackAndEmitsWarning() {
+    fun resolve_textOnlyModelForStt_isRejected_fallsBackAndEmitsWarning() {
         val providers = listOf(
-            provider(id = "appP", models = listOf(ModelConfig(id = "textAsStt", name = "textAsStt", kind = ModelKind.TEXT))),
-            provider(id = "globP", models = listOf(ModelConfig(id = "globStt", name = "globStt", kind = ModelKind.STT))),
+            provider(id = "appP", models = listOf(ModelConfig(id = "textAsStt", name = "textAsStt", capabilities = ModelCapabilities.TEXT))),
+            provider(id = "globP", models = listOf(ModelConfig(id = "globStt", name = "globStt", capabilities = ModelCapabilities.stt(ProviderType.OPENAI)))),
         )
 
         val mappings = listOf(
@@ -132,11 +132,36 @@ class RuntimeSelectionResolverTest {
     }
 
     @Test
+    fun resolve_sttOnlyModelForText_isRejected() {
+        val providers = listOf(
+            provider(id = "p", models = listOf(ModelConfig(id = "whisper", name = "whisper", capabilities = ModelCapabilities.stt(ProviderType.OPENAI)))),
+        )
+
+        val effective = RuntimeSelectionResolver.resolve(
+            packageName = null,
+            languageCode = "auto",
+            providers = providers,
+            languageDefaults = emptyList(),
+            appMappings = emptyList(),
+            globalSttProviderId = "p",
+            globalSttModelId = "whisper",
+            globalTextProviderId = "p",
+            globalTextModelId = "whisper",
+            basePrompt = "",
+            profiles = emptyList(),
+        )
+
+        assertEquals("whisper", effective.sttModelId)
+        assertEquals("", effective.textModelId)
+        assertTrue(effective.warnings.any { it.kind == RuntimeWarningKind.INCOMPATIBLE_MODEL_KIND && it.channel == RuntimeChannel.TEXT })
+    }
+
+    @Test
     fun resolve_missingProfileReference_usesBaseOnlyPrompt_andEmitsWarning() {
         val providers = listOf(
             provider(id = "globP", models = listOf(
-                ModelConfig(id = "globStt", name = "globStt", kind = ModelKind.STT),
-                ModelConfig(id = "globText", name = "globText", kind = ModelKind.TEXT),
+                ModelConfig(id = "globStt", name = "globStt", capabilities = ModelCapabilities.stt(ProviderType.OPENAI)),
+                ModelConfig(id = "globText", name = "globText", capabilities = ModelCapabilities.TEXT),
             ))
         )
 

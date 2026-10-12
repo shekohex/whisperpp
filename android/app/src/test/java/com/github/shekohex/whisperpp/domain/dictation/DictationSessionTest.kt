@@ -10,6 +10,7 @@ import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.domain.providers.StreamEvent
 import com.github.shekohex.whisperpp.domain.providers.StreamingTranscriptionSession
 import com.github.shekohex.whisperpp.domain.providers.Transcript
+import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -192,14 +193,7 @@ class DictationSessionTest {
     private fun request() = TranscriptionRequest(
         provider = ServiceProvider(id = "p", name = "P", type = ProviderType.OPENAI, endpoint = "https://example.com", models = emptyList()),
         modelId = "whisper-1",
-        languageCode = "auto",
-        mediaType = "audio/wav",
-        postprocessing = "",
-        addTrailingSpace = false,
         timeoutMs = 1_000,
-        staticPrompt = "",
-        temperature = 0f,
-        useContext = false,
     )
 
     private fun sessionTest(block: suspend TestScope.(Harness) -> Unit) = runTest {

@@ -39,13 +39,13 @@ object PreferenceKeys {
     val ENHANCEMENT_PRESET_ID = stringPreferencesKey("enhancement-preset-id")
     val COMMAND_PRESET_ID = stringPreferencesKey("command-preset-id")
 
-    val SMART_FIX_ENABLED = booleanPreferencesKey("smart-fix-enabled")
-    val SMART_FIX_BACKEND = stringPreferencesKey("smart-fix-backend")
-    val SMART_FIX_ENDPOINT = stringPreferencesKey("smart-fix-endpoint")
-    val SMART_FIX_API_KEY = stringPreferencesKey("smart-fix-api-key")
-    val SMART_FIX_MODEL = stringPreferencesKey("smart-fix-model")
-    val SMART_FIX_TEMPERATURE = floatPreferencesKey("smart-fix-temperature")
-    val SMART_FIX_PROMPT = stringPreferencesKey("smart-fix-prompt")
+    val ENHANCEMENT_ENABLED = booleanPreferencesKey("smart-fix-enabled")
+    val ENHANCEMENT_BACKEND = stringPreferencesKey("smart-fix-backend")
+    val ENHANCEMENT_ENDPOINT = stringPreferencesKey("smart-fix-endpoint")
+    val ENHANCEMENT_API_KEY = stringPreferencesKey("smart-fix-api-key")
+    val ENHANCEMENT_MODEL = stringPreferencesKey("smart-fix-model")
+    val ENHANCEMENT_TEMPERATURE = floatPreferencesKey("smart-fix-temperature")
+    val ENHANCEMENT_PROMPT = stringPreferencesKey("smart-fix-prompt")
 
     val HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic-feedback-enabled")
     val SOUND_EFFECTS_ENABLED = booleanPreferencesKey("sound-effects-enabled")
@@ -68,6 +68,7 @@ object PreferenceKeys {
     val APP_PROMPT_MAPPINGS_JSON = stringPreferencesKey("app_prompt_mappings_json")
     val PROVIDER_API_KEY_MIGRATION_DONE = booleanPreferencesKey("provider_api_key_migration_done")
     val PROVIDER_SCHEMA_V2_MIGRATION_DONE = booleanPreferencesKey("provider_schema_v2_migration_done")
+    val PROVIDER_SCHEMA_V3_MIGRATION_DONE = booleanPreferencesKey("provider_schema_v3_migration_done")
     val PROVIDER_SELECTIONS_V2_MIGRATION_DONE = booleanPreferencesKey("provider_selections_v2_migration_done")
     val PROMPTS_PROFILES_SCHEMA_V1_MIGRATION_DONE = booleanPreferencesKey("prompts_profiles_schema_v1_migration_done")
 
@@ -94,13 +95,13 @@ object PreferenceKeys {
         USE_CONTEXT,
         ENHANCEMENT_PRESET_ID,
         COMMAND_PRESET_ID,
-        SMART_FIX_ENABLED,
-        SMART_FIX_BACKEND,
-        SMART_FIX_ENDPOINT,
-        SMART_FIX_API_KEY,
-        SMART_FIX_MODEL,
-        SMART_FIX_TEMPERATURE,
-        SMART_FIX_PROMPT,
+        ENHANCEMENT_ENABLED,
+        ENHANCEMENT_BACKEND,
+        ENHANCEMENT_ENDPOINT,
+        ENHANCEMENT_API_KEY,
+        ENHANCEMENT_MODEL,
+        ENHANCEMENT_TEMPERATURE,
+        ENHANCEMENT_PROMPT,
         HAPTIC_FEEDBACK_ENABLED,
         SOUND_EFFECTS_ENABLED,
         PAUSE_MEDIA_WHILE_RECORDING,
@@ -120,6 +121,7 @@ object PreferenceKeys {
         APP_PROMPT_MAPPINGS_JSON,
         PROVIDER_API_KEY_MIGRATION_DONE,
         PROVIDER_SCHEMA_V2_MIGRATION_DONE,
+        PROVIDER_SCHEMA_V3_MIGRATION_DONE,
         PROVIDER_SELECTIONS_V2_MIGRATION_DONE,
         PROMPTS_PROFILES_SCHEMA_V1_MIGRATION_DONE,
     )

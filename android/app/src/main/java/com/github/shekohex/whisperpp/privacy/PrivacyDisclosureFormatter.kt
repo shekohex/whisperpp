@@ -53,7 +53,7 @@ object PrivacyDisclosureFormatter {
         val endpoint = resolveEndpoint(provider, selectedModelId, Mode.ENHANCEMENT_TEXT)
         return ModeDisclosure(
             mode = Mode.ENHANCEMENT_TEXT,
-            title = "Enhancement / Smart Fix (text)",
+            title = "Enhancement (text)",
             dataSent = "Transcript text is sent for refinement.",
             endpoints = listOf(endpoint),
             contextLine = if (useContext) {

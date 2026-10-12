@@ -19,8 +19,8 @@ class SettingsRepositoryProviderPersistenceTest {
             type = ProviderType.OPENAI,
             endpoint = "https://api.openai.com/v1",
             models = listOf(
-                ModelConfig(id = "gpt-4o", name = "GPT-4o", kind = ModelKind.TEXT),
-                ModelConfig(id = "whisper-1", name = "Whisper 1", kind = ModelKind.STT),
+                ModelConfig(id = "gpt-4o", name = "GPT-4o", capabilities = ModelCapabilities.TEXT),
+                ModelConfig(id = "whisper-1", name = "Whisper 1", capabilities = ModelCapabilities.stt(ProviderType.OPENAI)),
             ),
         )
 
@@ -43,8 +43,8 @@ class SettingsRepositoryProviderPersistenceTest {
         )
         val imported = initial.copy(
             models = listOf(
-                ModelConfig(id = "gpt-4o", name = "GPT-4o", kind = ModelKind.TEXT),
-                ModelConfig(id = "gpt-4.1-mini", name = "GPT-4.1 Mini", kind = ModelKind.TEXT),
+                ModelConfig(id = "gpt-4o", name = "GPT-4o", capabilities = ModelCapabilities.TEXT),
+                ModelConfig(id = "gpt-4.1-mini", name = "GPT-4.1 Mini", capabilities = ModelCapabilities.TEXT),
             ),
         )
         val saved = imported.copy(

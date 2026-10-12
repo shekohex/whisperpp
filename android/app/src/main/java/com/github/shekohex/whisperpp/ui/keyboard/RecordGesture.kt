@@ -33,7 +33,7 @@ fun KeyboardState.toRecordSession(isStarting: Boolean = false): RecordSession = 
     KeyboardState.Paused -> RecordSession.Recording(locked = false, paused = true)
     KeyboardState.PausedLocked -> RecordSession.Recording(locked = true, paused = true)
     KeyboardState.Transcribing,
-    KeyboardState.SmartFixing,
+    KeyboardState.Enhancing,
     -> RecordSession.Busy
 }
 

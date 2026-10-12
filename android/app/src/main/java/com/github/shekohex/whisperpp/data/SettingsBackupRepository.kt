@@ -130,7 +130,7 @@ class SettingsBackupRepository(
                 soundEffectsEnabled = prefs[PreferenceKeys.SOUND_EFFECTS_ENABLED] ?: true,
             ),
             privacySafety = PrivacySafetyBackup(
-                smartFixEnabled = prefs[PreferenceKeys.SMART_FIX_ENABLED] ?: false,
+                enhancementEnabled = prefs[PreferenceKeys.ENHANCEMENT_ENABLED] ?: false,
                 useContext = prefs[PreferenceKeys.USE_CONTEXT] ?: false,
                 perAppSendPolicies = parseSendPolicies(prefs[PreferenceKeys.PER_APP_SEND_POLICY_JSON]),
                 secureFieldExplanationDontShowAgain = prefs[PreferenceKeys.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN] ?: false,
@@ -346,7 +346,7 @@ class SettingsBackupRepository(
             return imported.privacySafety
         }
         return PrivacySafetyBackup(
-            smartFixEnabled = imported.privacySafety.smartFixEnabled,
+            enhancementEnabled = imported.privacySafety.enhancementEnabled,
             useContext = imported.privacySafety.useContext,
             perAppSendPolicies = current.privacySafety.perAppSendPolicies + imported.privacySafety.perAppSendPolicies,
             secureFieldExplanationDontShowAgain = imported.privacySafety.secureFieldExplanationDontShowAgain,
@@ -749,7 +749,7 @@ class SettingsBackupRepository(
     }
 
     private fun applyPrivacySafety(prefs: MutablePreferences, category: PrivacySafetyBackup) {
-        prefs[PreferenceKeys.SMART_FIX_ENABLED] = category.smartFixEnabled
+        prefs[PreferenceKeys.ENHANCEMENT_ENABLED] = category.enhancementEnabled
         prefs[PreferenceKeys.USE_CONTEXT] = category.useContext
         prefs[PreferenceKeys.PER_APP_SEND_POLICY_JSON] = gson.toJson(category.perAppSendPolicies)
         prefs[PreferenceKeys.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN] = category.secureFieldExplanationDontShowAgain
@@ -923,9 +923,7 @@ class SettingsBackupRepository(
             models += ModelConfig(
                 id = modelId,
                 name = modelName,
-                isThinking = modelObject.booleanValue("isThinking") ?: false,
-                kind = modelObject.enumValue("kind", inferModelKind(providerType, endpoint)),
-                streamingPartialsSupported = modelObject.booleanValue("streamingPartialsSupported") ?: false,
+                capabilities = parseModelCapabilities(modelObject, providerType, endpoint),
             )
         }
         return models
@@ -1024,7 +1022,7 @@ class SettingsBackupRepository(
             } catch (_: Exception) {
                 null
             }
-            if (profile == null || profile.languageCode.isBlank() || profile.transcriptionProviderId.isBlank() || profile.transcriptionModelId.isBlank() || profile.smartFixProviderId.isBlank() || profile.smartFixModelId.isBlank()) {
+            if (profile == null || profile.languageCode.isBlank() || profile.transcriptionProviderId.isBlank() || profile.transcriptionModelId.isBlank() || profile.enhancementProviderId.isBlank() || profile.enhancementModelId.isBlank()) {
                 skippedItems += SkippedImportItem(
                     categoryId = SETTINGS_BACKUP_CATEGORY_LANGUAGE_DEFAULTS,
                     itemKey = "profile[$index]",
@@ -1182,7 +1180,7 @@ class SettingsBackupRepository(
         }
 
         return PrivacySafetyBackup(
-            smartFixEnabled = category.booleanValue("smartFixEnabled") ?: false,
+            enhancementEnabled = category.booleanValue("smartFixEnabled") ?: false,
             useContext = category.booleanValue("useContext") ?: false,
             perAppSendPolicies = perAppSendPolicies,
             secureFieldExplanationDontShowAgain = category.booleanValue("secureFieldExplanationDontShowAgain") ?: false,
@@ -1342,6 +1340,31 @@ class SettingsBackupRepository(
             }
         }
         return 0
+    }
+
+    /** Backups from before schema v3 carry only the legacy kind/flags. */
+    private fun parseModelCapabilities(
+        modelObject: JsonObject,
+        providerType: ProviderType,
+        endpoint: String,
+    ): ModelCapabilities {
+        val capabilities = modelObject.get("capabilities")
+        if (capabilities != null && capabilities.isJsonObject) {
+            val obj = capabilities.asJsonObject
+            return ModelCapabilities(
+                stt = obj.booleanValue("stt") ?: false,
+                text = obj.booleanValue("text") ?: false,
+                realtime = obj.booleanValue("realtime") ?: false,
+                thinking = obj.booleanValue("thinking") ?: false,
+                vocabulary = obj.booleanValue("vocabulary") ?: false,
+            )
+        }
+        return ModelCapabilities.fromLegacy(
+            kind = modelObject.enumValue("kind", inferModelKind(providerType, endpoint)),
+            isThinking = modelObject.booleanValue("isThinking") ?: false,
+            streamingPartialsSupported = modelObject.booleanValue("streamingPartialsSupported") ?: false,
+            providerType = providerType,
+        )
     }
 
     private fun inferModelKind(

@@ -1,10 +1,10 @@
 package com.github.shekohex.whisperpp.ime
 
-import com.github.shekohex.whisperpp.SmartFixer
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_ENABLED
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_TEMPERATURE
+import android.content.Context
+import com.github.shekohex.whisperpp.R
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_TEMPERATURE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
-import com.github.shekohex.whisperpp.data.ProviderAuthMode
 import com.github.shekohex.whisperpp.data.RuntimeChannel
 import com.github.shekohex.whisperpp.data.RuntimeConfigLoader
 import com.github.shekohex.whisperpp.data.presetById
@@ -13,23 +13,22 @@ import com.github.shekohex.whisperpp.dictation.EnhancementOutcome
 import com.github.shekohex.whisperpp.dictation.EnhancementRunner
 import com.github.shekohex.whisperpp.dictation.FailureReason
 import com.github.shekohex.whisperpp.domain.dictation.DictationEnhancer
+import com.github.shekohex.whisperpp.domain.providers.EnhancementRequest
+import com.github.shekohex.whisperpp.domain.providers.ProviderConfigException
+import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
+import com.github.shekohex.whisperpp.domain.providers.ThinkingConfig
+import com.github.shekohex.whisperpp.domain.providers.toProviderUserMessage
 import com.github.shekohex.whisperpp.privacy.PrivacyDisclosureFormatter
-import com.github.shekohex.whisperpp.privacy.SecretsStore
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.job
-import kotlinx.coroutines.withContext
 
-/** Enhancement ("Smart Fix") step of a dictation run, backed by [SmartFixer] + [EnhancementRunner]. */
+/** Enhancement step of a dictation run, backed by an [com.github.shekohex.whisperpp.domain.providers.EnhancementProvider] + [EnhancementRunner]. */
 class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
     class Deps(
+        val context: Context,
         val config: RuntimeConfigLoader,
         val enhancementPresetId: Flow<String?>,
-        val secretsStore: SecretsStore,
-        val smartFixer: SmartFixer,
+        val providers: ProviderFactory,
         val runner: EnhancementRunner,
         val disclosures: FirstUseDisclosureGate,
         /** Non-null when the current editor forbids sending; the text explains why. */
@@ -39,37 +38,30 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
         val defaultPrompt: () -> String,
     )
 
+    private val context: Context
+        get() = deps.context
+
     override suspend fun isEnabled(request: DictationEnhancer.Request): Boolean {
-        val enabled = deps.config.prefs()[SMART_FIX_ENABLED] ?: false
+        val enabled = deps.config.prefs()[ENHANCEMENT_ENABLED] ?: false
         return enabled && !isBlankOrPunctuationOnly(request.rawText)
     }
 
     override suspend fun enhance(request: DictationEnhancer.Request): DictationEnhancer.Result {
-        // The runner reports cancellation as an outcome; make sure the blocking call is aborted too.
-        val cancelHandle = currentCoroutineContext().job.invokeOnCompletion { cause ->
-            if (cause is CancellationException) deps.smartFixer.cancel()
-        }
-        try {
-            return run(request)
-        } finally {
-            cancelHandle.dispose()
-        }
-    }
-
-    private suspend fun run(request: DictationEnhancer.Request): DictationEnhancer.Result {
         val snapshot = deps.config.load(request.focus.packageName)
         val textProviderId = snapshot.effective.textProviderId
         val textModelId = snapshot.effective.textModelId
         val provider = snapshot.provider(textProviderId)
-        val providerLabel = provider?.name?.trim().orEmpty().ifBlank { textProviderId.ifBlank { "Unknown provider" } }
-        val modelLabel = textModelId.ifBlank { "Unknown model" }
+        val unknownProvider = context.getString(R.string.enhancement_unknown_provider)
+        val providerLabel = provider?.name?.trim().orEmpty().ifBlank { textProviderId.ifBlank { unknownProvider } }
+        val modelLabel = textModelId.ifBlank { context.getString(R.string.enhancement_unknown_model) }
 
         deps.blockedNotice()?.let { notice ->
-            return kept("Enhancement skipped for $providerLabel ($modelLabel): $notice", isError = false)
+            return kept(context.getString(R.string.enhancement_skipped_blocked, providerLabel, modelLabel, notice), isError = false)
         }
         snapshot.effective.warnings.toNoticeText(RuntimeChannel.TEXT).takeIf { it.isNotBlank() }?.let(deps.onWarning)
-        if (provider == null || textModelId.isBlank() || provider.models.none { it.id == textModelId }) {
-            return kept("Enhancement unavailable for ${textProviderId.ifBlank { "Unknown provider" }} ($modelLabel)")
+        val model = provider?.models?.find { it.id == textModelId }
+        if (provider == null || model == null) {
+            return kept(context.getString(R.string.enhancement_unavailable, textProviderId.ifBlank { unknownProvider }, modelLabel))
         }
 
         val disclosure = PrivacyDisclosureFormatter.disclosureForEnhancement(
@@ -80,43 +72,61 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
         if (deps.disclosures.await(FirstUseDisclosureGate.Mode.ENHANCEMENT_TEXT, disclosure) != FirstUseDisclosureGate.Decision.CONTINUE) {
             return DictationEnhancer.Result.Kept()
         }
-        if (provider.endpoint.isBlank()) {
-            return kept("Enhancement unavailable for ${provider.name} ($textModelId): missing endpoint")
-        }
-        val providerWithApiKey = provider.copy(apiKey = deps.secretsStore.getProviderApiKey(provider.id).orEmpty())
-        if (providerWithApiKey.authMode == ProviderAuthMode.API_KEY && providerWithApiKey.apiKey.isBlank()) {
-            return kept("Enhancement unavailable for ${provider.name} ($textModelId): missing API key")
+        val label = "${provider.name} ($textModelId)"
+        val enhancer = deps.providers.enhancement(provider, model).getOrElse { error ->
+            return keptForConfigError(error, label)
         }
 
-        val temperature = if (provider.temperature > 0) provider.temperature else snapshot.prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
+        val temperature = if (provider.temperature > 0) provider.temperature else snapshot.prefs[ENHANCEMENT_TEMPERATURE] ?: 0.0f
         val presetInstruction = presetById(deps.enhancementPresetId.first().orEmpty())?.promptInstruction
-        val promptTemplate = buildPromptTemplate(snapshot.effective.prompt, presetInstruction)
+        val systemPrompt = buildPromptTemplate(snapshot.effective.prompt, presetInstruction)
+        val thinking = ThinkingConfig.from(provider, model)
 
         deps.onRequestSent()
-        val outcome = deps.runner.run(rawText = request.rawText) {
-            withContext(Dispatchers.IO) {
-                deps.smartFixer.fix(
-                    text = request.rawText,
-                    contextInformation = request.contextPrompt,
-                    provider = providerWithApiKey,
-                    modelId = textModelId,
+        // The provider timeout is the total budget for all attempts and backoff waits.
+        val outcome = deps.runner.run(rawText = request.rawText, budgetMs = provider.timeout.toLong()) { attemptTimeoutMs ->
+            enhancer.enhance(
+                EnhancementRequest(
+                    systemPrompt = systemPrompt,
+                    userText = request.rawText,
+                    contextPrompt = request.contextPrompt,
                     temperature = temperature,
-                    promptTemplate = promptTemplate,
+                    thinking = thinking,
+                    timeoutMs = attemptTimeoutMs,
                 )
-            }
+            ).getOrThrow()
         }
-        val label = "${provider.name} ($textModelId)"
         return when (outcome) {
             is EnhancementOutcome.Succeeded -> DictationEnhancer.Result.Enhanced(outcome.enhancedText, label)
             is EnhancementOutcome.Skipped -> DictationEnhancer.Result.Kept()
             is EnhancementOutcome.Failed -> when (val reason = outcome.reason) {
-                FailureReason.Cancelled -> DictationEnhancer.Result.Kept()
-                FailureReason.Timeout -> kept("Enhancement timed out for $label")
-                is FailureReason.Transient -> kept("Enhancement failed for $label: ${reason.message}")
-                is FailureReason.NonTransient -> kept("Enhancement failed for $label: ${reason.message}")
+                FailureReason.Timeout -> kept(context.getString(R.string.enhancement_timed_out, label))
+                is FailureReason.Transient -> failed(label, reason.error)
+                is FailureReason.NonTransient -> keptForConfigError(reason.error, label)
             }
         }
     }
+
+    /** Unsupported provider/model combinations are a skip, not an error (G-08). */
+    private fun keptForConfigError(error: Throwable, label: String): DictationEnhancer.Result {
+        val problem = (error as? ProviderConfigException)?.problem ?: return failed(label, error)
+        val message = error.toProviderUserMessage(context)
+        return when (problem) {
+            ProviderConfigException.Problem.UNSUPPORTED_PROVIDER_TYPE,
+            ProviderConfigException.Problem.MODEL_LACKS_TEXT,
+            ProviderConfigException.Problem.MODEL_NOT_FOUND,
+            -> kept(context.getString(R.string.enhancement_skipped, label, message), isError = false)
+            ProviderConfigException.Problem.MISSING_ENDPOINT,
+            ProviderConfigException.Problem.INVALID_ENDPOINT,
+            ProviderConfigException.Problem.MISSING_API_KEY,
+            ProviderConfigException.Problem.MISSING_MODEL,
+            ProviderConfigException.Problem.MODEL_LACKS_STT,
+            -> kept(context.getString(R.string.enhancement_unavailable_reason, label, message))
+        }
+    }
+
+    private fun failed(label: String, error: Throwable): DictationEnhancer.Result =
+        kept(context.getString(R.string.enhancement_failed, label, error.toProviderUserMessage(context)))
 
     private fun kept(notice: String, isError: Boolean = true) = DictationEnhancer.Result.Kept(notice, isError)
 

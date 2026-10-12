@@ -46,7 +46,11 @@ import com.github.shekohex.whisperpp.app.appContainer
 import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
 import com.github.shekohex.whisperpp.*
 import com.github.shekohex.whisperpp.R
+import com.github.shekohex.whisperpp.core.network.NetworkError
 import com.github.shekohex.whisperpp.core.network.isLocalNetworkHost
+import com.github.shekohex.whisperpp.domain.providers.Credentials
+import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
+import com.github.shekohex.whisperpp.domain.providers.toProviderUserMessage
 import com.github.shekohex.whisperpp.data.*
 import com.github.shekohex.whisperpp.updater.*
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_STT_MODEL_ID
@@ -61,10 +65,10 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.CANCEL_CONFIRMATION
 import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_MODEL_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.COMMAND_TEXT_PROVIDER_ID
 import com.github.shekohex.whisperpp.data.PreferenceKeys.HAPTIC_FEEDBACK_ENABLED
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_BACKEND
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_ENABLED
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_MODEL
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_PROMPT
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_BACKEND
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_MODEL
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_PROMPT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.TAP_TO_RECORD
@@ -181,7 +185,7 @@ fun SettingsNavigation(
             BackendSettingsScreen(dataStore, navController)
         }
         composable(SettingsScreen.PostProcessing.route) {
-            SmartFixSettingsScreen(dataStore, navController)
+            EnhancementSettingsScreen(dataStore, navController)
         }
         composable(SettingsScreen.Keyboard.route) {
             KeyboardSettingsScreen(dataStore, navController)
@@ -1148,7 +1152,7 @@ fun AppMappingDetailScreen(
             ProviderModelSelectionEditor(
                 title = "Dictation override (STT)",
                 providers = providers,
-                allowedKinds = setOf(ModelKind.STT, ModelKind.MULTIMODAL),
+                isCompatible = { it.capabilities.stt },
                 providerId = sttOverrideProviderId,
                 modelId = sttOverrideModelId,
                 onUpdate = { providerId, modelId ->
@@ -1160,7 +1164,7 @@ fun AppMappingDetailScreen(
             ProviderModelSelectionEditor(
                 title = "Enhancement override (Text)",
                 providers = providers,
-                allowedKinds = setOf(ModelKind.TEXT, ModelKind.MULTIMODAL),
+                isCompatible = { it.capabilities.text },
                 providerId = textOverrideProviderId,
                 modelId = textOverrideModelId,
                 onUpdate = { providerId, modelId ->
@@ -1194,7 +1198,7 @@ fun AppMappingDetailScreen(
 private fun ProviderModelSelectionEditor(
     title: String,
     providers: List<ServiceProvider>,
-    allowedKinds: Set<ModelKind>,
+    isCompatible: (ModelConfig) -> Boolean,
     providerId: String,
     modelId: String,
     onUpdate: (String, String) -> Unit,
@@ -1204,10 +1208,6 @@ private fun ProviderModelSelectionEditor(
 
     val selectedProvider = remember(providers, providerId) { providers.firstOrNull { it.id == providerId } }
     val selectedModel = remember(selectedProvider, modelId) { selectedProvider?.models?.firstOrNull { it.id == modelId } }
-
-    fun isCompatible(model: ModelConfig): Boolean {
-        return model.kind in allowedKinds
-    }
 
     SettingsGroup(title = title) {
         Column(
@@ -1294,7 +1294,7 @@ private fun ProviderModelSelectionEditor(
                             modelExpanded = false
                         },
                     )
-                    val compatibleModels = selectedProvider?.models?.filter(::isCompatible).orEmpty()
+                    val compatibleModels = selectedProvider?.models?.filter(isCompatible).orEmpty()
                     compatibleModels.forEach { model ->
                         DropdownMenuItem(
                             text = { Text(model.name) },
@@ -1468,7 +1468,7 @@ fun LanguageDefaultsScreen(dataStore: DataStore<Preferences>, navController: Nav
                                 ProviderModelSelectionEditor(
                                     title = "Dictation (STT)",
                                     providers = providers,
-                                    allowedKinds = setOf(ModelKind.STT, ModelKind.MULTIMODAL),
+                                    isCompatible = { it.capabilities.stt },
                                     providerId = profile.transcriptionProviderId,
                                     modelId = profile.transcriptionModelId,
                                     onUpdate = { providerId, modelId ->
@@ -1484,14 +1484,14 @@ fun LanguageDefaultsScreen(dataStore: DataStore<Preferences>, navController: Nav
                                 ProviderModelSelectionEditor(
                                     title = "Enhancement (Text)",
                                     providers = providers,
-                                    allowedKinds = setOf(ModelKind.TEXT, ModelKind.MULTIMODAL),
-                                    providerId = profile.smartFixProviderId,
-                                    modelId = profile.smartFixModelId,
+                                    isCompatible = { it.capabilities.text },
+                                    providerId = profile.enhancementProviderId,
+                                    modelId = profile.enhancementModelId,
                                     onUpdate = { providerId, modelId ->
                                         upsert(
                                             profile.copy(
-                                                smartFixProviderId = providerId,
-                                                smartFixModelId = modelId,
+                                                enhancementProviderId = providerId,
+                                                enhancementModelId = modelId,
                                             )
                                         )
                                     },
@@ -1544,8 +1544,8 @@ fun LanguageDefaultsScreen(dataStore: DataStore<Preferences>, navController: Nav
                                     languageCode = normalized,
                                     transcriptionProviderId = "",
                                     transcriptionModelId = "",
-                                    smartFixProviderId = "",
-                                    smartFixModelId = "",
+                                    enhancementProviderId = "",
+                                    enhancementModelId = "",
                                 )
                             )
                             Toast.makeText(context, "Added", Toast.LENGTH_SHORT).show()
@@ -1755,11 +1755,11 @@ fun ProviderSelectionsScreen(dataStore: DataStore<Preferences>, navController: N
     val commandProvider = providers.find { it.id == commandProviderId }
 
     fun isSttCompatible(model: ModelConfig): Boolean {
-        return model.kind == ModelKind.STT || model.kind == ModelKind.MULTIMODAL
+        return model.capabilities.stt
     }
 
     fun isTextCompatible(model: ModelConfig): Boolean {
-        return model.kind == ModelKind.TEXT || model.kind == ModelKind.MULTIMODAL
+        return model.capabilities.text
     }
 
     Scaffold(
@@ -2439,6 +2439,8 @@ fun ProviderEditScreen(
     val settingsState by dataStore.data.collectAsState(initial = null)
     val scope = rememberCoroutineScope()
 
+    val providerFactory = context.appContainer.providerFactory
+    val testOkText = stringResource(R.string.provider_test_ok)
     val httpClient = remember(context) {
         context.appContainer.okHttpClient.newBuilder()
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -2708,97 +2710,37 @@ fun ProviderEditScreen(
         )
     }
 
+    fun testModel(modelId: String, capabilities: ModelCapabilities): ModelConfig {
+        return models.find { it.id == modelId }?.copy(capabilities = capabilities)
+            ?: ModelConfig(id = modelId, name = modelId, capabilities = capabilities)
+    }
+
+    fun showTestResult(title: String, result: Result<String>) {
+        result.fold(
+            onSuccess = { showRawResult(title, null, it, null) },
+            onFailure = { error ->
+                val status = when (error) {
+                    is NetworkError.Http -> error.status
+                    is NetworkError.Unauthorized -> error.status
+                    is NetworkError.RateLimited -> 429
+                    else -> null
+                }
+                showRawResult(title, status, (error as? NetworkError.Http)?.bodySnippet.orEmpty(), error.toProviderUserMessage(context))
+            },
+        )
+    }
+
     suspend fun runTextTest(modelId: String) {
-        val endpointUrl = buildProviderTextTestUrl(
-            providerType = type,
-            baseUrl = baseUrl,
-            modelId = modelId,
-        ) ?: run {
-            showRawResult("Text test", null, "", "Invalid base URL")
-            return
-        }
-
-        val requestBody = if (type == ProviderType.GEMINI) {
-            JSONObject().apply {
-                put(
-                    "contents",
-                    JSONArray().apply {
-                        put(
-                            JSONObject().apply {
-                                put(
-                                    "parts",
-                                    JSONArray().apply {
-                                        put(JSONObject().apply { put("text", "Reply with OK") })
-                                    }
-                                )
-                            }
-                        )
-                    }
-                )
-                put(
-                    "generationConfig",
-                    JSONObject().apply {
-                        put("temperature", 0)
-                        put("maxOutputTokens", 16)
-                    }
-                )
-            }.toString().toRequestBody("application/json".toMediaType())
-        } else {
-            JSONObject().apply {
-                put("model", modelId)
-                put(
-                    "messages",
-                    JSONArray().apply {
-                        put(
-                            JSONObject().apply {
-                                put("role", "user")
-                                put("content", "Reply with OK")
-                            }
-                        )
-                    }
-                )
-                put("temperature", 0)
-                put("max_tokens", 16)
-            }.toString().toRequestBody("application/json".toMediaType())
-        }
-
-        val requestBuilder = Request.Builder()
-            .url(endpointUrl)
-            .addHeader("Content-Type", "application/json")
-            .post(requestBody)
-
-        if (authMode == ProviderAuthMode.API_KEY) {
-            val apiKey = resolveApiKeyForTests()
-            if (apiKey.isNotBlank()) {
-                if (type == ProviderType.GEMINI) {
-                    requestBuilder.addHeader("x-goog-api-key", apiKey)
-                } else {
-                    requestBuilder.addHeader("Authorization", "Bearer $apiKey")
-                }
-            }
-        }
-
-        val request = requestBuilder.build()
-        val (status, body, error) = withContext(Dispatchers.IO) {
-            try {
-                httpClient.newCall(request).execute().use { response ->
-                    Triple(response.code, response.body?.string().orEmpty(), null)
-                }
-            } catch (e: Exception) {
-                Triple(null, "", e.message)
-            }
-        }
-
-        showRawResult("Text test", status, body, error)
+        val provider = providerFromForm()
+        val result = providerFactory
+            .enhancement(provider, testModel(modelId, ModelCapabilities.TEXT), Credentials(resolveApiKeyForTests()))
+            .mapCatching { enhancer -> enhancer.verify().getOrThrow() }
+            .map { testOkText }
+        showTestResult("Text test", result)
     }
 
     suspend fun runSttTest(modelId: String, audioUri: Uri) {
-        val endpointUrl = buildProviderSttTestUrl(baseUrl) ?: run {
-            showRawResult("STT test", null, "", "Invalid base URL")
-            return
-        }
-
-        val tempFile = withContext(Dispatchers.IO) {
+        val (file, mimeType) = withContext(Dispatchers.IO) {
             val mimeType = context.contentResolver.getType(audioUri).orEmpty()
             val file = File.createTempFile("provider_test_", null, context.cacheDir)
             context.contentResolver.openInputStream(audioUri)?.use { input ->
@@ -2809,42 +2751,19 @@ fun ProviderEditScreen(
             Pair(file, mimeType)
         }
 
-        val (file, mimeType) = tempFile
-
         try {
-            val body = MultipartBody.Builder()
-                .setType(MultipartBody.FORM)
-                .addFormDataPart(
-                    "file",
-                    file.name,
-                    file.asRequestBody(mimeType.toMediaTypeOrNull())
-                )
-                .addFormDataPart("model", modelId)
-                .build()
-
-            val requestBuilder = Request.Builder()
-                .url(endpointUrl)
-                .post(body)
-
-            if (authMode == ProviderAuthMode.API_KEY) {
-                val apiKey = resolveApiKeyForTests()
-                if (apiKey.isNotBlank()) {
-                    requestBuilder.addHeader("Authorization", "Bearer $apiKey")
-                }
-            }
-
-            val request = requestBuilder.build()
-            val (status, rawBody, error) = withContext(Dispatchers.IO) {
-                try {
-                    httpClient.newCall(request).execute().use { response ->
-                        Triple(response.code, response.body?.string().orEmpty(), null)
-                    }
-                } catch (e: Exception) {
-                    Triple(null, "", e.message)
-                }
-            }
-
-            showRawResult("STT test", status, rawBody, error)
+            val provider = providerFromForm()
+            val request = TranscriptionRequest(
+                provider = provider,
+                modelId = modelId,
+                languageCode = provider.languageCode,
+                timeoutMs = STT_TEST_TIMEOUT_MS,
+                mediaType = mimeType.ifBlank { "audio/wav" },
+            )
+            val result = providerFactory
+                .transcription(provider, testModel(modelId, ModelCapabilities.stt(provider.type)), Credentials(resolveApiKeyForTests()))
+                .mapCatching { transcriber -> transcriber.transcribe(file, request).getOrThrow().text }
+            showTestResult("STT test", result)
         } finally {
             withContext(Dispatchers.IO) {
                 runCatching { file.delete() }
@@ -2914,8 +2833,7 @@ fun ProviderEditScreen(
                     ModelConfig(
                         id = id,
                         name = displayName.ifBlank { id },
-                        kind = ModelKind.MULTIMODAL,
-                        streamingPartialsSupported = false,
+                        capabilities = ModelCapabilities.TEXT,
                     )
                 }
             }
@@ -2933,8 +2851,7 @@ fun ProviderEditScreen(
                     ModelConfig(
                         id = id,
                         name = id,
-                        kind = ModelKind.TEXT,
-                        streamingPartialsSupported = false,
+                        capabilities = ModelCapabilities.TEXT,
                     )
                 }
             }
@@ -2961,10 +2878,10 @@ fun ProviderEditScreen(
         if (uri != null && pendingSttTestAfterPick) {
             pendingSttTestAfterPick = false
             scope.launch {
-                val modelId = if (useCustomSttTestModel || models.firstOrNull { it.kind == ModelKind.STT || it.kind == ModelKind.MULTIMODAL }?.id.isNullOrBlank()) {
+                val modelId = if (useCustomSttTestModel || models.firstOrNull { it.capabilities.stt }?.id.isNullOrBlank()) {
                     customSttTestModelId.trim()
                 } else {
-                    models.firstOrNull { it.kind == ModelKind.STT || it.kind == ModelKind.MULTIMODAL }?.id.orEmpty()
+                    models.firstOrNull { it.capabilities.stt }?.id.orEmpty()
                 }
                 if (modelId.isBlank()) {
                     showRawResult("STT test", null, "", "Model ID is required")
@@ -3247,10 +3164,10 @@ fun ProviderEditScreen(
                 Text("Test", style = MaterialTheme.typography.titleMedium)
 
                 val defaultTextModelId = models.firstOrNull {
-                    it.kind == ModelKind.TEXT || it.kind == ModelKind.MULTIMODAL
+                    it.capabilities.text
                 }?.id.orEmpty()
                 val defaultSttModelId = models.firstOrNull {
-                    it.kind == ModelKind.STT || it.kind == ModelKind.MULTIMODAL
+                    it.capabilities.stt
                 }?.id.orEmpty()
 
                 val mustUseCustomTextModel = defaultTextModelId.isBlank()
@@ -3600,24 +3517,14 @@ fun ProviderEditScreen(
       }
 }
 
+private const val STT_TEST_TIMEOUT_MS = 30_000L
+
 private fun sanitizedBaseUrl(baseUrl: String): HttpUrl? {
     return baseUrl.trim().toHttpUrlOrNull()
         ?.newBuilder()
         ?.query(null)
         ?.fragment(null)
         ?.build()
-}
-
-private fun buildProviderTextTestUrl(providerType: ProviderType, baseUrl: String, modelId: String): HttpUrl? {
-    return if (providerType == ProviderType.GEMINI) {
-        buildGeminiGenerateContentUrl(baseUrl, modelId)
-    } else {
-        buildOpenAiChatCompletionsUrl(baseUrl)
-    }
-}
-
-private fun buildProviderSttTestUrl(baseUrl: String): HttpUrl? {
-    return buildOpenAiTranscriptionsUrl(baseUrl)
 }
 
 private fun buildModelsListUrl(baseUrl: String): HttpUrl? {
@@ -3628,33 +3535,6 @@ private fun buildModelsListUrl(baseUrl: String): HttpUrl? {
     } else {
         base.newBuilder().addPathSegment("models").build()
     }
-}
-
-private fun buildOpenAiChatCompletionsUrl(baseUrl: String): HttpUrl? {
-    val base = sanitizedBaseUrl(baseUrl) ?: return null
-    val segments = base.pathSegments.filter { it.isNotBlank() }
-    val alreadyDerived = segments.size >= 2 && segments.takeLast(2) == listOf("chat", "completions")
-    return if (alreadyDerived) base else base.newBuilder().addPathSegments("chat/completions").build()
-}
-
-private fun buildOpenAiTranscriptionsUrl(baseUrl: String): HttpUrl? {
-    val base = sanitizedBaseUrl(baseUrl) ?: return null
-    val segments = base.pathSegments.filter { it.isNotBlank() }
-    val alreadyDerived = segments.size >= 2 && segments.takeLast(2) == listOf("audio", "transcriptions")
-    return if (alreadyDerived) base else base.newBuilder().addPathSegments("audio/transcriptions").build()
-}
-
-private fun buildGeminiGenerateContentUrl(baseUrl: String, modelId: String): HttpUrl? {
-    val base = sanitizedBaseUrl(baseUrl) ?: return null
-    val normalizedPath = base.encodedPath.trim().trimEnd('/')
-    if (normalizedPath.endsWith(":generateContent") && normalizedPath.contains("/models/")) {
-        return base
-    }
-    val normalizedModel = modelId.trim().removePrefix("models/").trimStart('/')
-    return base.newBuilder()
-        .addPathSegments("models")
-        .addPathSegment("${normalizedModel}:generateContent")
-        .build()
 }
 
 private fun redactSecretsForUi(value: String): String {
@@ -3703,7 +3583,7 @@ fun ModelEditCard(model: ModelConfig, onUpdate: (ModelConfig) -> Unit, onDelete:
             ) {
                 OutlinedTextField(
                     readOnly = true,
-                    value = model.kind.name,
+                    value = model.capabilities.legacyKind.name,
                     onValueChange = {},
                     label = { Text("Kind") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = kindExpanded) },
@@ -3718,12 +3598,7 @@ fun ModelEditCard(model: ModelConfig, onUpdate: (ModelConfig) -> Unit, onDelete:
                         DropdownMenuItem(
                             text = { Text(kind.name) },
                             onClick = {
-                                val updated = if (kind == ModelKind.TEXT) {
-                                    model.copy(kind = kind, streamingPartialsSupported = false)
-                                } else {
-                                    model.copy(kind = kind)
-                                }
-                                onUpdate(updated)
+                                onUpdate(model.copy(capabilities = model.capabilities.withKind(kind)))
                                 kindExpanded = false
                             }
                         )
@@ -3731,11 +3606,11 @@ fun ModelEditCard(model: ModelConfig, onUpdate: (ModelConfig) -> Unit, onDelete:
                 }
             }
 
-            if (model.kind == ModelKind.STT || model.kind == ModelKind.MULTIMODAL) {
+            if (model.capabilities.stt) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(
-                        checked = model.streamingPartialsSupported,
-                        onCheckedChange = { onUpdate(model.copy(streamingPartialsSupported = it)) }
+                        checked = model.capabilities.realtime,
+                        onCheckedChange = { onUpdate(model.copy(capabilities = model.capabilities.copy(realtime = it))) }
                     )
                     Text("Streaming partials supported")
                 }
@@ -3743,8 +3618,8 @@ fun ModelEditCard(model: ModelConfig, onUpdate: (ModelConfig) -> Unit, onDelete:
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(
-                    checked = model.isThinking,
-                    onCheckedChange = { onUpdate(model.copy(isThinking = it)) }
+                    checked = model.capabilities.thinking,
+                    onCheckedChange = { onUpdate(model.copy(capabilities = model.capabilities.copy(thinking = it))) }
                 )
                 Text("Thinking Model")
             }
@@ -3754,14 +3629,14 @@ fun ModelEditCard(model: ModelConfig, onUpdate: (ModelConfig) -> Unit, onDelete:
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
+fun EnhancementSettingsScreen(dataStore: DataStore<Preferences>, navController: NavHostController) {
     val settingsState by dataStore.data.collectAsState(initial = null)
     val repository = LocalContext.current.appContainer.settingsRepository
     val providers by repository.providers.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     
-    val selectedProviderId = settingsState?.get(SMART_FIX_BACKEND) ?: ""
-    val selectedModelId = settingsState?.get(SMART_FIX_MODEL) ?: ""
+    val selectedProviderId = settingsState?.get(ENHANCEMENT_BACKEND) ?: ""
+    val selectedModelId = settingsState?.get(ENHANCEMENT_MODEL) ?: ""
     val selectedProvider = providers.find { it.id == selectedProviderId } ?: providers.firstOrNull()
 
     // State for Prompt Edit
@@ -3774,7 +3649,7 @@ fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
     Scaffold(
         topBar = {
             MediumTopAppBar(
-                title = { Text("Smart Fix") },
+                title = { Text("Enhancement") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
@@ -3797,9 +3672,9 @@ fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
             SettingsGroup(title = "Behavior") {
                 SettingsToggle(
                     icon = Icons.Default.AutoFixHigh,
-                    title = "Enable Smart Fix",
-                    checked = settingsState?.get(SMART_FIX_ENABLED) ?: false,
-                    onCheckedChange = { scope.launch { dataStore.edit { s -> s[SMART_FIX_ENABLED] = it } } }
+                    title = "Enable enhancement",
+                    checked = settingsState?.get(ENHANCEMENT_ENABLED) ?: false,
+                    onCheckedChange = { scope.launch { dataStore.edit { s -> s[ENHANCEMENT_ENABLED] = it } } }
                 )
                 SettingsToggle(
                     icon = Icons.Default.History,
@@ -3810,7 +3685,7 @@ fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                 SettingsItem(
                     icon = Icons.Default.EditNote,
                     title = "Custom Prompt",
-                    subtitle = (settingsState?.get(SMART_FIX_PROMPT) ?: "Default").take(20) + "...",
+                    subtitle = (settingsState?.get(ENHANCEMENT_PROMPT) ?: "Default").take(20) + "...",
                     onClick = { showPromptDialog = true }
                 )
             }
@@ -3844,9 +3719,9 @@ fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                                 onClick = {
                                     scope.launch {
                                         dataStore.edit { 
-                                            it[SMART_FIX_BACKEND] = provider.id 
+                                            it[ENHANCEMENT_BACKEND] = provider.id 
                                             // Reset model when provider changes
-                                            it[SMART_FIX_MODEL] = provider.models.firstOrNull()?.id ?: ""
+                                            it[ENHANCEMENT_MODEL] = provider.models.firstOrNull()?.id ?: ""
                                         }
                                     }
                                     providerExpanded = false
@@ -3882,7 +3757,7 @@ fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
                                 text = { Text(model.name) },
                                 onClick = {
                                     scope.launch {
-                                        dataStore.edit { it[SMART_FIX_MODEL] = model.id }
+                                        dataStore.edit { it[ENHANCEMENT_MODEL] = model.id }
                                     }
                                     modelExpanded = false
                                 }
@@ -3899,11 +3774,11 @@ fun SmartFixSettingsScreen(dataStore: DataStore<Preferences>, navController: Nav
         if (showPromptDialog) {
             SettingsEditDialog(
                 title = "Custom System Prompt",
-                initialValue = settingsState?.get(SMART_FIX_PROMPT) ?: "",
+                initialValue = settingsState?.get(ENHANCEMENT_PROMPT) ?: "",
                 onDismiss = { showPromptDialog = false },
                 onConfirm = { newValue ->
                     scope.launch {
-                        dataStore.edit { it[SMART_FIX_PROMPT] = newValue }
+                        dataStore.edit { it[ENHANCEMENT_PROMPT] = newValue }
                         showPromptDialog = false
                     }
                 }

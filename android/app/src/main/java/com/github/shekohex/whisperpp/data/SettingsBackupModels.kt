@@ -1,5 +1,7 @@
 package com.github.shekohex.whisperpp.data
 
+import com.google.gson.annotations.SerializedName
+
 const val SETTINGS_BACKUP_SCHEMA_VERSION = 1
 const val SETTINGS_BACKUP_CATEGORY_PROVIDERS_MODELS = "providers_models"
 const val SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS = "provider_credentials"
@@ -107,7 +109,7 @@ data class KeyboardBehaviorBackup(
 )
 
 data class PrivacySafetyBackup(
-    val smartFixEnabled: Boolean = false,
+    @SerializedName("smartFixEnabled") val enhancementEnabled: Boolean = false,
     val useContext: Boolean = false,
     val perAppSendPolicies: Map<String, Boolean> = emptyMap(),
     val secureFieldExplanationDontShowAgain: Boolean = false,

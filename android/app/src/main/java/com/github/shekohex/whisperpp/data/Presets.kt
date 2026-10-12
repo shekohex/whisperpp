@@ -10,7 +10,7 @@ object Presets {
         endpoint = "https://api.openai.com/v1",
         apiKey = "",
         models = listOf(
-            ModelConfig(id = "whisper-1", name = "Whisper 1", kind = ModelKind.STT)
+            ModelConfig(id = "whisper-1", name = "Whisper 1", capabilities = ModelCapabilities.stt(ProviderType.OPENAI))
         ),
         temperature = 0.0f,
         prompt = "",
@@ -24,9 +24,9 @@ object Presets {
         endpoint = "https://api.openai.com/v1",
         apiKey = "",
         models = listOf(
-            ModelConfig(id = "gpt-4o", name = "GPT-4o", kind = ModelKind.TEXT),
-            ModelConfig(id = "gpt-4-turbo", name = "GPT-4 Turbo", kind = ModelKind.TEXT),
-            ModelConfig(id = "gpt-3.5-turbo", name = "GPT-3.5 Turbo", kind = ModelKind.TEXT)
+            ModelConfig(id = "gpt-4o", name = "GPT-4o"),
+            ModelConfig(id = "gpt-4-turbo", name = "GPT-4 Turbo"),
+            ModelConfig(id = "gpt-3.5-turbo", name = "GPT-3.5 Turbo")
         ),
         temperature = 0.7f,
         prompt = "You are a helpful assistant that fixes text.",
@@ -40,9 +40,9 @@ object Presets {
         endpoint = "https://generativelanguage.googleapis.com/v1beta",
         apiKey = "",
         models = listOf(
-            ModelConfig(id = "gemini-1.5-flash", name = "Gemini 1.5 Flash", kind = ModelKind.MULTIMODAL),
-            ModelConfig(id = "gemini-1.5-pro", name = "Gemini 1.5 Pro", kind = ModelKind.MULTIMODAL),
-            ModelConfig(id = "gemini-2.0-flash", name = "Gemini 2.0 Flash", kind = ModelKind.MULTIMODAL)
+            ModelConfig(id = "gemini-1.5-flash", name = "Gemini 1.5 Flash"),
+            ModelConfig(id = "gemini-1.5-pro", name = "Gemini 1.5 Pro"),
+            ModelConfig(id = "gemini-2.0-flash", name = "Gemini 2.0 Flash")
         ),
         temperature = 0.7f,
         prompt = "You are a helpful assistant.",

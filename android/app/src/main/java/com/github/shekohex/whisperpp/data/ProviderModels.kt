@@ -1,5 +1,6 @@
 package com.github.shekohex.whisperpp.data
 
+import com.google.gson.annotations.SerializedName
 import java.util.UUID
 
 enum class ProviderType {
@@ -30,13 +31,87 @@ enum class ProviderAuthMode {
     NO_AUTH,
 }
 
+/**
+ * What a model can do (§4.5). Source of truth for selection and routing; filled by the v3 migration
+ * from the legacy fields, by discovery (WP-2.6) or by the user.
+ */
+data class ModelCapabilities(
+    val stt: Boolean = false,
+    val text: Boolean = false,
+    val realtime: Boolean = false,
+    val thinking: Boolean = false,
+    val vocabulary: Boolean = false,
+) {
+    /** Closest legacy [ModelKind], kept for older readers of the persisted JSON. */
+    val legacyKind: ModelKind
+        get() = when {
+            stt && text -> ModelKind.MULTIMODAL
+            stt -> ModelKind.STT
+            else -> ModelKind.TEXT
+        }
+
+    /** Editor shortcut: switches the STT/text flags, keeping the others where they still apply. */
+    fun withKind(kind: ModelKind): ModelCapabilities {
+        val newStt = kind != ModelKind.TEXT
+        return copy(
+            stt = newStt,
+            text = kind != ModelKind.STT,
+            realtime = realtime && newStt,
+            vocabulary = vocabulary && newStt,
+        )
+    }
+
+    companion object {
+        val TEXT = ModelCapabilities(text = true)
+
+        /**
+         * Maps the pre-v3 flags. `MULTIMODAL` becomes text-only: STT always used the Whisper
+         * multipart API, which Gemini does not serve (G-04; WP-2.2 may re-enable it).
+         */
+        fun fromLegacy(
+            kind: ModelKind?,
+            isThinking: Boolean,
+            streamingPartialsSupported: Boolean,
+            providerType: ProviderType,
+        ): ModelCapabilities {
+            val stt = kind == ModelKind.STT
+            return ModelCapabilities(
+                stt = stt,
+                text = kind != ModelKind.STT,
+                realtime = stt && streamingPartialsSupported,
+                thinking = isThinking,
+                vocabulary = stt && providerType.acceptsTranscriptionPrompt,
+            )
+        }
+
+        fun stt(providerType: ProviderType, realtime: Boolean = false): ModelCapabilities = ModelCapabilities(
+            stt = true,
+            realtime = realtime,
+            vocabulary = providerType.acceptsTranscriptionPrompt,
+        )
+    }
+}
+
+/** OpenAI-compatible transcription endpoints accept a `prompt` (vocabulary) field. */
+val ProviderType.acceptsTranscriptionPrompt: Boolean
+    get() = this == ProviderType.OPENAI || this == ProviderType.CUSTOM
+
 data class ModelConfig(
     val id: String,
     val name: String,
-    val isThinking: Boolean = false,
-    val kind: ModelKind = ModelKind.TEXT,
-    val streamingPartialsSupported: Boolean = false,
-)
+    val capabilities: ModelCapabilities = ModelCapabilities.TEXT,
+) {
+    // Legacy mirrors of [capabilities], persisted so older app versions can still read providers
+    // and backups. Never read them in new code.
+    @Deprecated("Use capabilities.thinking")
+    val isThinking: Boolean = capabilities.thinking
+
+    @Deprecated("Use capabilities")
+    val kind: ModelKind = capabilities.legacyKind
+
+    @Deprecated("Use capabilities.realtime")
+    val streamingPartialsSupported: Boolean = capabilities.realtime
+}
 
 data class ServiceProvider(
     val id: String = UUID.randomUUID().toString(),
@@ -63,6 +138,6 @@ data class LanguageProfile(
     val languageCode: String,
     val transcriptionProviderId: String,
     val transcriptionModelId: String,
-    val smartFixProviderId: String,
-    val smartFixModelId: String
+    @SerializedName("smartFixProviderId") val enhancementProviderId: String,
+    @SerializedName("smartFixModelId") val enhancementModelId: String,
 )

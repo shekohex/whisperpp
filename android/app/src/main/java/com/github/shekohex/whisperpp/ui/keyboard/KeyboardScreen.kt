@@ -688,7 +688,7 @@ fun KeyboardScreen(
                                     )
                                 }
                             }
-                            KeyboardState.Ready, KeyboardState.Transcribing, KeyboardState.SmartFixing -> {
+                            KeyboardState.Ready, KeyboardState.Transcribing, KeyboardState.Enhancing -> {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     IconButton(onClick = onOpenSettings) {
                                         Icon(
@@ -823,7 +823,7 @@ fun KeyboardScreen(
                         }
                     }
 
-                    AnimatedVisibility(visible = state == KeyboardState.Transcribing || state == KeyboardState.SmartFixing) {
+                    AnimatedVisibility(visible = state == KeyboardState.Transcribing || state == KeyboardState.Enhancing) {
                         IconButton(onClick = onCancelAction) {
                             Icon(
                                 Icons.Default.Close,
@@ -1111,7 +1111,7 @@ fun StatusContent(state: KeyboardState, level: () -> Float, recordingTimeMs: () 
             KeyboardState.Transcribing -> {
                 TranscribingStatus()
             }
-            KeyboardState.SmartFixing -> {
+            KeyboardState.Enhancing -> {
                 WhimsicalStatus()
             }
         }
@@ -1279,7 +1279,7 @@ fun MainActionButton(
             KeyboardState.Ready,
             KeyboardState.Recording,
             KeyboardState.Transcribing,
-            KeyboardState.SmartFixing,
+            KeyboardState.Enhancing,
             -> Icons.Default.Mic
         }
     }
@@ -1292,7 +1292,7 @@ fun MainActionButton(
                 KeyboardState.Recording -> R.string.record_button_recording
                 KeyboardState.RecordingLocked -> R.string.record_button_locked
                 KeyboardState.Paused, KeyboardState.PausedLocked -> R.string.record_button_paused
-                KeyboardState.Transcribing, KeyboardState.SmartFixing -> R.string.record_button_busy
+                KeyboardState.Transcribing, KeyboardState.Enhancing -> R.string.record_button_busy
             }
         }
     )
@@ -1320,7 +1320,7 @@ fun MainActionButton(
             resumeLabel to RecordIntent.Resume,
             cancelLabel to RecordIntent.Cancel,
         )
-        KeyboardState.Transcribing, KeyboardState.SmartFixing -> emptyList()
+        KeyboardState.Transcribing, KeyboardState.Enhancing -> emptyList()
     }
     val a11yModifier = Modifier.semantics(mergeDescendants = true) {
         contentDescription = description

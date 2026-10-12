@@ -74,7 +74,7 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.LANGUAGE_CODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.POSTPROCESSING
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PROMPT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN
-import com.github.shekohex.whisperpp.data.PreferenceKeys.SMART_FIX_TEMPERATURE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_TEMPERATURE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED
@@ -91,7 +91,12 @@ import com.github.shekohex.whisperpp.domain.dictation.DictationSession
 import com.github.shekohex.whisperpp.domain.dictation.SessionEvent
 import com.github.shekohex.whisperpp.domain.dictation.SessionState
 import com.github.shekohex.whisperpp.domain.dictation.TextCommitter
-import com.github.shekohex.whisperpp.domain.dictation.TranscriptionRequest
+import com.github.shekohex.whisperpp.domain.providers.EnhancementRequest
+import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
+import com.github.shekohex.whisperpp.domain.providers.ScriptConversion
+import com.github.shekohex.whisperpp.domain.providers.ThinkingConfig
+import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
+import com.github.shekohex.whisperpp.domain.providers.toProviderUserMessage
 import com.github.shekohex.whisperpp.domain.dictation.toKeyboardState
 import com.github.shekohex.whisperpp.ime.DictationEnhancementStep
 import com.github.shekohex.whisperpp.ime.DictationStartPlanner
@@ -114,6 +119,7 @@ import com.github.shekohex.whisperpp.ui.keyboard.KeyboardScreen
 import com.github.shekohex.whisperpp.ui.keyboard.RecordIntent
 import com.github.shekohex.whisperpp.ui.theme.WhisperToInputTheme
 import java.io.File
+import java.io.IOException
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -144,8 +150,8 @@ private const val AUTO_SWITCH_BACK_DELAY_MS = 150L
 class WhisperInputService : InputMethodService() {
     private val dataStore: DataStore<Preferences>
         get() = appContainer.settingsDataStore
-    private val whisperTranscriber: WhisperTranscriber by lazy { WhisperTranscriber(appContainer.okHttpClient) }
-    private lateinit var smartFixer: SmartFixer
+    private val providerFactory: ProviderFactory
+        get() = appContainer.providerFactory
     private val serviceScope = MainScope() + Dispatchers.Main.immediate
     private lateinit var audioRecorder: AudioRecorder
     private lateinit var audioFocus: AudioFocusController
@@ -248,7 +254,6 @@ class WhisperInputService : InputMethodService() {
         )
         soundCues = SoundCues(this, serviceScope, repository.soundEffectsEnabled)
         serviceScope.launch { repository.tapToRecord.collect { tapToRecord.value = it } }
-        smartFixer = SmartFixer(this, container.okHttpClient)
         configLoader = RuntimeConfigLoader(dataStore, repository)
         disclosureGate = FirstUseDisclosureGate(dataStore, serviceScope)
         startPlanner = createStartPlanner()
@@ -260,7 +265,7 @@ class WhisperInputService : InputMethodService() {
                 recorder = AudioRecorderSource(audioRecorder),
                 focus = audioFocus,
                 cues = soundCues::play,
-                transcriber = { file, request -> whisperTranscriber.transcribe(this, file, request) },
+                transcriber = ::transcribe,
                 enhancer = createEnhancementStep(),
                 committer = textCommitter,
                 planner = startPlanner::plan,
@@ -365,6 +370,7 @@ class WhisperInputService : InputMethodService() {
             config = configLoader,
             secretsStore = secretsStore,
             okHttpClient = appContainer.okHttpClient,
+            providers = providerFactory,
             awaitMigrations = { appContainer.awaitMigrations(MIGRATIONS_WAIT_MS) },
             awaitSendPolicy = { sendPolicyRules.first { it != null } },
             isSendBlocked = ::shouldBlockExternalSend,
@@ -374,7 +380,7 @@ class WhisperInputService : InputMethodService() {
                 micPermissionGate.check(MicPermissionGate.ACTION_DICTATION) { onPressStart(locked = true) }
             },
             recordingFile = ::recordingFile,
-            defaultPostprocessing = { getString(R.string.settings_option_no_conversion) },
+            scriptConversion = ::scriptConversion,
             audioMediaType = AUDIO_MEDIA_TYPE_WAV,
             onBlocked = ::handleBlockedExternalSendAction,
             onSetupRequired = ::showSetupRequiredToast,
@@ -385,16 +391,16 @@ class WhisperInputService : InputMethodService() {
 
     private fun createEnhancementStep() = DictationEnhancementStep(
         DictationEnhancementStep.Deps(
+            context = this,
             config = configLoader,
             enhancementPresetId = repository.enhancementPresetId,
-            secretsStore = secretsStore,
-            smartFixer = smartFixer,
+            providers = providerFactory,
             runner = EnhancementRunner(),
             disclosures = disclosureGate,
             blockedNotice = { if (shouldBlockExternalSend()) blockedNotice() else null },
             onWarning = { showEnhancementNotice(it, EnhancementNoticeStyle.INFO) },
             onRequestSent = { performFeedback() },
-            defaultPrompt = ::readSmartFixDefaultPromptOrEmpty,
+            defaultPrompt = ::readEnhancementDefaultPromptOrEmpty,
         )
     )
 
@@ -408,6 +414,21 @@ class WhisperInputService : InputMethodService() {
     private fun deleteStaleRecordings() {
         recordingDir().listFiles { file -> file.name.startsWith(RECORDING_FILE_PREFIX) || file.name == "recorded.wav" }
             ?.forEach { it.delete() }
+    }
+
+    /** Batch transcription via [ProviderFactory]; failures carry a user-facing message. */
+    private suspend fun transcribe(file: File, request: TranscriptionRequest): Result<String> {
+        return providerFactory.transcribe(file, request).fold(
+            onSuccess = { Result.success(it.text + if (request.addTrailingSpace) " " else "") },
+            onFailure = { Result.failure(IOException(it.toProviderUserMessage(this), it)) },
+        )
+    }
+
+    /** The post-processing preference stores the localized option label. */
+    private fun scriptConversion(stored: String?): ScriptConversion = when (stored) {
+        getString(R.string.settings_option_to_simplified) -> ScriptConversion.TO_SIMPLIFIED
+        getString(R.string.settings_option_to_traditional) -> ScriptConversion.TO_TRADITIONAL
+        else -> ScriptConversion.NONE
     }
 
     private fun observeSession() {
@@ -675,9 +696,9 @@ class WhisperInputService : InputMethodService() {
         }
     }
 
-    private fun readSmartFixDefaultPromptOrEmpty(): String {
+    private fun readEnhancementDefaultPromptOrEmpty(): String {
         return runCatching {
-            resources.openRawResource(R.raw.smart_fix_prompt).bufferedReader().use { it.readText() }
+            resources.openRawResource(R.raw.enhancement_prompt).bufferedReader().use { it.readText() }
         }.getOrDefault("")
     }
 
@@ -966,8 +987,6 @@ class WhisperInputService : InputMethodService() {
         // The recorder and clients are shared with dictation; never tear down a dictation run (F-08).
         if (!session.isBusy) {
             cancelCapture()
-            whisperTranscriber.stop()
-            smartFixer.cancel()
         }
 
         commandRunFocusKey = null
@@ -1221,25 +1240,21 @@ class WhisperInputService : InputMethodService() {
     private class CommandTranscriptionException(message: String) : Exception(message)
 
     private suspend fun transcribeCommandInstruction(runtimeConfig: CommandRuntimeConfig): String {
-        val provider = runtimeConfig.sttProvider.copy(
-            apiKey = secretsStore.getProviderApiKey(runtimeConfig.sttProvider.id).orEmpty(),
-        )
+        val provider = runtimeConfig.sttProvider
         val request = TranscriptionRequest(
             provider = provider,
             modelId = runtimeConfig.sttModelId,
             languageCode = runtimeConfig.languageCode,
-            mediaType = AUDIO_MEDIA_TYPE_WAV,
-            postprocessing = runtimeConfig.prefs[POSTPROCESSING] ?: getString(R.string.settings_option_no_conversion),
-            addTrailingSpace = false,
-            timeoutMs = provider.timeout,
-            staticPrompt = provider.prompt.ifEmpty { runtimeConfig.prefs[PROMPT] ?: "" },
+            prompt = provider.prompt.ifEmpty { runtimeConfig.prefs[PROMPT] ?: "" },
             temperature = provider.temperature,
-            useContext = false,
+            timeoutMs = provider.timeout.toLong(),
+            mediaType = AUDIO_MEDIA_TYPE_WAV,
+            scriptConversion = scriptConversion(runtimeConfig.prefs[POSTPROCESSING]),
         )
         val file = commandAudioFile ?: throw CommandTranscriptionException("No recording")
         commandAudioFile = null
         val result = try {
-            whisperTranscriber.transcribe(this, file, request)
+            transcribe(file, request)
         } finally {
             file.delete()
         }
@@ -1258,16 +1273,23 @@ class WhisperInputService : InputMethodService() {
             return
         }
 
-        if (runtimeConfig.textProvider.endpoint.isBlank()) {
+        val textProvider = runtimeConfig.textProvider
+        if (textProvider.endpoint.isBlank()) {
             cancelCommandMode(showError = true, message = getString(R.string.command_error_missing_endpoint))
             return
         }
-
-        val providerWithApiKey = runtimeConfig.textProvider.copy(
-            apiKey = secretsStore.getProviderApiKey(runtimeConfig.textProvider.id).orEmpty(),
-        )
-        if (providerWithApiKey.authMode == ProviderAuthMode.API_KEY && providerWithApiKey.apiKey.isBlank()) {
+        if (textProvider.authMode == ProviderAuthMode.API_KEY && !providerFactory.credentials(textProvider).hasApiKey) {
             cancelCommandMode(showError = true, message = getString(R.string.command_error_missing_api_key))
+            return
+        }
+        val textModel = textProvider.models.find { it.id == runtimeConfig.textModelId }
+        val enhancer = textModel?.let { providerFactory.enhancement(textProvider, it) }
+            ?.getOrElse { error ->
+                cancelCommandMode(showError = true, message = error.toProviderUserMessage(this))
+                return
+            }
+        if (enhancer == null) {
+            cancelCommandMode(showError = true, message = getString(R.string.command_error_setup_text))
             return
         }
 
@@ -1278,30 +1300,27 @@ class WhisperInputService : InputMethodService() {
             spokenInstruction = spokenInstruction,
         )
 
-        val temperature = if (runtimeConfig.textProvider.temperature > 0) {
-            runtimeConfig.textProvider.temperature
+        val temperature = if (textProvider.temperature > 0) {
+            textProvider.temperature
         } else {
-            runtimeConfig.prefs[SMART_FIX_TEMPERATURE] ?: 0.0f
+            runtimeConfig.prefs[ENHANCEMENT_TEMPERATURE] ?: 0.0f
         }
         val contextPrompt = if (runtimeConfig.useContext) currentInputConnection?.getTextBeforeCursor(500, 0)?.toString() else null
 
         setCommandStage(CommandStage.PROCESSING, null)
 
-        val transformed = try {
-            withContext(Dispatchers.IO) {
-                smartFixer.fix(
-                    text = confirmedText,
-                    contextInformation = contextPrompt,
-                    provider = providerWithApiKey,
-                    modelId = runtimeConfig.textModelId,
-                    temperature = temperature,
-                    promptTemplate = promptTemplate,
-                )
-            }
-        } catch (_: CancellationException) {
-            return
-        } catch (e: Exception) {
-            setCommandStage(CommandStage.ERROR, e.message ?: getString(R.string.command_error_transform_failed))
+        // Cancelling commandJob cancels the request (G-01).
+        val transformed = enhancer.enhance(
+            EnhancementRequest(
+                systemPrompt = promptTemplate,
+                userText = confirmedText,
+                contextPrompt = contextPrompt,
+                temperature = temperature,
+                thinking = ThinkingConfig.from(textProvider, textModel),
+                timeoutMs = textProvider.timeout.toLong(),
+            )
+        ).getOrElse { error ->
+            setCommandStage(CommandStage.ERROR, error.toProviderUserMessage(this))
             return
         }
 
@@ -1542,8 +1561,6 @@ class WhisperInputService : InputMethodService() {
         savedViewState = null
         session.release()
         resetCommandRunState()
-        whisperTranscriber.stop()
-        smartFixer.cancel()
         commandUndoJob?.cancel()
         commandUndoJob = null
         audioRecorder.release()

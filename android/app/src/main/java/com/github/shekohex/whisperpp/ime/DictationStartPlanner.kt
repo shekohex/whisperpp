@@ -16,8 +16,10 @@ import com.github.shekohex.whisperpp.dictation.OpenAiRealtimeSttClient
 import com.github.shekohex.whisperpp.dictation.OpenAiRealtimeStreamingSession
 import com.github.shekohex.whisperpp.domain.dictation.StartDecision
 import com.github.shekohex.whisperpp.domain.dictation.StartPlan
-import com.github.shekohex.whisperpp.domain.dictation.TranscriptionRequest
+import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
+import com.github.shekohex.whisperpp.domain.providers.ScriptConversion
 import com.github.shekohex.whisperpp.domain.providers.StreamingTranscriptionSession
+import com.github.shekohex.whisperpp.domain.providers.TranscriptionRequest
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import okhttp3.OkHttpClient
 import java.io.File
@@ -28,12 +30,14 @@ class DictationStartPlanner(private val deps: Deps) {
         val config: RuntimeConfigLoader,
         val secretsStore: SecretsStore,
         val okHttpClient: OkHttpClient,
+        val providers: ProviderFactory,
         val awaitMigrations: suspend () -> Boolean,
         val awaitSendPolicy: suspend () -> Unit,
         val isSendBlocked: () -> Boolean,
         val checkMicPermission: () -> Boolean,
         val recordingFile: () -> File,
-        val defaultPostprocessing: () -> String,
+        /** Maps the stored post-processing preference (null when unset) to a script conversion. */
+        val scriptConversion: (String?) -> ScriptConversion,
         val audioMediaType: String,
         val onBlocked: () -> Unit,
         val onSetupRequired: () -> Unit,
@@ -76,20 +80,24 @@ class DictationStartPlanner(private val deps: Deps) {
         if (selection.warnings.isNotBlank()) deps.onNotice(selection.warnings)
         if (!deps.checkMicPermission()) return StartDecision.PermissionRequired
 
+        // Unsupported provider/model combinations never reach the network (G-04).
+        if (deps.providers.transcription(selection.provider, selection.modelId).isFailure) {
+            deps.onSetupRequired()
+            return StartDecision.Abort
+        }
+
         val prefs = selection.prefs
-        val provider = selection.provider.copy(
-            apiKey = deps.secretsStore.getProviderApiKey(selection.provider.id).orEmpty(),
-        )
+        val provider = selection.provider
         val request = TranscriptionRequest(
             provider = provider,
             modelId = selection.modelId,
             languageCode = prefs[LANGUAGE_CODE] ?: "auto",
-            mediaType = deps.audioMediaType,
-            postprocessing = prefs[POSTPROCESSING] ?: deps.defaultPostprocessing(),
-            addTrailingSpace = prefs[ADD_TRAILING_SPACE] ?: false,
-            timeoutMs = provider.timeout,
-            staticPrompt = provider.prompt.ifEmpty { prefs[PROMPT] ?: "" },
+            prompt = provider.prompt.ifEmpty { prefs[PROMPT] ?: "" },
             temperature = provider.temperature,
+            timeoutMs = provider.timeout.toLong(),
+            mediaType = deps.audioMediaType,
+            scriptConversion = deps.scriptConversion(prefs[POSTPROCESSING]),
+            addTrailingSpace = prefs[ADD_TRAILING_SPACE] ?: false,
             useContext = prefs[USE_CONTEXT] ?: false,
         )
         return StartDecision.Proceed(
@@ -104,9 +112,10 @@ class DictationStartPlanner(private val deps: Deps) {
     /** Realtime partials for models flagged for streaming; batch stays authoritative (G-11, WP-2.5). */
     private fun createStreamingSession(provider: ServiceProvider, modelId: String): StreamingTranscriptionSession? {
         val model = provider.models.find { it.id == modelId }
-        if (model?.streamingPartialsSupported != true) return null
-        val request = if (provider.type == ProviderType.OPENAI && provider.apiKey.isNotBlank()) {
-            OpenAiRealtimeSttClient.buildRequest(provider.endpoint, modelId, provider.apiKey)
+        if (model?.capabilities?.realtime != true) return null
+        val apiKey = deps.secretsStore.getProviderApiKey(provider.id).orEmpty()
+        val request = if (provider.type == ProviderType.OPENAI && apiKey.isNotBlank()) {
+            OpenAiRealtimeSttClient.buildRequest(provider.endpoint, modelId, apiKey)
         } else {
             null
         }

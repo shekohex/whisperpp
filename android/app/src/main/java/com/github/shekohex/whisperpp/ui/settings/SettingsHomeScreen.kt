@@ -348,7 +348,7 @@ fun SettingsHomeScreen(
                             guidance = if (validation.isSttValid && validation.isTextValid) {
                                 "Review defaults, command override, and language-specific fallbacks."
                             } else {
-                                "Choose valid STT and text models before relying on dictation or Smart Fix."
+                                "Choose valid STT and text models before relying on dictation or enhancement."
                             },
                             onClick = { navController.navigate(SettingsScreen.ProviderSelections.route) },
                         )

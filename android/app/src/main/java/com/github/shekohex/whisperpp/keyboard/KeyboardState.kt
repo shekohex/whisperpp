@@ -7,7 +7,7 @@ enum class KeyboardState {
     Paused,
     PausedLocked,
     Transcribing,
-    SmartFixing,
+    Enhancing,
 }
 
 val KeyboardState.isRecording: Boolean

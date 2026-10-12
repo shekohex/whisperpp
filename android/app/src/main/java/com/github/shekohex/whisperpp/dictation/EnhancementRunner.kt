@@ -1,20 +1,32 @@
 package com.github.shekohex.whisperpp.dictation
 
+import com.github.shekohex.whisperpp.core.network.NetworkError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 
+/**
+ * Retry policy for one enhancement: attempts are spaced by at least [Config.minSpacingMs], retried
+ * with exponential backoff only for rate limits and 5xx (honouring `Retry-After`), and the whole run
+ * (attempts + waits) stays within the total budget. Each attempt is cancellable (G-01).
+ */
 class EnhancementRunner(
     private val config: Config = Config(),
+    private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
 ) {
     data class Config(
-        val balancedTimeoutMs: Long = 2_500L,
-        val quickRetryTimeoutMs: Long = 1_200L,
+        val totalBudgetMs: Long = 10_000L,
+        val minSpacingMs: Long = 1_000L,
+        val initialBackoffMs: Long = 1_000L,
+        val maxAttempts: Int = 3,
         val transientFailureClassifier: TransientFailureClassifier = DefaultTransientFailureClassifier,
     ) {
         init {
-            require(balancedTimeoutMs > 0)
-            require(quickRetryTimeoutMs > 0)
+            require(totalBudgetMs > 0)
+            require(minSpacingMs >= 0)
+            require(initialBackoffMs >= 0)
+            require(maxAttempts >= 1)
         }
     }
 
@@ -22,76 +34,67 @@ class EnhancementRunner(
         fun isTransient(t: Throwable): Boolean
     }
 
+    /**
+     * Runs [enhance] (given the time left for that attempt) until it succeeds, fails permanently or
+     * the budget ([budgetMs], default [Config.totalBudgetMs]) is spent.
+     */
     suspend fun run(
         rawText: String,
-        enhance: suspend (String) -> String,
+        budgetMs: Long = config.totalBudgetMs,
+        enhance: suspend (attemptTimeoutMs: Long) -> String,
     ): EnhancementOutcome {
         val skipReason = skipReason(rawText)
         if (skipReason != null) {
             return EnhancementOutcome.Skipped(skipReason)
         }
 
+        val deadline = clock() + budgetMs.coerceAtLeast(1)
         var attempts = 0
-        val firstAttempt = attempt(rawText, enhance, config.balancedTimeoutMs)
-        attempts += 1
-
-        when (firstAttempt) {
-            is AttemptResult.Success -> {
-                return EnhancementOutcome.Succeeded(firstAttempt.text, attempts)
+        while (true) {
+            val remaining = deadline - clock()
+            if (remaining <= 0) return EnhancementOutcome.Failed(FailureReason.Timeout, attempts)
+            attempts += 1
+            val failure = when (val result = attempt(enhance, remaining)) {
+                is AttemptResult.Success -> return EnhancementOutcome.Succeeded(result.text, attempts)
+                is AttemptResult.Failure -> result
             }
-            is AttemptResult.Failure -> {
-                if (firstAttempt.reason == FailureReason.Cancelled) {
-                    return EnhancementOutcome.Failed(FailureReason.Cancelled, attempts)
-                }
-                if (firstAttempt.reason is FailureReason.NonTransient) {
-                    return EnhancementOutcome.Failed(firstAttempt.reason, attempts)
-                }
+            val reason = failure.reason
+            if (reason !is FailureReason.Transient || attempts >= config.maxAttempts) {
+                return EnhancementOutcome.Failed(reason, attempts)
             }
-        }
-
-        val secondAttempt = attempt(rawText, enhance, config.quickRetryTimeoutMs)
-        attempts += 1
-
-        return when (secondAttempt) {
-            is AttemptResult.Success -> EnhancementOutcome.Succeeded(secondAttempt.text, attempts)
-            is AttemptResult.Failure -> EnhancementOutcome.Failed(secondAttempt.reason, attempts)
+            val wait = backoffMs(attempts, failure.retryAfterMs)
+            if (clock() + wait >= deadline) return EnhancementOutcome.Failed(reason, attempts)
+            delay(wait)
         }
     }
 
     private sealed interface AttemptResult {
         data class Success(val text: String) : AttemptResult
-        data class Failure(val reason: FailureReason) : AttemptResult
+        data class Failure(val reason: FailureReason, val retryAfterMs: Long? = null) : AttemptResult
     }
 
-    private suspend fun attempt(
-        rawText: String,
-        enhance: suspend (String) -> String,
-        timeoutMs: Long,
-    ): AttemptResult {
+    private fun backoffMs(attempts: Int, retryAfterMs: Long?): Long {
+        val exponential = config.initialBackoffMs shl (attempts - 1).coerceAtMost(MAX_BACKOFF_SHIFT)
+        return maxOf(config.minSpacingMs, exponential, retryAfterMs ?: 0L)
+    }
+
+    private suspend fun attempt(enhance: suspend (Long) -> String, timeoutMs: Long): AttemptResult {
         return try {
-            AttemptResult.Success(
-                withTimeout(timeoutMs) {
-                    enhance(rawText)
-                }
-            )
+            AttemptResult.Success(withTimeout(timeoutMs) { enhance(timeoutMs) })
         } catch (_: TimeoutCancellationException) {
             AttemptResult.Failure(FailureReason.Timeout)
-        } catch (_: CancellationException) {
-            AttemptResult.Failure(FailureReason.Cancelled)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: NetworkError.Timeout) {
+            AttemptResult.Failure(FailureReason.Timeout)
         } catch (t: Throwable) {
-            val message = safeErrorMessage(t)
+            val retryAfter = (t as? NetworkError.RateLimited)?.retryAfterMs
             if (config.transientFailureClassifier.isTransient(t)) {
-                AttemptResult.Failure(FailureReason.Transient(message))
+                AttemptResult.Failure(FailureReason.Transient(t), retryAfter)
             } else {
-                AttemptResult.Failure(FailureReason.NonTransient(message))
+                AttemptResult.Failure(FailureReason.NonTransient(t))
             }
         }
-    }
-
-    private fun safeErrorMessage(t: Throwable): String {
-        val name = t::class.java.simpleName.ifBlank { "Throwable" }
-        val message = t.message?.trim().orEmpty()
-        return if (message.isBlank()) name else "$name: $message"
     }
 
     private fun skipReason(rawText: String): SkipReason? {
@@ -116,12 +119,15 @@ class EnhancementRunner(
     }
 
     private companion object {
+        const val MAX_BACKOFF_SHIFT = 10
+
+        /** Rate limits and server errors are worth another try; auth, 4xx and bad input are not. */
         val DefaultTransientFailureClassifier = TransientFailureClassifier { t ->
-            if (t is TimeoutCancellationException) return@TransientFailureClassifier true
-            val message = t.message?.lowercase().orEmpty()
-            if ("429" in message) return@TransientFailureClassifier true
-            if ("rate" in message && "limit" in message) return@TransientFailureClassifier true
-            t is java.io.IOException
+            when (t) {
+                is NetworkError.RateLimited -> true
+                is NetworkError.Http -> t.status >= 500
+                else -> false
+            }
         }
     }
 }
@@ -139,7 +145,6 @@ enum class SkipReason {
 
 sealed interface FailureReason {
     object Timeout : FailureReason
-    object Cancelled : FailureReason
-    data class Transient(val message: String) : FailureReason
-    data class NonTransient(val message: String) : FailureReason
+    data class Transient(val error: Throwable) : FailureReason
+    data class NonTransient(val error: Throwable) : FailureReason
 }
