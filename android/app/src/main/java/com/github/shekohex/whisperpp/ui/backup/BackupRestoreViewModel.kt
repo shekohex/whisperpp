@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.BackupStatusStore
 import com.github.shekohex.whisperpp.data.ImportAnalysis
 import com.github.shekohex.whisperpp.data.RestoreMode
@@ -43,6 +44,8 @@ class BackupRestoreViewModel(
         val isExporting: Boolean = false,
         val isAnalyzingImport: Boolean = false,
         val isApplyingImport: Boolean = false,
+        /** Opt-in: add the transcript history (text only) to the next export. */
+        val includeHistory: Boolean = false,
     ) {
         val isBusy: Boolean get() = isExporting || isAnalyzingImport || isApplyingImport
     }
@@ -56,23 +59,28 @@ class BackupRestoreViewModel(
             credentialSink = it,
             gson = gson,
             currentAppVersionNameProvider = { appVersionName },
+            historySource = container.transcriptHistoryRepository,
         )
     }
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    fun setIncludeHistory(include: Boolean) = _state.update { it.copy(includeHistory = include) }
+
     fun onExportStarted() = _state.update { it.copy(isExporting = true) }
 
     fun onExportCancelled() = _state.update { it.copy(isExporting = false) }
 
     fun export(uri: Uri, password: String, exportedAtUtc: String, onMessage: (String) -> Unit) {
+        val includeHistory = _state.value.includeHistory
         viewModelScope.launch {
             try {
                 val envelope = repository.exportEncryptedBackup(
                     password = password,
                     appVersionName = appVersionName,
                     exportedAtUtc = exportedAtUtc,
+                    includeHistory = includeHistory,
                 )
                 withContext(Dispatchers.IO) {
                     val output = appContext.contentResolver.openOutputStream(uri)
@@ -80,11 +88,13 @@ class BackupRestoreViewModel(
                     output.use { it.write(gson.toJson(envelope).toByteArray()) }
                 }
                 val summary = "Last export ${formatBackupDisplayTime(exportedAtUtc)}"
+                val categoryCount = SETTINGS_BACKUP_CATEGORY_MANIFEST.count { it.includedByDefault || includeHistory }
+                val historyNote = if (includeHistory) " ${appContext.getString(R.string.backup_history_export_notice)}" else ""
                 _state.update {
                     it.copy(
                         exportNotice = BackupNotice(
                             title = "Encrypted backup ready",
-                            message = "$summary. All ${SETTINGS_BACKUP_CATEGORY_MANIFEST.size} categories were written to a .whisperpp-backup file.",
+                            message = "$summary. All $categoryCount categories were written to a .whisperpp-backup file.$historyNote",
                             tone = Tone.Success,
                         ),
                     )
@@ -169,7 +179,8 @@ class BackupRestoreViewModel(
             try {
                 val summary = repository.applyImportAnalysis(
                     analysis = analysis,
-                    includedCategoryIds = if (analysis.restoreMode == RestoreMode.MERGE) current.selectedMergeCategories else emptySet(),
+                    // Overwrite restores every default category; only opt-in ones (history) are picked here.
+                    includedCategoryIds = current.selectedMergeCategories,
                 )
                 val repairCount = summary.repairChecklist.size
                 val homeStatus = if (repairCount > 0) {

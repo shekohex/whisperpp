@@ -19,6 +19,10 @@ sealed interface Destination {
     @Serializable
     data object History : Destination
 
+    /** One transcript (raw vs enhanced, audio, re-enhance). */
+    @Serializable
+    data class HistoryDetail(val id: Long) : Destination
+
     @Serializable
     data object Dictionary : Destination
 

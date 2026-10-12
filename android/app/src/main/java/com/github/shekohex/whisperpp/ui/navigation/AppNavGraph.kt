@@ -16,6 +16,7 @@ import com.github.shekohex.whisperpp.ui.enhancement.EnhancementScreen
 import com.github.shekohex.whisperpp.ui.enhancement.PresetsScreen
 import com.github.shekohex.whisperpp.ui.enhancement.PromptEditScreen
 import com.github.shekohex.whisperpp.ui.enhancement.PromptsScreen
+import com.github.shekohex.whisperpp.ui.history.HistoryDetailScreen
 import com.github.shekohex.whisperpp.ui.history.HistoryScreen
 import com.github.shekohex.whisperpp.ui.home.HomeScreen
 import com.github.shekohex.whisperpp.ui.modes.ModesHubScreen
@@ -38,7 +39,10 @@ internal fun NavGraphBuilder.appGraph(
     }
     composable<Destination.Home> { HomeScreen(onNavigate = onNavigate) }
     composable<Destination.Modes> { ModesHubScreen(onNavigate = onNavigate) }
-    composable<Destination.History> { HistoryScreen() }
+    composable<Destination.History> { HistoryScreen(onNavigate = onNavigate) }
+    composable<Destination.HistoryDetail> { entry ->
+        HistoryDetailScreen(entryId = entry.toRoute<Destination.HistoryDetail>().id, onBack = onBack)
+    }
     composable<Destination.Dictionary> { DictionaryScreen() }
     composable<Destination.More> { MoreScreen(onNavigate = onNavigate) }
 

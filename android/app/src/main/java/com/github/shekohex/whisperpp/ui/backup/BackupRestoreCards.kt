@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -29,8 +31,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ImportAnalysis
 import com.github.shekohex.whisperpp.data.RestoreMode
 import com.github.shekohex.whisperpp.data.RestoreRepairArea
@@ -88,6 +93,29 @@ internal fun BackupCategoryRow(
                 contentDescription = null,
             )
         },
+    )
+}
+
+/** A checkbox row for content that is only exported / restored when the user opts in. */
+@Composable
+internal fun BackupOptInRow(
+    title: String,
+    summary: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+) {
+    ListItem(
+        modifier = Modifier.toggleable(
+            value = checked,
+            enabled = enabled,
+            role = Role.Checkbox,
+            onValueChange = onCheckedChange,
+        ),
+        headlineContent = { Text(title) },
+        supportingContent = { Text(summary) },
+        leadingContent = { Icon(Icons.Default.Security, contentDescription = null) },
+        trailingContent = { Checkbox(checked = checked, onCheckedChange = null, enabled = enabled) },
     )
 }
 
@@ -205,7 +233,19 @@ internal fun ImportPreviewCard(
                     fontWeight = FontWeight.SemiBold,
                 )
                 analysis.categoryPreviews.forEachIndexed { index, preview ->
-                    if (analysis.restoreMode == RestoreMode.MERGE && preview.selectable) {
+                    if (preview.isAvailable && !preview.includedByDefault) {
+                        // Opt-in category (transcript history): unchecked until the user asks for it.
+                        BackupOptInRow(
+                            title = stringResource(R.string.backup_history_restore_checkbox),
+                            summary = stringResource(
+                                R.string.backup_history_restore_summary,
+                                preview.importedItemCount,
+                                preview.existingItemCount,
+                            ),
+                            checked = selectedMergeCategories.contains(preview.categoryId),
+                            onCheckedChange = { onToggleCategory(preview.categoryId) },
+                        )
+                    } else if (analysis.restoreMode == RestoreMode.MERGE && preview.selectable) {
                         FilterChip(
                             selected = selectedMergeCategories.contains(preview.categoryId),
                             onClick = { onToggleCategory(preview.categoryId) },

@@ -41,8 +41,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.RestoreMode
 import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_MANIFEST
 import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS
@@ -116,6 +118,8 @@ fun BackupRestoreScreen(
                     appVersionName = viewModel.appVersionName,
                     notice = state.exportNotice,
                     isExporting = state.isExporting,
+                    includeHistory = state.includeHistory,
+                    onIncludeHistoryChange = viewModel::setIncludeHistory,
                     enabled = !state.isBusy,
                     onExport = { showExportPasswordDialog = true },
                 )
@@ -249,6 +253,8 @@ private fun ExportSection(
     appVersionName: String,
     notice: BackupNotice?,
     isExporting: Boolean,
+    includeHistory: Boolean,
+    onIncludeHistoryChange: (Boolean) -> Unit,
     enabled: Boolean,
     onExport: () -> Unit,
 ) {
@@ -266,7 +272,8 @@ private fun ExportSection(
             BackupIdentityRow(label = "App version", value = appVersionName, icon = Icons.Default.Backup)
             BackupIdentityRow(label = "Export timestamp", value = "Generated when you create the file", icon = Icons.Default.CheckCircle)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SETTINGS_BACKUP_CATEGORY_MANIFEST.forEachIndexed { index, category ->
+                val defaultCategories = SETTINGS_BACKUP_CATEGORY_MANIFEST.filter { it.includedByDefault }
+                defaultCategories.forEachIndexed { index, category ->
                     BackupCategoryRow(
                         title = category.label,
                         summary = if (category.id == SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS) {
@@ -276,10 +283,18 @@ private fun ExportSection(
                         },
                         sensitive = category.containsSensitiveContent,
                     )
-                    if (index != SETTINGS_BACKUP_CATEGORY_MANIFEST.lastIndex) {
+                    if (index != defaultCategories.lastIndex) {
                         HorizontalDivider()
                     }
                 }
+                HorizontalDivider()
+                BackupOptInRow(
+                    title = stringResource(R.string.backup_history_include_title),
+                    summary = stringResource(R.string.backup_history_include_summary),
+                    checked = includeHistory,
+                    onCheckedChange = onIncludeHistoryChange,
+                    enabled = enabled,
+                )
             }
             notice?.let { BackupNoticeCard(it.title, it.message, it.tone, noticeIcon(it, Icons.Default.CloudUpload)) }
             ProgressButton(
