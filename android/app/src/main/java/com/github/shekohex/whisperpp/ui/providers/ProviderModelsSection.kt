@@ -36,10 +36,13 @@ import androidx.compose.ui.unit.dp
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.data.ModelKind
+import com.github.shekohex.whisperpp.data.ProviderType
+import com.github.shekohex.whisperpp.providers.ModelClassifier
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsDropdown
 
 @Composable
 internal fun ProviderModelsSection(
+    providerType: ProviderType,
     models: List<ModelConfig>,
     isModelMissing: (ModelConfig) -> Boolean,
     discoveryEnabled: Boolean,
@@ -58,6 +61,7 @@ internal fun ProviderModelsSection(
     models.forEachIndexed { index, model ->
         ModelEditCard(
             model = model,
+            providerType = providerType,
             notFound = isModelMissing(model),
             onUpdate = { onUpdateModel(index, it) },
             onDelete = { onDeleteModel(index, model) },
@@ -90,6 +94,7 @@ internal fun ProviderModelsSection(
 @Composable
 private fun ModelEditCard(
     model: ModelConfig,
+    providerType: ProviderType,
     onUpdate: (ModelConfig) -> Unit,
     onDelete: () -> Unit,
     notFound: Boolean,
@@ -138,9 +143,15 @@ private fun ModelEditCard(
                 optionLabel = { kindLabels.getValue(it) },
                 onSelect = { onUpdate(model.copy(capabilities = model.capabilities.withKind(it))) },
             )
-            if (model.capabilities.stt) {
+            if (model.capabilities.stt && ModelClassifier.acceptsRealtimeFlag(providerType)) {
+                val hint = if (providerType == ProviderType.OPENAI) {
+                    R.string.provider_model_realtime_hint_openai
+                } else {
+                    R.string.provider_model_realtime_hint
+                }
                 CheckboxRow(
-                    text = stringResource(R.string.provider_model_streaming),
+                    text = stringResource(R.string.provider_model_realtime),
+                    supportingText = stringResource(hint),
                     checked = model.capabilities.realtime,
                     onCheckedChange = { onUpdate(model.copy(capabilities = model.capabilities.copy(realtime = it))) },
                 )
@@ -155,7 +166,12 @@ private fun ModelEditCard(
 }
 
 @Composable
-private fun CheckboxRow(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun CheckboxRow(
+    text: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    supportingText: String? = null,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -164,6 +180,15 @@ private fun CheckboxRow(text: String, checked: Boolean, onCheckedChange: (Boolea
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Checkbox(checked = checked, onCheckedChange = null, modifier = Modifier.minimumInteractiveComponentSize())
-        Text(text)
+        Column {
+            Text(text)
+            if (supportingText != null) {
+                Text(
+                    supportingText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }

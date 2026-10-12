@@ -83,6 +83,14 @@ object ModelClassifier {
     fun supportsRealtimeTranscription(id: String, providerType: ProviderType): Boolean =
         providerType.isCloudRealtime || isRealtimeTranscription(id.trim().substringAfterLast('/').lowercase(), providerType)
 
+    /**
+     * Providers whose models can carry the explicit "Realtime (WebSocket)" flag: OpenAI and any
+     * OpenAI-compatible gateway (CUSTOM) that exposes `/v1/realtime`. The Whisper ASR webservice and
+     * Gemini have no such endpoint here; the cloud realtime providers always stream.
+     */
+    fun acceptsRealtimeFlag(providerType: ProviderType): Boolean =
+        providerType == ProviderType.OPENAI || providerType == ProviderType.CUSTOM
+
     private fun isReasoning(name: String): Boolean {
         if (REASONING_PREFIXES.any { name.startsWith(it) }) return true
         if (REASONING_MARKERS.any { name.contains(it) }) return true

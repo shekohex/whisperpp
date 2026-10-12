@@ -185,6 +185,7 @@ fun ProviderEditScreen(
             )
             HorizontalDivider()
             ProviderModelsSection(
+                providerType = draft.type,
                 models = draft.models,
                 isModelMissing = { model ->
                     discoveryCache?.let { cache -> model.id.isNotBlank() && !cache.contains(model.id) } == true
