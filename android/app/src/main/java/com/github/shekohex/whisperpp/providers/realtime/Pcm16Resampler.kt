@@ -35,6 +35,25 @@ internal class Pcm16Resampler(private val inRate: Int, private val outRate: Int)
         return out.copyOf(written)
     }
 
+    /**
+     * Drains the samples held back for interpolation at the end of the stream (the last input sample
+     * is repeated, as there is no next one to interpolate towards). Call once, after the last chunk.
+     */
+    fun flush(): ByteArray {
+        val last = carry ?: return EMPTY
+        val out = ByteArray(((outRate.toLong() / inRate + 2) * 2).toInt())
+        var written = 0
+        while (position < outRate && written + 1 < out.size) {
+            out[written] = last.toByte()
+            out[written + 1] = (last shr 8).toByte()
+            written += 2
+            position += inRate
+        }
+        carry = null
+        position = 0
+        return out.copyOf(written)
+    }
+
     private fun sampleAt(pcm: ByteArray, previous: Int?, offset: Int, index: Int): Int {
         if (index < offset) return previous ?: 0
         val i = (index - offset) * 2
