@@ -4,6 +4,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -38,6 +40,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ServiceProvider
@@ -100,8 +104,11 @@ fun DictionarySettingsPane(
                 DictionarySettingsViewModel.Message.Exported -> resources.getString(R.string.dictionary_export_done)
                 DictionarySettingsViewModel.Message.ExportFailed -> resources.getString(R.string.dictionary_export_failed)
                 DictionarySettingsViewModel.Message.ImportFailed -> resources.getString(R.string.dictionary_import_failed)
-                is DictionarySettingsViewModel.Message.Imported ->
-                    resources.getString(R.string.dictionary_import_done, message.rules, message.terms)
+                is DictionarySettingsViewModel.Message.Imported -> resources.getString(
+                    R.string.dictionary_import_done_summary,
+                    resources.getQuantityString(R.plurals.dictionary_replacement_count, message.rules, message.rules),
+                    resources.getQuantityString(R.plurals.dictionary_vocabulary_count, message.terms, message.terms),
+                )
             }
         }
     }
@@ -144,6 +151,7 @@ data class DictionarySettingsActions(
     val onImport: () -> Unit,
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DictionarySettingsContent(
     settings: AutoLearnSettings,
@@ -181,7 +189,7 @@ fun DictionarySettingsContent(
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = Spacing.sm))
         SectionHeader(stringResource(R.string.dictionary_backup_section_title))
-        Row(
+        FlowRow(
             modifier = Modifier.padding(horizontal = Spacing.lg),
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
@@ -214,7 +222,11 @@ private fun AutoLearnOptions(
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         ReviewModelPickers(settings, providers, actions.onModelChange)
-        Text(stringResource(R.string.autolearn_schedule_title), style = MaterialTheme.typography.titleSmall)
+        Text(
+            text = stringResource(R.string.autolearn_schedule_title),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.semantics { heading() },
+        )
         ScheduleSelector(settings.reviewSchedule, actions.onScheduleChange)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(

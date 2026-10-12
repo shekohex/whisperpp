@@ -10,6 +10,7 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
 import com.github.shekohex.whisperpp.data.RuntimeChannel
 import com.github.shekohex.whisperpp.data.RuntimeConfigLoader
 import com.github.shekohex.whisperpp.data.ServiceProvider
+import com.github.shekohex.whisperpp.data.RuntimeWarning
 import com.github.shekohex.whisperpp.data.toNoticeText
 import com.github.shekohex.whisperpp.dictation.FocusKey
 import com.github.shekohex.whisperpp.domain.dictation.DictationOptions
@@ -42,6 +43,10 @@ class DictationStartPlanner(private val deps: Deps) {
         val onStreamingUnsupported: () -> Unit,
         /** Dictionary vocabulary; sent only to models with `capabilities.vocabulary`. */
         val vocabulary: suspend () -> List<String> = { emptyList() },
+        /** User-facing (localized) summary of resolver warnings for one channel. */
+        val describeWarnings: (List<RuntimeWarning>, RuntimeChannel) -> String = { warnings, channel ->
+            warnings.toNoticeText(channel)
+        },
     )
 
     class SttSelection(
@@ -62,7 +67,7 @@ class DictationStartPlanner(private val deps: Deps) {
             prefs = snapshot.prefs,
             provider = provider,
             modelId = modelId,
-            warnings = snapshot.effective.warnings.toNoticeText(RuntimeChannel.STT),
+            warnings = deps.describeWarnings(snapshot.effective.warnings, RuntimeChannel.STT),
             mode = snapshot.mode,
         )
     }

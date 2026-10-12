@@ -1,5 +1,6 @@
 package com.github.shekohex.whisperpp.ui.backup
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -25,10 +27,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.RestoreMode
 
 // TODO(WP-3.6): move the restore wizard steps into BackupRestoreViewModel with a sealed RestoreStage.
@@ -39,28 +49,28 @@ internal fun ExportPasswordDialog(onDismiss: () -> Unit, onConfirm: (String) -> 
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var visible by rememberSaveable { mutableStateOf(false) }
-    var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var error by rememberSaveable { mutableStateOf<Int?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Protect backup with a password") },
+        title = { Text(stringResource(R.string.backup_export_password_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "Every export is encrypted. Provider credentials can be included, so there is no plain export path.",
+                    text = stringResource(R.string.backup_export_password_message),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                PasswordField(password, "Backup password", visible) {
+                PasswordField(password, stringResource(R.string.backup_password_label), visible) {
                     password = it
                     error = null
                 }
-                PasswordField(confirmation, "Confirm password", visible) {
+                PasswordField(confirmation, stringResource(R.string.backup_password_confirm_label), visible) {
                     confirmation = it
                     error = null
                 }
-                error?.let { ErrorText(it) }
+                error?.let { ErrorText(stringResource(it)) }
                 TextButton(onClick = { visible = !visible }) {
-                    Text(if (visible) "Hide password" else "Show password")
+                    Text(stringResource(if (visible) R.string.backup_hide_password else R.string.backup_show_password))
                 }
             }
         },
@@ -68,18 +78,18 @@ internal fun ExportPasswordDialog(onDismiss: () -> Unit, onConfirm: (String) -> 
             TextButton(
                 onClick = {
                     when {
-                        password.isBlank() -> error = "Enter a password before creating the backup."
-                        password != confirmation -> error = "Passwords do not match."
+                        password.isBlank() -> error = R.string.backup_error_password_blank
+                        password != confirmation -> error = R.string.backup_error_password_mismatch
                         else -> onConfirm(password)
                     }
                 },
             ) {
-                Text("Continue")
+                Text(stringResource(R.string.backup_continue))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.component_cancel))
             }
         },
     )
@@ -88,7 +98,7 @@ internal fun ExportPasswordDialog(onDismiss: () -> Unit, onConfirm: (String) -> 
 /** Asks for the backup password before previewing; [error] comes from a failed decrypt. */
 @Composable
 internal fun ImportPasswordDialog(
-    error: String?,
+    @StringRes error: Int?,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
     onErrorCleared: () -> Unit,
@@ -98,31 +108,31 @@ internal fun ImportPasswordDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Unlock backup preview") },
+        title = { Text(stringResource(R.string.backup_import_password_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "Enter the password before previewing or applying anything from this backup.",
+                    text = stringResource(R.string.backup_import_password_message),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                PasswordField(password, "Backup password", visible) {
+                PasswordField(password, stringResource(R.string.backup_password_label), visible) {
                     password = it
                     onErrorCleared()
                 }
-                error?.let { ErrorText(it) }
+                error?.let { ErrorText(stringResource(it)) }
                 TextButton(onClick = { visible = !visible }) {
-                    Text(if (visible) "Hide password" else "Show password")
+                    Text(stringResource(if (visible) R.string.backup_hide_password else R.string.backup_show_password))
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(password) }) {
-                Text("Preview restore")
+                Text(stringResource(R.string.backup_preview_restore))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.component_cancel))
             }
         },
     )
@@ -139,23 +149,24 @@ internal fun RestoreModeSheet(onDismiss: () -> Unit, onSelect: (RestoreMode) -> 
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = "Choose how to restore this backup",
+                text = stringResource(R.string.backup_mode_sheet_title),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.semantics { heading() },
             )
             Text(
-                text = "Overwrite restores every category found in the file. Merge lets you preview and include or exclude whole categories before applying anything.",
+                text = stringResource(R.string.backup_mode_sheet_message),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             RestoreModeOption(
-                title = "Overwrite",
-                summary = "Replace every category present in the backup file.",
+                title = stringResource(R.string.backup_mode_overwrite),
+                summary = stringResource(R.string.backup_mode_overwrite_summary),
                 onClick = { onSelect(RestoreMode.OVERWRITE) },
             )
             RestoreModeOption(
-                title = "Merge",
-                summary = "Preview the backup first, then choose which categories to include. Imported values win conflicts.",
+                title = stringResource(R.string.backup_mode_merge),
+                summary = stringResource(R.string.backup_mode_merge_summary),
                 onClick = { onSelect(RestoreMode.MERGE) },
             )
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
@@ -165,7 +176,12 @@ internal fun RestoreModeSheet(onDismiss: () -> Unit, onSelect: (RestoreMode) -> 
 
 @Composable
 private fun ErrorText(text: String) {
-    Text(text = text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error,
+        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+    )
 }
 
 // TODO(WP-3.7): adopt shared components (SecureTextField).
@@ -182,6 +198,7 @@ private fun PasswordField(
         modifier = Modifier.fillMaxWidth(),
         label = { Text(label) },
         singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
     )
 }
@@ -195,7 +212,7 @@ private fun RestoreModeOption(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         tonalElevation = 2.dp,
     ) {

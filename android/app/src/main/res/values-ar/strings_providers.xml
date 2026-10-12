@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- WP-3.7 providers: provider list -->
+    <string name="provider_list_title">مزوّدو الخدمة</string>
+    <string name="provider_list_intro">أضِف المزوّدين أو اختبرهم هنا، ثم افتح «النماذج الافتراضية» لتحديد ما يستخدمه Whisper++.</string>
+    <string name="provider_list_active">المزوّد النشط</string>
+    <string name="provider_delete_named">حذف %1$s</string>
+    <plurals name="provider_models_configured">
+        <item quantity="zero">لا توجد نماذج مُعدّة</item>
+        <item quantity="one">نموذج واحد مُعدّ</item>
+        <item quantity="two">نموذجان مُعدّان</item>
+        <item quantity="few">%1$d نماذج مُعدّة</item>
+        <item quantity="many">%1$d نموذجًا مُعدًّا</item>
+        <item quantity="other">%1$d نموذج مُعدّ</item>
+    </plurals>
+    <string name="provider_delete_blocked_title">لا يمكن حذف هذا المزوّد</string>
+    <string name="provider_delete_blocked_message">‏%1$s مستخدَم في: %2$s. اختر مزوّدًا آخر أو امسح الاختيار أولًا.</string>
+    <string name="provider_go_to_selections">الانتقال إلى النماذج الافتراضية</string>
+    <string name="provider_add_custom">مزوّد مخصّص</string>
+    <string name="provider_add_presets">إعدادات جاهزة</string>
+    <string name="provider_list_separator">، </string>
+
+    <!-- Provider types -->
+    <string name="provider_type_custom">مخصّص</string>
+
+    <!-- Selection references -->
+    <string name="provider_selection_ref_dictation">الإملاء (تحويل الكلام إلى نص)</string>
+    <string name="provider_selection_ref_enhancement">التحسين (نص)</string>
+    <string name="provider_selection_ref_command">تجاوز الأوامر</string>
+
+    <!-- Provider editor -->
+    <string name="provider_edit_title_edit">تعديل المزوّد</string>
+    <string name="provider_edit_title_duplicate">نسخ المزوّد</string>
+    <string name="provider_edit_title_new">مزوّد جديد</string>
+    <string name="provider_duplicate">إنشاء نسخة</string>
+    <string name="provider_save">حفظ</string>
+    <string name="provider_edit_intro">يحفظ زر الحفظ هذا المزوّد لاستخدامه في النماذج الافتراضية والاختبارات. استخدم «اختبار» أو «اكتشاف النماذج» للتحقق من الإعداد قبل المغادرة.</string>
+    <string name="provider_name_label">اسم المزوّد</string>
+    <string name="provider_type_label">النوع</string>
+    <string name="provider_language_label">لغة التفريغ الصوتي</string>
+    <string name="provider_base_url_label">عنوان URL الأساسي</string>
+    <string name="provider_base_url_required">عنوان URL الأساسي مطلوب</string>
+    <string name="provider_base_url_invalid">استخدم عنوان https:// صالحًا</string>
+    <string name="provider_duplicate_warning">‏%1$s يستخدم بالفعل هذا النوع وعنوان URL الأساسي</string>
+    <string name="provider_auth_title">المصادقة</string>
+    <string name="provider_auth_api_key">مفتاح API</string>
+    <string name="provider_auth_none">بدون مصادقة</string>
+    <string name="provider_key_status_set_last4">تم تعيين مفتاح API (ينتهي بـ %1$s)</string>
+    <string name="provider_key_status_set">تم تعيين مفتاح API</string>
+    <string name="provider_key_status_reuse_last4">سيُعاد استخدام مفتاح API المنسوخ (ينتهي بـ %1$s)</string>
+    <string name="provider_key_status_reuse">سيُعاد استخدام مفتاح API المنسوخ</string>
+    <string name="provider_key_status_not_set">لم يتم تعيين مفتاح API</string>
+    <string name="provider_key_replace">استبدال مفتاح API</string>
+    <string name="provider_key_set">تعيين مفتاح API</string>
+    <string name="provider_key_clear">مسح المفتاح المحفوظ</string>
+
+    <!-- Provider tests -->
+    <string name="provider_test_title">اختبار</string>
+    <string name="provider_test_text">اختبار النص</string>
+    <string name="provider_test_stt">اختبار التفريغ الصوتي</string>
+    <string name="provider_test_custom_text">نموذج نص مخصّص</string>
+    <string name="provider_test_custom_stt">نموذج تفريغ مخصّص</string>
+    <string name="provider_test_pick_audio">اختيار ملف صوتي</string>
+    <string name="provider_test_change_audio">تغيير الملف الصوتي</string>
+    <string name="provider_test_text_model_id">معرّف نموذج النص</string>
+    <string name="provider_test_stt_model_id">معرّف نموذج التفريغ</string>
+    <string name="provider_test_running">جارٍ التشغيل…</string>
+    <string name="provider_test_text_title">اختبار النص</string>
+    <string name="provider_test_stt_title">اختبار التفريغ الصوتي</string>
+    <string name="provider_test_audio_open_failed">تعذّر فتح الملف الصوتي</string>
+    <string name="provider_test_model_required">معرّف النموذج مطلوب</string>
+    <string name="provider_test_empty_response">استجابة فارغة</string>
+
+    <!-- Provider tuning -->
+    <string name="provider_timeout_label">مهلة الانتظار (مللي ثانية)</string>
+    <string name="provider_temperature">درجة الحرارة: %1$s</string>
+    <string name="provider_prompt_label">موجّه النظام / السياق</string>
+    <string name="provider_thinking_title">التفكير</string>
+    <string name="provider_thinking_enable">تفعيل التفكير</string>
+    <string name="provider_thinking_mode">وضع التفكير</string>
+    <string name="provider_thinking_type_level">المستوى</string>
+    <string name="provider_thinking_type_budget">الميزانية (رموز)</string>
+    <string name="provider_thinking_level_label">مستوى التفكير</string>
+    <string name="provider_thinking_level_minimal">أدنى</string>
+    <string name="provider_thinking_level_low">منخفض</string>
+    <string name="provider_thinking_level_medium">متوسط</string>
+    <string name="provider_thinking_level_high">مرتفع</string>
+    <string name="provider_thinking_level_xhigh">مرتفع جدًا</string>
+    <plurals name="provider_thinking_budget_tokens">
+        <item quantity="zero">الميزانية: %1$d رمز</item>
+        <item quantity="one">الميزانية: رمز واحد</item>
+        <item quantity="two">الميزانية: رمزان</item>
+        <item quantity="few">الميزانية: %1$d رموز</item>
+        <item quantity="many">الميزانية: %1$d رمزًا</item>
+        <item quantity="other">الميزانية: %1$d رمز</item>
+    </plurals>
+
+    <!-- Provider models -->
+    <string name="provider_models_title">النماذج</string>
+    <string name="provider_model_add">إضافة نموذج</string>
+    <string name="provider_model_default_name">نموذج جديد</string>
+    <string name="provider_model_name">اسم النموذج</string>
+    <string name="provider_model_delete">حذف النموذج</string>
+    <string name="provider_model_id">معرّف النموذج (API)</string>
+    <string name="provider_model_kind">النوع</string>
+    <string name="provider_model_kind_stt">تحويل الكلام إلى نص</string>
+    <string name="provider_model_kind_text">نص</string>
+    <string name="provider_model_kind_multimodal">متعدد الوسائط</string>
+    <string name="provider_model_streaming">يدعم النتائج الجزئية المباشرة</string>
+    <string name="provider_model_thinking">نموذج تفكير</string>
+    <string name="provider_model_delete_blocked_title">لا يمكن حذف هذا النموذج</string>
+    <string name="provider_model_delete_blocked_message">‏%1$s مستخدَم في: %2$s. اختر نموذجًا آخر أو امسح الاختيار أولًا.</string>
+
+    <!-- Default model selections -->
+    <string name="provider_selections_intro">تُحفَظ الاختيارات فورًا. اختر مزوّدًا أولًا، ثم أحد نماذجه المتوافقة.</string>
+    <string name="provider_selections_advanced">متقدّم</string>
+    <string name="provider_label">المزوّد</string>
+    <string name="provider_model_label">النموذج</string>
+    <string name="provider_none">لا شيء</string>
+    <string name="provider_no_providers">لم تتم إضافة أي مزوّد</string>
+    <string name="provider_select_provider_first">اختر مزوّدًا أولًا</string>
+    <string name="provider_select_provider">اختر مزوّدًا</string>
+    <string name="provider_select_model">اختر نموذجًا</string>
+    <string name="provider_inherit">وراثة</string>
+    <string name="provider_inherit_enhancement">نفس اختيار التحسين</string>
+    <string name="provider_command_inherit_info">يستخدم وضع الأوامر اختيار التحسين افتراضيًا.</string>
+    <string name="provider_command_override_info">تم تعيين تجاوز للأوامر. امسحه ليتبع وضع الأوامر اختيار التحسين مجددًا.</string>
+    <string name="provider_command_provider">مزوّد الأوامر</string>
+    <string name="provider_command_model">نموذج الأوامر</string>
+
+    <!-- App mappings -->
+    <plurals name="apps_selected_count">
+        <item quantity="zero">لم يتم تحديد شيء</item>
+        <item quantity="one">تم تحديد عنصر واحد</item>
+        <item quantity="two">تم تحديد عنصرين</item>
+        <item quantity="few">تم تحديد %1$d عناصر</item>
+        <item quantity="many">تم تحديد %1$d عنصرًا</item>
+        <item quantity="other">تم تحديد %1$d عنصر</item>
+    </plurals>
+    <string name="apps_assign">تعيين</string>
+    <string name="apps_cancel_selection">إلغاء التحديد</string>
+    <string name="apps_multi_select">تحديد متعدد</string>
+    <string name="apps_search_group">البحث</string>
+    <string name="apps_search_label">البحث في التطبيقات المثبّتة</string>
+    <string name="apps_add_package_label">الإضافة باسم الحزمة</string>
+    <string name="apps_add">إضافة</string>
+    <string name="apps_installed_group">التطبيقات المثبّتة</string>
+    <string name="apps_no_matching">لا توجد تطبيقات مطابقة</string>
+    <string name="apps_profile_none">لا شيء</string>
+    <string name="apps_profile_missing">مفقود</string>
+    <string name="apps_profile_missing_description">الملف الشخصي مفقود</string>
+    <plurals name="apps_assigned">
+        <item quantity="zero">لم يُعيَّن الملف الشخصي لأي تطبيق</item>
+        <item quantity="one">تم تعيين الملف الشخصي لتطبيق واحد</item>
+        <item quantity="two">تم تعيين الملف الشخصي لتطبيقين</item>
+        <item quantity="few">تم تعيين الملف الشخصي لـ %1$d تطبيقات</item>
+        <item quantity="many">تم تعيين الملف الشخصي لـ %1$d تطبيقًا</item>
+        <item quantity="other">تم تعيين الملف الشخصي لـ %1$d تطبيق</item>
+    </plurals>
+    <string name="apps_assign_profile_title">تعيين ملف شخصي</string>
+    <string name="apps_no_append">بدون إضافة</string>
+    <string name="apps_mapping_title">ربط التطبيق</string>
+    <string name="apps_save">حفظ</string>
+    <string name="apps_saved">تم الحفظ</string>
+    <string name="apps_mapping_intro">يُطبَّق هذا الربط فور الحفظ. اترك أي حقل فارغًا لوراثة الإعدادات العامة.</string>
+    <string name="apps_group_app">التطبيق</string>
+    <string name="apps_group_profile">الملف الشخصي</string>
+    <string name="apps_group_prompt_append">إضافة إلى الموجّه</string>
+    <string name="apps_stt_override">تجاوز الإملاء (تحويل الكلام إلى نص)</string>
+    <string name="apps_text_override">تجاوز التحسين (نص)</string>
+    <string name="apps_mapping_removed">تمت إزالة الربط</string>
+    <string name="apps_remove_mapping">إزالة الربط</string>
+    <string name="apps_prompt_profile">ملف الموجّه</string>
+    <string name="apps_missing_profile_warning">لم يعد هذا الملف الشخصي موجودًا. سيستخدم التطبيق الإعدادات الافتراضية إلى أن تختار ملفًا آخر.</string>
+    <string name="apps_append">إضافة</string>
+    <string name="apps_append_disabled">الإضافة متوقفة لهذا التطبيق. يظل الموجّه الأساسي مطبَّقًا.</string>
+    <string name="apps_append_label">إضافة خاصة بالتطبيق (اختياري)</string>
+    <string name="apps_clear">مسح</string>
+
+    <!-- Per-language defaults -->
+    <string name="apps_language_add">إضافة لغة</string>
+    <string name="apps_language_intro">أضِف لغة عندما لا يكفي إعداد عام واحد. تُحفَظ التغييرات فور اختيارها.</string>
+    <string name="apps_languages_group">اللغات</string>
+    <string name="apps_language_empty">لا توجد إعدادات افتراضية للغات بعد</string>
+    <string name="apps_language_removed">تمت إزالة اللغة</string>
+    <string name="apps_language_added">تمت إضافة اللغة</string>
+    <string name="apps_language_exists">هذه اللغة موجودة بالفعل</string>
+    <string name="apps_language_subtitle">الإعدادات الافتراضية للتفريغ الصوتي والنص</string>
+    <string name="apps_language_expand">عرض الإعدادات</string>
+    <string name="apps_language_collapse">إخفاء الإعدادات</string>
+    <string name="apps_language_delete">حذف %1$s</string>
+    <string name="apps_language_code">رمز اللغة</string>
+    <string name="apps_language_code_hint">مثل: en أو en-US أو ar</string>
+
+    <!-- Enhancement -->
+    <string name="enhancement_title">التحسين</string>
+    <string name="enhancement_intro">تُطبَّق التغييرات فورًا. استخدم موجّهًا مخصّصًا فقط عندما لا يكفي التنظيف الافتراضي.</string>
+    <string name="enhancement_group_behavior">السلوك</string>
+    <string name="enhancement_use_context">استخدام السياق</string>
+    <string name="enhancement_custom_prompt">موجّه مخصّص</string>
+    <string name="enhancement_prompt_default">افتراضي</string>
+    <string name="enhancement_group_model">النموذج اللغوي</string>
+    <string name="enhancement_no_models">لا توجد نماذج</string>
+    <string name="enhancement_group_prompts">الموجّهات</string>
+    <string name="enhancement_custom_prompt_dialog">موجّه نظام مخصّص</string>
+
+    <!-- Presets -->
+    <string name="presets_intro">تُطبَّق تغييرات الإعدادات الجاهزة في المرة التالية لتشغيل التحسين أو الأوامر.</string>
+    <string name="presets_summary">%1$s • %2$s</string>
+
+    <!-- Prompts & profiles -->
+    <string name="prompts_save">حفظ</string>
+    <string name="prompts_saved">تم الحفظ</string>
+    <string name="prompts_intro">اضغط «حفظ» لتطبيق تعديلات الموجّه الأساسي. تتحدّث الملفات الشخصية وروابط التطبيقات عند تعديل عناصرها.</string>
+    <string name="prompts_base_group">الموجّه الأساسي العام</string>
+    <string name="prompts_base_label">الموجّه الأساسي</string>
+    <string name="prompts_base_hint">مثلًا: حسِّن الوضوح، وصحّح علامات الترقيم، وحافظ على الأسلوب.</string>
+    <string name="prompts_base_helper">يُستخدم أساسًا لموجّهات التحسين.</string>
+    <string name="prompts_profiles_group">ملفات الموجّهات</string>
+    <string name="prompts_delete_title">حذف الملف الشخصي؟</string>
+    <string name="prompts_delete_message">حذف «%1$s»؟ ستبقى روابط التطبيقات التي تستخدمه، وستعود إلى الإعدادات الافتراضية إلى أن تُحدَّث.</string>
+    <string name="prompts_delete">حذف</string>
+    <string name="prompts_deleted">تم حذف الملف الشخصي</string>
+    <string name="prompts_add">إضافة ملف شخصي</string>
+    <string name="prompts_add_summary">اسم وإضافة اختيارية إلى الموجّه</string>
+    <string name="prompts_empty_title">لا توجد ملفات شخصية بعد</string>
+    <string name="prompts_empty_body">أنشئ ملفًا لإعادة استخدام نص الإضافة إلى الموجّه في عدة تطبيقات.</string>
+    <string name="prompts_no_append">بدون إضافة</string>
+    <string name="prompts_edit_named">تعديل %1$s</string>
+    <string name="prompts_delete_named">حذف %1$s</string>
+    <string name="prompts_not_found">لم يتم العثور على الملف الشخصي</string>
+    <string name="prompts_new_title">ملف شخصي جديد</string>
+    <string name="prompts_edit_title">تعديل الملف الشخصي</string>
+    <string name="prompts_edit_intro">يُحفَظ هذا الملف فورًا لتتمكّن من استخدامه في روابط التطبيقات.</string>
+    <string name="prompts_group_profile">الملف الشخصي</string>
+    <string name="prompts_name">الاسم</string>
+    <string name="prompts_append_label">إضافة إلى الموجّه (اختياري)</string>
+
+    <!-- Dictation & audio settings -->
+    <string name="dictation_group_automation">التشغيل التلقائي</string>
+    <string name="dictation_auto_start">بدء التسجيل تلقائيًا</string>
+    <string name="dictation_auto_switch_back">الرجوع تلقائيًا إلى لوحة المفاتيح السابقة</string>
+    <string name="dictation_auto_transcribe">التفريغ تلقائيًا</string>
+    <string name="dictation_group_extras">إضافات</string>
+    <string name="dictation_trailing_space">إضافة مسافة في النهاية</string>
+    <string name="dictation_cancel_confirmation">التأكيد قبل الإلغاء</string>
+    <string name="dictation_audio_group_feedback">الاستجابة</string>
+    <string name="dictation_audio_haptics">الاهتزاز عند اللمس</string>
+    <string name="dictation_audio_sounds">المؤثرات الصوتية</string>
+</resources>

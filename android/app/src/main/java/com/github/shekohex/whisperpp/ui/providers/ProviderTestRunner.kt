@@ -2,6 +2,8 @@ package com.github.shekohex.whisperpp.ui.providers
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
+import androidx.annotation.StringRes
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.core.network.NetworkError
 import com.github.shekohex.whisperpp.data.ModelCapabilities
@@ -33,7 +35,7 @@ class ProviderTestRunner(
             .enhancement(provider, model, credentials)
             .mapCatching { enhancer -> enhancer.verify().getOrThrow() }
             .map { appContext.getString(R.string.provider_test_ok) }
-        return toResult(TEXT_TEST_TITLE, result)
+        return toResult(appContext.getString(TEXT_TEST_TITLE), result)
     }
 
     suspend fun stt(
@@ -42,10 +44,12 @@ class ProviderTestRunner(
         credentials: Credentials,
         audioUri: Uri,
     ): ProviderTestResult {
+        val title = appContext.getString(STT_TEST_TITLE)
         val (file, mimeType) = try {
             copyToCache(audioUri)
         } catch (e: IOException) {
-            return ProviderTestResult(STT_TEST_TITLE, null, "", e.message ?: "Unable to open audio file")
+            Log.w(TAG, "Couldn't read test audio", e)
+            return ProviderTestResult(title, null, "", appContext.getString(R.string.provider_test_audio_open_failed))
         }
         try {
             val request = TranscriptionRequest(
@@ -58,7 +62,7 @@ class ProviderTestRunner(
             val result = providerFactory
                 .transcription(provider, model, credentials)
                 .mapCatching { transcriber -> transcriber.transcribe(file, request).getOrThrow().text }
-            return toResult(STT_TEST_TITLE, result)
+            return toResult(title, result)
         } finally {
             withContext(Dispatchers.IO) { runCatching { file.delete() } }
         }
@@ -83,6 +87,14 @@ class ProviderTestRunner(
         }
         return toResult(title, verified.map { appContext.getString(R.string.provider_test_ok) })
     }
+
+    /** Result shown when a test is started without a model id. */
+    fun missingModel(@StringRes titleRes: Int): ProviderTestResult = ProviderTestResult(
+        title = appContext.getString(titleRes),
+        status = null,
+        body = "",
+        error = appContext.getString(R.string.provider_test_model_required),
+    )
 
     private suspend fun copyToCache(uri: Uri): Pair<File, String> = withContext(Dispatchers.IO) {
         val resolver = appContext.contentResolver
@@ -121,8 +133,12 @@ class ProviderTestRunner(
     )
 
     companion object {
-        const val TEXT_TEST_TITLE = "Text test"
-        const val STT_TEST_TITLE = "STT test"
+        @StringRes
+        val TEXT_TEST_TITLE: Int = R.string.provider_test_text_title
+
+        @StringRes
+        val STT_TEST_TITLE: Int = R.string.provider_test_stt_title
+        private const val TAG = "ProviderTestRunner"
         private const val STT_TEST_TIMEOUT_MS = 30_000L
 
         /** Test model: the configured one (if any) with the [capabilities] under test. */

@@ -10,13 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AutoFixHigh
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -24,7 +25,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,6 +34,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
@@ -41,8 +42,9 @@ import com.github.shekohex.whisperpp.data.TRANSFORM_PRESETS
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_CLEANUP
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
 import com.github.shekohex.whisperpp.data.presetById
-import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
 
@@ -59,19 +61,13 @@ fun PresetsScreen(
     var showEnhancementPicker by rememberSaveable { mutableStateOf(false) }
     var showCommandPicker by rememberSaveable { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            DetailTopBar(
-                title = stringResource(R.string.settings_transform_presets_title),
-                onBack = onBack,
-                helpTopic = SettingsHelpTopic.PRESETS,
-            )
-        },
-        contentWindowInsets = WindowInsets.statusBars,
-    ) { padding ->
+    PageScaffold(
+        title = stringResource(R.string.settings_transform_presets_title),
+        onBack = onBack,
+        actions = { SettingsHelpAction(SettingsHelpTopic.PRESETS) },
+    ) {
         Column(
             modifier = Modifier
-                .padding(padding)
                 .padding(horizontal = 16.dp)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
@@ -79,7 +75,7 @@ fun PresetsScreen(
         ) {
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "Preset changes apply to the next enhancement or command run.",
+                text = stringResource(R.string.presets_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -90,11 +86,11 @@ fun PresetsScreen(
                         supportingContent = {
                             val title = enhancementPreset?.let { stringResource(it.titleRes) }
                                 ?: stringResource(R.string.transform_preset_cleanup_title)
-                            Text("$title • ${stringResource(R.string.settings_transform_presets_enhancement_helper)}")
+                            Text(stringResource(R.string.presets_summary, title, stringResource(R.string.settings_transform_presets_enhancement_helper)))
                         },
                         leadingContent = { Icon(Icons.Default.AutoFixHigh, null) },
-                        trailingContent = { Icon(Icons.Default.ChevronRight, null) },
-                        modifier = Modifier.clickable { showEnhancementPicker = true },
+                        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) },
+                        modifier = Modifier.clickable(role = Role.Button) { showEnhancementPicker = true },
                     )
                     HorizontalDivider()
                     ListItem(
@@ -102,11 +98,11 @@ fun PresetsScreen(
                         supportingContent = {
                             val title = commandPreset?.let { stringResource(it.titleRes) }
                                 ?: stringResource(R.string.transform_preset_tone_rewrite_title)
-                            Text("$title • ${stringResource(R.string.settings_transform_presets_command_helper)}")
+                            Text(stringResource(R.string.presets_summary, title, stringResource(R.string.settings_transform_presets_command_helper)))
                         },
                         leadingContent = { Icon(Icons.Default.EditNote, null) },
-                        trailingContent = { Icon(Icons.Default.ChevronRight, null) },
-                        modifier = Modifier.clickable { showCommandPicker = true },
+                        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) },
+                        modifier = Modifier.clickable(role = Role.Button) { showCommandPicker = true },
                     )
                 }
             }
@@ -146,13 +142,17 @@ private fun PresetPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_transform_presets_picker_title)) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()).selectableGroup()) {
                 TRANSFORM_PRESETS.forEachIndexed { index, preset ->
                     ListItem(
                         headlineContent = { Text(stringResource(preset.titleRes)) },
                         supportingContent = { Text(stringResource(preset.descriptionRes)) },
                         leadingContent = { RadioButton(selected = selectedId == preset.id, onClick = null) },
-                        modifier = Modifier.clickable { onSelect(preset.id) },
+                        modifier = Modifier.selectable(
+                            selected = selectedId == preset.id,
+                            role = Role.RadioButton,
+                            onClick = { onSelect(preset.id) },
+                        ),
                     )
                     if (index < TRANSFORM_PRESETS.lastIndex) {
                         HorizontalDivider()

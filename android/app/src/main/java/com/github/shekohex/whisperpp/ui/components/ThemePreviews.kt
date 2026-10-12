@@ -12,6 +12,12 @@ import com.github.shekohex.whisperpp.ui.theme.WhisperTheme
 @Preview(name = "Dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 annotation class ThemePreviews
 
+/** Small phone, foldable/tablet width, and an Arabic RTL phone. Use on main screens. */
+@Preview(name = "360dp", widthDp = 360, heightDp = 800, showBackground = true)
+@Preview(name = "840dp", widthDp = 840, heightDp = 900, showBackground = true)
+@Preview(name = "RTL 360dp", widthDp = 360, heightDp = 800, showBackground = true, locale = "ar")
+annotation class WidthPreviews
+
 @Composable
 internal fun PreviewSurface(content: @Composable () -> Unit) {
     WhisperTheme(darkTheme = isSystemInDarkTheme(), dynamicColor = false) {

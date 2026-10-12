@@ -27,6 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.modes.LegacyModesMigration
@@ -72,7 +75,11 @@ private fun LegacyMigrationContent(
             .padding(bottom = Spacing.xl),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
-        Text(stringResource(R.string.modes_migration_title), style = MaterialTheme.typography.titleLarge)
+        Text(
+            text = stringResource(R.string.modes_migration_title),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.semantics { heading() },
+        )
         Text(
             text = stringResource(R.string.modes_migration_body),
             style = MaterialTheme.typography.bodyMedium,
@@ -118,7 +125,13 @@ private fun LegacyMigrationContent(
         }
         Button(onClick = onMigrate, enabled = !migrating, modifier = Modifier.fillMaxWidth()) {
             if (migrating) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                val progressDescription = stringResource(R.string.modes_migration_in_progress)
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .size(18.dp)
+                        .semantics { contentDescription = progressDescription },
+                    strokeWidth = 2.dp,
+                )
             } else {
                 Text(stringResource(R.string.modes_migration_migrate_now))
             }

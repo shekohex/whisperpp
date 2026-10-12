@@ -1,16 +1,10 @@
 <resources>
     <!-- General -->
-    <string name="app_name">Whisper++</string>
-    <string name="enter_text">Enter Text</string>
-    <string name="whisper_to_input">Whisper++</string>
+    <string name="app_name" translatable="false">Whisper++</string>
     <string name="language_auto_label">Auto</string>
-    <string name="empty_string" />
     <string name="loading">Loading…</string>
 
     <!-- Keyboard -->
-    <string name="recording">Recording</string>
-    <string name="transcribing">Transcribing</string>
-    <string name="paused">Paused</string>
     <string name="input_ready">Ready</string>
     <string name="input_recording">Recording</string>
     <string name="input_paused">Paused</string>
@@ -19,17 +13,11 @@
     <string name="live_audio_level">Live audio level</string>
     <string name="input_enhancing">Enhancing</string>
     <string name="toast_transcription_empty">Transcription was empty</string>
-    <string name="toast_setup_required_stt">Setup required: select STT provider + model in Settings</string>
+    <string name="toast_setup_required_stt">Setup required: choose a dictation provider and model in Settings</string>
     <string name="cancel_confirmation_title">Cancel recording?</string>
     <string name="cancel_confirmation_message">This will discard the current audio.</string>
     <string name="cancel_confirmation_confirm">Cancel</string>
     <string name="cancel_confirmation_dismiss">Keep</string>
-    <string name="start_speech_to_text">Start speech-to-text.</string>
-    <string name="start_transcribing">Start transcribing.</string>
-    <string name="grant_microphone_permission">Grant Microphone Permission</string>
-    <string name="mic_permission_required">Whisper++ requires microphone permission to work.</string>
-    <string name="notification_permission_required">Whisper++ requires notification permission to work.</string>
-    <string name="microphone">Microphone</string>
     <string name="mic_permission_title">Microphone access</string>
     <string name="mic_permission_rationale">Whisper++ uses the microphone only while you dictate.</string>
     <string name="mic_permission_denied_rationale">Microphone access is turned off. Allow it in app settings to dictate.</string>
@@ -38,9 +26,6 @@
     <string name="mic_permission_open_settings">Open settings</string>
     <string name="mic_permission_needed">Microphone access needed</string>
     <string name="mic_permission_allow_description">Allow microphone access</string>
-    <string name="settings_mic_permission_rationale">Grant microphone access so Whisper++ can record while you dictate.</string>
-    <string name="settings_mic_permission_denied">Microphone access was denied. Open app settings to allow it.</string>
-    <string name="successfully_set">Successfully set!</string>
     <string name="backspace_button_hint">Backspace Button</string>
     <string name="long_press_hint">Long press to record</string>
     <string name="slide_to_cancel">Slide to cancel</string>
@@ -60,9 +45,7 @@
     <string name="record_action_resume">Resume recording</string>
     <string name="cancel_processing">Cancel</string>
     <string name="undo">Undo</string>
-    <string name="btn_previous_ime_hint">Switch To Previous Input Method</string>
     <string name="btn_settings_hint">Open Settings</string>
-    <string name="generate_logcat">Generate Recent Logcat</string>
     <string name="secure_field_sending_stopped">Secure field: sending stopped</string>
     <string name="secure_field_sheet_title">External sending is disabled</string>
     <string name="secure_field_sheet_description">Whisper++ blocks dictation and enhancement in this field to protect private input.</string>
@@ -81,7 +64,6 @@
     <string name="command_key_hint">Command</string>
     <string name="command_cancel">Cancel</string>
     <string name="command_retry">Retry</string>
-    <string name="command_close">Close</string>
     <string name="command_stop_listening">Stop</string>
 
     <string name="command_stage_waiting">Command mode</string>
@@ -100,7 +82,10 @@
     <string name="command_clipboard_sheet_recovery">Recovery: select text in the editor or copy text, then try again.</string>
     <string name="command_clipboard_sheet_preview_label">Preview</string>
     <string name="command_clipboard_sheet_char_count">Characters: %1$d</string>
-    <string name="command_clipboard_sheet_large_warning">Large clipboard text (%1$d characters). This may take longer.</string>
+    <plurals name="command_clipboard_sheet_large_warning">
+        <item quantity="one">Large clipboard text (%1$d character). This may take longer.</item>
+        <item quantity="other">Large clipboard text (%1$d characters). This may take longer.</item>
+    </plurals>
     <string name="command_clipboard_sheet_attempts_remaining">Attempts remaining: %1$d</string>
     <string name="command_clipboard_sheet_continue">Continue</string>
     <string name="command_clipboard_sheet_refresh">Refresh</string>
@@ -109,12 +94,11 @@
     <string name="command_preset_picker_helper">Preset and spoken instruction both apply. Spoken instruction overrides when conflicting.</string>
     <string name="command_error_focus_changed">Focus changed; command mode cancelled.</string>
     <string name="command_error_permissions">Microphone permission required.</string>
-    <string name="command_error_setup_stt">Setup required: select STT provider + model in Settings</string>
+    <string name="command_error_setup_stt">Setup required: choose a dictation provider and model in Settings</string>
     <string name="command_error_setup_text">Setup required: select text provider + model in Settings</string>
     <string name="command_error_missing_text">Command mode needs text to transform.</string>
     <string name="command_error_missing_endpoint">Command unavailable: missing endpoint.</string>
     <string name="command_error_missing_api_key">Command unavailable: missing API key.</string>
-    <string name="command_error_transform_failed">Command failed.</string>
     <string name="command_error_no_input_connection">Cannot edit text here.</string>
     <string name="command_error_empty_result">Result was empty.</string>
     <string name="command_error_apply_failed">Cannot apply result here.</string>
@@ -126,79 +110,10 @@
     <string name="error_insecure_http_endpoint">Error: Insecure HTTP is only allowed for local-network servers. Use an https:// endpoint.</string>
     <string name="provider_url_insecure_http_local_only">Insecure HTTP is only allowed for local-network servers</string>
 
-    <!-- Settings -->
-    <string name="whisper_to_input_settings_title">Whisper++ Settings</string>
-    <string name="settings_btn_apply">Apply</string>
-    <string name="menu_open_settings">Open Settings</string>
-    <string name="menu_auto_recording_start">Auto Recording Start</string>
-    <string name="menu_auto_switch_back">Auto Switch Back</string>
-    <string name="menu_switch_ime">Switch Keyboard</string>
-    <string name="settings_speech_to_text_backend">Speech to Text Backend</string>
-    <string name="settings_speech_to_text_backend_desc">Use the official OpenAI API, Whisper ASR Webservice, or NVIDIA NIM backend.</string>
-    <string name="settings_option_openai_api">OpenAI API</string>
-    <string name="settings_option_openai_api_default_endpoint">https://api.openai.com/v1/audio/transcriptions</string>
-    <string name="settings_option_openai_api_default_model">whisper-1</string>
-    <string name="settings_option_openai_api_default_language">auto</string>
-    <string name="settings_option_whisper_asr_webservice">Whisper ASR Webservice</string>
-    <string name="settings_option_whisper_asr_webservice_default_endpoint">http://localhost:9000/asr</string>
-    <string name="settings_option_whisper_asr_webservice_default_model"></string> <!-- Empty default model -->
-    <string name="settings_option_nvidia_nim">NVIDIA NIM</string>
-    <string name="settings_option_nvidia_nim_default_endpoint">http://localhost:9000/v1/audio/transcriptions</string>
-    <string name="settings_option_nvidia_nim_default_model"></string> <!-- Empty default model -->
-    <string name="settings_option_nvidia_nim_default_language">multi</string> <!-- Empty default language -->
-    <string-array name="settings_speech_to_text_backend_array">
-        <item>@string/settings_option_openai_api</item>
-        <item>@string/settings_option_whisper_asr_webservice</item>
-        <item>@string/settings_option_nvidia_nim</item>
-    </string-array>
-    <string name="settings_endpoint">Endpoint</string>
-    <string name="settings_endpoint_desc">The host and port for the OpenAI API, Whisper ASR Webservice, or NVIDIA NIM endpoint.</string>
-    <string name="settings_endpoint_hint"><![CDATA[e.g., http://<host>:<port>/asr]]></string>
-    <string name="settings_language_code">Language Code</string>
-    <string name="settings_language_code_desc">The language code to be included in the request payload (e.g., en, zh).</string>
-    <string name="settings_language_code_hint">Enter Language Code (e.g., en, zh)</string>
-    <string name="settings_api_key">API Key</string>
-    <string name="settings_api_key_desc">The official OpenAI API Key to be used in requests.</string>
-    <string name="settings_api_key_hint">Enter OpenAI API Key…</string>
-    <string name="settings_model">Model</string>
-    <string name="settings_model_desc">The model to use for transcription (e.g., whisper-1).</string>
-    <string name="settings_model_hint">Enter model name (e.g., whisper-1)</string>
-    <string name="settings_timeout">Request Timeout (ms)</string>
-    <string name="settings_timeout_desc">The timeout for transcription requests in milliseconds.</string>
-    <string name="settings_timeout_hint">Enter timeout in ms (default 10000)</string>
-    <string name="settings_prompt">Transcription Prompt</string>
-    <string name="settings_prompt_desc">Guide the model style/vocabulary (OpenAI/NIM only). Up to 224 tokens.</string>
-    <string name="settings_prompt_hint">e.g., Use academic terminology, specific names, or previous context…</string>
-    <string name="settings_use_context">Use Input Context</string>
-    <string name="settings_use_context_desc">Append text before cursor to the prompt for better continuity.</string>
-
     <!-- Enhancement -->
-    <string name="settings_enhancement_title">Enhancement</string>
     <string name="settings_enhancement_enabled">Enable enhancement</string>
-    <string name="settings_enhancement_enabled_desc">Clean up transcription using an LLM (OpenAI or Gemini).</string>
-    <string name="settings_enhancement_backend">Enhancement backend</string>
-    <string name="settings_enhancement_backend_openai">OpenAI Format</string>
-    <string name="settings_enhancement_backend_google">Google Gemini Format</string>
-    <string-array name="settings_enhancement_backend_array">
-        <item>@string/settings_enhancement_backend_openai</item>
-        <item>@string/settings_enhancement_backend_google</item>
-    </string-array>
-    <string name="settings_enhancement_endpoint">Enhancement endpoint</string>
-    <string name="settings_enhancement_endpoint_hint">e.g., https://api.openai.com/v1/chat/completions</string>
-    <string name="settings_enhancement_api_key">Enhancement API key</string>
-    <string name="settings_enhancement_openai_default_endpoint">https://api.openai.com/v1/chat/completions</string>
-    <string name="settings_enhancement_openai_default_model">gpt-4o-mini</string>
-    <string name="settings_enhancement_google_default_endpoint">https://generativelanguage.googleapis.com/v1beta</string>
-    <string name="settings_enhancement_google_default_model">gemini-2.5-flash-lite</string>
-    <string name="settings_enhancement_model">Enhancement model</string>
-    <string name="settings_enhancement_model_hint">e.g., gpt-4o-mini or gemini-1.5-flash</string>
-    <string name="settings_enhancement_temperature">Temperature</string>
-    <string name="settings_enhancement_prompt">Enhancement prompt</string>
-    <string name="settings_enhancement_prompt_desc">The instruction prompt for the LLM. Leave empty to use default.</string>
-    <string name="settings_enhancement_prompt_hint">Customize the cleanup rules…</string>
 
     <string name="settings_transform_presets_title">Transform presets</string>
-    <string name="settings_transform_presets_subtitle">Defaults for enhancement and command mode</string>
     <string name="settings_transform_presets_group_title">Defaults</string>
     <string name="settings_transform_presets_enhancement_label">Enhancement default</string>
     <string name="settings_transform_presets_command_label">Command default</string>
@@ -221,45 +136,8 @@
     <string name="transform_preset_tone_rewrite_title">Tone rewrite</string>
     <string name="transform_preset_tone_rewrite_description">Rewrite in a friendly, professional tone.</string>
 
-    <string name="settings_option_yes">Yes</string>
-    <string name="settings_option_no">No</string>
-    <string name="settings_auto_recording_start">Auto Recording Start</string>
-    <string name="settings_auto_recording_start_desc">Whether to automatically start recording upon opening the keyboard.</string>
-    <string-array name="settings_auto_recording_start_array">
-        <item>@string/settings_option_yes</item>
-        <item>@string/settings_option_no</item>
-    </string-array>
-    <string name="settings_auto_switch_back">Auto Switch Back</string>
-    <string name="settings_auto_switch_back_desc">Automatically switch back to the previous keyboard after transcription.</string>
-    <string-array name="settings_auto_switch_back_array">
-        <item>@string/settings_option_yes</item>
-        <item>@string/settings_option_no</item>
-    </string-array>
-    <string name="settings_auto_transcribe">Auto Transcribe</string>
-    <string name="settings_auto_transcribe_desc">Automatically start transcription when you release the mic button.</string>
-    <string name="settings_confirm_cancel">Confirm Cancel</string>
-    <string name="settings_confirm_cancel_desc">Ask before canceling recording or transcription.</string>
-    <string-array name="settings_confirm_cancel_array">
-        <item>@string/settings_option_yes</item>
-        <item>@string/settings_option_no</item>
-    </string-array>
-    <string name="settings_add_trailing_space">Add Trailing Space</string>
-    <string name="settings_add_trailing_space_desc">Whether to add a trailing space after the transcribed text.</string>
-    <string-array name="settings_add_trailing_space_array">
-        <item>@string/settings_option_yes</item>
-        <item>@string/settings_option_no</item>
-    </string-array>
-    <string name="settings_postprocessing">Postprocessing</string>
-    <string name="settings_postprocessing_desc">Choose how to handle text postprocessing.</string>
     <string name="settings_option_to_traditional">Convert to Traditional Chinese</string>
     <string name="settings_option_to_simplified">Convert to Simplified Chinese</string>
-    <string name="settings_option_no_conversion">No Conversion</string>
-    <string-array name="settings_postprocessing_array">
-        <item>@string/settings_option_to_traditional</item>
-        <item>@string/settings_option_to_simplified</item>
-        <item>@string/settings_option_no_conversion</item>
-    </string-array>
-    <string name="desc_space_bar">Space Bar</string>
 
     <!-- Updates -->
     <string name="update_available_title">Update Available</string>
@@ -267,7 +145,6 @@
     <string name="update_notification_channel_name">App Updates</string>
     <string name="update_notification_channel_description">Notifications for app updates</string>
     <string name="settings_update_channel">Update Channel</string>
-    <string name="settings_update_channel_desc">Choose between stable releases or nightly builds.</string>
     <string name="settings_update_channel_stable">Stable</string>
     <string name="settings_update_channel_nightly">Nightly</string>
     <string name="settings_check_for_updates">Check for Updates</string>
@@ -377,7 +254,6 @@
     <string name="nav_history">History</string>
     <string name="nav_dictionary">Dictionary</string>
     <string name="nav_more">More</string>
-    <string name="placeholder_coming_soon_title">Coming soon</string>
     <!-- WP-3.8b history -->
     <string name="history_search_hint">Search transcripts</string>
     <string name="history_search_clear">Clear search</string>
@@ -486,7 +362,7 @@
     <string name="modes_chip_not_set">Not set</string>
     <string name="modes_chip_keyboard_language">Keyboard language</string>
     <string name="modes_chip_enhancement_off">Enhancement off</string>
-    <string name="modes_chip_apps_more">%1$s +%2$d</string>
+    <string name="modes_chip_apps_more" translatable="false">%1$s +%2$d</string>
     <string name="modes_action_set_default">Set as default</string>
     <string name="modes_action_duplicate">Duplicate</string>
     <string name="modes_action_delete">Delete</string>
@@ -500,7 +376,6 @@
     <string name="modes_legacy_note_title">Still in use until you migrate</string>
     <string name="modes_legacy_note">These apply underneath your modes. After migrating they become modes and this section goes away.</string>
     <string name="modes_migration_banner_title">Turn your old rules into modes</string>
-    <string name="modes_migration_banner_body">%1$d app, language or prompt rules can become modes.</string>
     <string name="modes_migration_review">Review</string>
     <string name="modes_migration_title">Migrate to modes</string>
     <string name="modes_migration_body">Modes replace app mappings, per-language defaults and prompt presets. This is what will be converted:</string>
@@ -533,7 +408,6 @@
     <string name="modes_edit_name">Name</string>
     <string name="modes_edit_icon">Icon</string>
     <string name="modes_error_name_blank">Enter a name</string>
-    <string name="modes_error_name_long">Use at most %1$d characters</string>
     <string name="modes_error_name_duplicate">Another mode already has this name</string>
     <string name="modes_error_model_missing">Choose a model, or set the provider back to inherit</string>
     <string name="modes_inherit_global">Inherit (global)</string>
@@ -567,7 +441,6 @@
     <string name="modes_edit_apps">Apps</string>
     <string name="modes_edit_apps_helper">Typing in these apps uses this mode. An app belongs to one mode; adding it here moves it.</string>
     <string name="modes_edit_apps_add">Add apps</string>
-    <string name="modes_edit_apps_remove">Remove app</string>
     <string name="modes_edit_apps_picker_title">Choose apps</string>
     <string name="modes_edit_apps_search">Search apps</string>
     <string name="modes_edit_apps_used_by">Used by %1$s</string>
@@ -583,11 +456,9 @@
     <string name="modes_icon_code">Code</string>
     <string name="modes_icon_notes">Notes</string>
     <string name="modes_icon_custom">Custom</string>
-    <string name="keyboard_mode_chip_description">Mode: %1$s. Tap to change</string>
     <string name="keyboard_mode_picker_title">Mode</string>
     <string name="keyboard_mode_picker_helper">Applies until the keyboard closes or you switch apps.</string>
     <string name="keyboard_mode_default">Default</string>
-    <string name="keyboard_mode_active">Active</string>
     <string name="keyboard_mode_manage">Manage modes</string>
     <string name="more_title">More</string>
     <string name="more_ai_models_title">AI Models</string>
@@ -695,13 +566,11 @@
     <string name="home_momentum_keep_going">Nice pace. Keep it going this week.</string>
     <string name="home_momentum_on_a_roll">You’re on a roll this week.</string>
     <string name="home_hero_saved">You have saved %1$s with Whisper++</string>
-    <string name="home_hero_equivalent">Dictated %1$s words, equivalent to %2$s.</string>
-    <string name="home_hero_progress">Dictated %1$s words. %2$s words to go until %3$s.</string>
     <string name="home_hero_empty">Continue using Whisper++ to unlock stats and insights.</string>
     <string name="home_hero_view_insights">View insights</string>
     <string name="home_duration_hours_minutes">%1$dh %2$dm</string>
     <string name="home_duration_minutes">%1$dm</string>
-    <string name="home_milestone_times">%1$s ×%2$d</string>
+    <string name="home_milestone_times" translatable="false">%1$s ×%2$d</string>
     <string name="home_book_metamorphosis">The Metamorphosis</string>
     <string name="home_book_animal_farm">Animal Farm</string>
     <string name="home_book_great_gatsby">The Great Gatsby</string>
@@ -737,18 +606,15 @@
     <string name="insights_stat_time_saved">Time saved</string>
     <string name="insights_calendar_title">Activity calendar</string>
     <string name="insights_calendar_subtitle">Consistency, at a glance</string>
-    <string name="insights_calendar_summary">Active on %1$d of the last %2$d days.</string>
-    <string name="insights_calendar_busiest">Busiest day: %1$s with %2$d sessions.</string>
     <string name="insights_legend_less">Less</string>
     <string name="insights_legend_more">More</string>
     <string name="insights_peak_hours_title">Peak dictation hours</string>
     <string name="insights_peak_hours_subtitle">Sessions by hour of day</string>
-    <string name="insights_peak_hours_summary">Most active around %1$s (%2$d sessions).</string>
     <string name="insights_peak_hours_empty">No sessions in this period yet.</string>
     <string name="insights_model_usage_title">Model usage</string>
     <string name="insights_model_usage_subtitle">Share of transcriptions and enhancements per model</string>
     <string name="insights_model_other">Other</string>
-    <string name="insights_percent">%1$d%%</string>
+    <string name="insights_percent" translatable="false">%1$d%%</string>
     <string name="insights_model_performance_title">Model performance</string>
     <string name="insights_model_performance_subtitle">Average latency per model</string>
     <string name="insights_latency_transcription">Transcription</string>
@@ -774,7 +640,7 @@
     <string name="dictionary_edit_replacement">Edit replacement</string>
     <string name="dictionary_rule_format">%1$s → %2$s</string>
     <string name="dictionary_replacements_empty_title">No replacements yet</string>
-    <string name="dictionary_replacements_empty_body">Fix words the model keeps getting wrong, e.g. “whisper plus plus” → “Whisper++”. Replacements run before enhancement.</string>
+    <string name="dictionary_replacements_empty_body">Fix words the model keeps getting wrong, e.g. “chat GPT” → “ChatGPT”. Replacements run before enhancement.</string>
     <string name="dictionary_vocabulary_label">Add a term</string>
     <string name="dictionary_vocabulary_hint">Names, brands, jargon</string>
     <string name="dictionary_add_term">Add term</string>
@@ -799,7 +665,6 @@
     <string name="dictionary_import">Import dictionary</string>
     <string name="dictionary_export_done">Dictionary exported</string>
     <string name="dictionary_export_failed">Couldn\'t export the dictionary</string>
-    <string name="dictionary_import_done">Imported %1$d replacements and %2$d terms</string>
     <string name="dictionary_import_failed">That file isn\'t a valid dictionary export</string>
 
     <!-- Auto-Learn (§4.11) -->

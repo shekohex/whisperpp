@@ -1,5 +1,6 @@
 package com.github.shekohex.whisperpp.ui.settings.common
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,8 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.TipsAndUpdates
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -20,140 +21,143 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.github.shekohex.whisperpp.R
 
 private data class SettingsHelpContent(
-    val title: String,
-    val summary: String,
-    val tips: List<String>,
+    @StringRes val title: Int,
+    @StringRes val summary: Int,
+    val tips: List<Int>,
 )
 
 private fun settingsHelpContent(topic: SettingsHelpTopic): SettingsHelpContent {
     return when (topic) {
         SettingsHelpTopic.HOME -> SettingsHelpContent(
-            title = "Settings home",
-            summary = "Start with the setup banner, then use the grouped cards to open a focused settings area.",
+            title = R.string.settings_help_home_title,
+            summary = R.string.settings_help_home_summary,
             tips = listOf(
-                "Fix missing dictation or enhancement selections from Provider selections first.",
-                "Each card shows one short status line so you can spot stale setup quickly.",
-                "Import, export, and updates stay lower on the page so core setup remains first.",
+                R.string.settings_help_home_tip1,
+                R.string.settings_help_home_tip2,
+                R.string.settings_help_home_tip3,
             ),
         )
 
         SettingsHelpTopic.PROVIDERS -> SettingsHelpContent(
-            title = "Providers & models",
-            summary = "Add providers here, then choose which ones Whisper++ should use elsewhere.",
+            title = R.string.settings_help_providers_title,
+            summary = R.string.settings_help_providers_summary,
             tips = listOf(
-                "Provider selections controls the active STT and text defaults.",
-                "Keep model lists accurate so status summaries and validation stay useful.",
-                "If a provider is still selected, clear or reassign that selection before deleting it.",
+                R.string.settings_help_providers_tip1,
+                R.string.settings_help_providers_tip2,
+                R.string.settings_help_providers_tip3,
             ),
         )
 
         SettingsHelpTopic.PROVIDER_SELECTIONS -> SettingsHelpContent(
-            title = "Provider selections",
-            summary = "Choose the default dictation, enhancement, and optional command models Whisper++ should use.",
+            title = R.string.settings_help_provider_selections_title,
+            summary = R.string.settings_help_provider_selections_summary,
             tips = listOf(
-                "Pick a provider first, then choose one of its compatible models.",
-                "Leave command override empty to inherit the enhancement selection.",
-                "Per-language defaults can override these defaults for specific languages.",
+                R.string.settings_help_provider_selections_tip1,
+                R.string.settings_help_provider_selections_tip2,
+                R.string.settings_help_provider_selections_tip3,
             ),
         )
 
         SettingsHelpTopic.LANGUAGE_DEFAULTS -> SettingsHelpContent(
-            title = "Per-language defaults",
-            summary = "Create language-specific STT and text defaults when one global setup is not enough.",
+            title = R.string.settings_help_language_defaults_title,
+            summary = R.string.settings_help_language_defaults_summary,
             tips = listOf(
-                "Add only the languages you actually switch between.",
-                "Each language can override both dictation and enhancement defaults.",
-                "If a provider or model disappears later, revisit the rule and update it.",
+                R.string.settings_help_language_defaults_tip1,
+                R.string.settings_help_language_defaults_tip2,
+                R.string.settings_help_language_defaults_tip3,
             ),
         )
 
         SettingsHelpTopic.PROMPTS_PROFILES -> SettingsHelpContent(
-            title = "Prompts & profiles",
-            summary = "Shape how enhancement behaves globally, then reuse focused prompt profiles across apps.",
+            title = R.string.settings_help_prompts_profiles_title,
+            summary = R.string.settings_help_prompts_profiles_summary,
             tips = listOf(
-                "Base prompt text applies everywhere unless a screen says it inherits something else.",
-                "Profiles are reusable prompt append bundles for app mappings.",
-                "Use App mappings when one app needs a different profile or provider override.",
+                R.string.settings_help_prompts_profiles_tip1,
+                R.string.settings_help_prompts_profiles_tip2,
+                R.string.settings_help_prompts_profiles_tip3,
             ),
         )
 
         SettingsHelpTopic.APP_MAPPINGS -> SettingsHelpContent(
-            title = "App mappings",
-            summary = "Map individual apps to prompt profiles and optional provider overrides.",
+            title = R.string.settings_help_app_mappings_title,
+            summary = R.string.settings_help_app_mappings_summary,
             tips = listOf(
-                "Choose a profile when an app needs a different voice or cleanup style.",
-                "Overrides are optional; leave them empty to inherit the global defaults.",
-                "Manual package names are useful for apps that are not launchable from the picker.",
+                R.string.settings_help_app_mappings_tip1,
+                R.string.settings_help_app_mappings_tip2,
+                R.string.settings_help_app_mappings_tip3,
             ),
         )
 
         SettingsHelpTopic.PRESETS -> SettingsHelpContent(
-            title = "Transform presets",
-            summary = "Set the default preset for post-dictation enhancement and command mode transforms.",
+            title = R.string.settings_help_presets_title,
+            summary = R.string.settings_help_presets_summary,
             tips = listOf(
-                "Enhancement defaults apply after dictation when enhancement runs.",
-                "Command defaults shape selected-text transforms before your spoken instruction adds detail.",
-                "Changing a preset affects the next run; nothing is rewritten retroactively.",
+                R.string.settings_help_presets_tip1,
+                R.string.settings_help_presets_tip2,
+                R.string.settings_help_presets_tip3,
             ),
         )
 
         SettingsHelpTopic.DICTATION -> SettingsHelpContent(
-            title = "Keyboard behavior",
-            summary = "Tune how the IME behaves while recording, sending text, and giving feedback.",
+            title = R.string.settings_help_dictation_title,
+            summary = R.string.settings_help_dictation_summary,
             tips = listOf(
-                "Automation toggles affect how fast Whisper++ moves from recording to insertion.",
-                "UI extras keep typing behavior predictable across editors.",
-                "Feedback toggles are local-only and can be adjusted without touching provider setup.",
+                R.string.settings_help_dictation_tip1,
+                R.string.settings_help_dictation_tip2,
+                R.string.settings_help_dictation_tip3,
             ),
         )
 
         SettingsHelpTopic.ENHANCEMENT -> SettingsHelpContent(
-            title = "Enhancement",
-            summary = "Control enhancement behavior and the provider used to clean up dictation.",
+            title = R.string.settings_help_enhancement_title,
+            summary = R.string.settings_help_enhancement_summary,
             tips = listOf(
-                "Enable enhancement only when you want automatic cleanup after dictation.",
-                "Custom prompt text should stay short and instruction-focused.",
-                "Provider selections is the primary place for the new shared text-model defaults.",
+                R.string.settings_help_enhancement_tip1,
+                R.string.settings_help_enhancement_tip2,
+                R.string.settings_help_enhancement_tip3,
             ),
         )
 
         SettingsHelpTopic.PRIVACY_SAFETY -> SettingsHelpContent(
-            title = "Privacy & safety",
-            summary = "Review what data is sent, manage blocked apps, and reset first-use disclosures.",
+            title = R.string.settings_help_privacy_safety_title,
+            summary = R.string.settings_help_privacy_safety_summary,
             tips = listOf(
-                "Blocked apps keep external sending off even if dictation is available elsewhere.",
-                "Verbose logs only include redacted headers; payload bodies are never logged.",
-                "Use this screen when imported or changed selections need a trust review.",
+                R.string.settings_help_privacy_safety_tip1,
+                R.string.settings_help_privacy_safety_tip2,
+                R.string.settings_help_privacy_safety_tip3,
             ),
         )
 
         SettingsHelpTopic.BACKUP_RESTORE -> SettingsHelpContent(
-            title = "Backup & restore",
-            summary = "Exports are password-encrypted only, and restores always go file pick to mode choice to password to preview before apply.",
+            title = R.string.settings_help_backup_restore_title,
+            summary = R.string.settings_help_backup_restore_summary,
             tips = listOf(
-                "Provider credentials can be included in encrypted backups, so use a strong password you will remember.",
-                "Merge mode lets you include or exclude whole categories before restoring anything.",
-                "After restore, stay on this screen to review skipped items, cleared selections, and repair guidance.",
+                R.string.settings_help_backup_restore_tip1,
+                R.string.settings_help_backup_restore_tip2,
+                R.string.settings_help_backup_restore_tip3,
             ),
         )
 
         SettingsHelpTopic.ANALYTICS -> SettingsHelpContent(
-            title = "Analytics dashboard",
-            summary = "This screen stays local-only and compares your dictation wins against typing with a rolling seven-day view.",
+            title = R.string.settings_help_analytics_title,
+            summary = R.string.settings_help_analytics_summary,
             tips = listOf(
-                "Time saved leads the dashboard, while named lifetime totals call out dictation minutes, WPM, and keystrokes saved.",
-                "Sent versus cancelled sessions and raw versus final words stay here so settings home can remain compact.",
-                "Reset clears the local dashboard in place on this device, including the visible seven-day trend scaffold.",
+                R.string.settings_help_analytics_tip1,
+                R.string.settings_help_analytics_tip2,
+                R.string.settings_help_analytics_tip3,
             ),
         )
     }
@@ -184,14 +188,15 @@ fun SettingsHelpAction(topic: SettingsHelpTopic) {
                         modifier = Modifier.size(24.dp),
                     )
                     Text(
-                        text = help.title,
+                        text = stringResource(help.title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.semantics { heading() },
                     )
                 }
 
                 Text(
-                    text = help.summary,
+                    text = stringResource(help.summary),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -207,9 +212,10 @@ fun SettingsHelpAction(topic: SettingsHelpTopic) {
                                 text = "•",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.clearAndSetSemantics {},
                             )
                             Text(
-                                text = tip,
+                                text = stringResource(tip),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )

@@ -1,10 +1,20 @@
 package com.github.shekohex.whisperpp.privacy
 
+import android.content.res.Resources
+import android.text.BidiFormatter
+import android.text.TextDirectionHeuristics
+import androidx.annotation.StringRes
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
+/**
+ * Describes what each cloud mode sends and where. User-visible text is returned as string resource
+ * ids (resolve with [title]/[endpointLine] helpers or `stringResource`) so the formatter stays
+ * Android-free and testable; URLs and paths are plain data.
+ */
 object PrivacyDisclosureFormatter {
     enum class Mode {
         DICTATION_AUDIO,
@@ -12,18 +22,26 @@ object PrivacyDisclosureFormatter {
         COMMAND_TEXT,
     }
 
+    enum class EndpointStatus {
+        CONFIGURED,
+        NOT_CONFIGURED,
+        INVALID,
+    }
+
+    /** [baseUrl] and [path] are empty unless [status] is [EndpointStatus.CONFIGURED]. */
     data class EndpointDisclosure(
-        val label: String? = null,
+        @StringRes val label: Int? = null,
         val baseUrl: String,
         val path: String,
+        val status: EndpointStatus = EndpointStatus.CONFIGURED,
     )
 
     data class ModeDisclosure(
         val mode: Mode,
-        val title: String,
-        val dataSent: String,
+        @StringRes val title: Int,
+        @StringRes val dataSent: Int,
         val endpoints: List<EndpointDisclosure>,
-        val contextLine: String,
+        @StringRes val contextLine: Int,
     )
 
     fun disclosureForDictation(
@@ -34,13 +52,13 @@ object PrivacyDisclosureFormatter {
         val endpoint = resolveEndpoint(provider, selectedModelId, Mode.DICTATION_AUDIO)
         return ModeDisclosure(
             mode = Mode.DICTATION_AUDIO,
-            title = "Dictation (audio)",
-            dataSent = "Recorded audio is uploaded for transcription.",
+            title = R.string.privacy_disclosure_dictation_title,
+            dataSent = R.string.privacy_disclosure_dictation_data,
             endpoints = listOf(endpoint),
             contextLine = if (useContext) {
-                "Use Context is enabled. Recent text before cursor is sent with the request."
+                R.string.privacy_disclosure_dictation_context_on
             } else {
-                "Use Context is disabled. No before-cursor context text is sent."
+                R.string.privacy_disclosure_dictation_context_off
             },
         )
     }
@@ -53,13 +71,13 @@ object PrivacyDisclosureFormatter {
         val endpoint = resolveEndpoint(provider, selectedModelId, Mode.ENHANCEMENT_TEXT)
         return ModeDisclosure(
             mode = Mode.ENHANCEMENT_TEXT,
-            title = "Enhancement (text)",
-            dataSent = "Transcript text is sent for refinement.",
+            title = R.string.privacy_disclosure_enhancement_title,
+            dataSent = R.string.privacy_disclosure_enhancement_data,
             endpoints = listOf(endpoint),
             contextLine = if (useContext) {
-                "Use Context is enabled. Context text may be sent with transcript text."
+                R.string.privacy_disclosure_enhancement_context_on
             } else {
-                "Use Context is disabled. Only transcript text is sent."
+                R.string.privacy_disclosure_enhancement_context_off
             },
         )
     }
@@ -75,39 +93,54 @@ object PrivacyDisclosureFormatter {
             provider = sttProvider,
             selectedModelId = sttModelId,
             mode = Mode.DICTATION_AUDIO,
-            label = "Instruction audio transcription",
+            label = R.string.privacy_endpoint_instruction_audio,
         )
         val textTransformHop = resolveEndpoint(
             provider = textProvider,
             selectedModelId = textModelId,
             mode = Mode.COMMAND_TEXT,
-            label = "Text transform",
+            label = R.string.privacy_endpoint_text_transform,
         )
         return ModeDisclosure(
             mode = Mode.COMMAND_TEXT,
-            title = "Command mode",
-            dataSent = "Instruction audio is uploaded for transcription. Then selected text plus the transcribed instruction are sent for transformation.",
+            title = R.string.privacy_disclosure_command_title,
+            dataSent = R.string.privacy_disclosure_command_data,
             endpoints = listOf(instructionAudioHop, textTransformHop),
             contextLine = if (useContext) {
-                "Use Context is enabled. Context text may be sent with the selected text and transcribed instruction."
+                R.string.privacy_disclosure_command_context_on
             } else {
-                "Use Context is disabled. Only the selected text and transcribed instruction are sent after transcription."
+                R.string.privacy_disclosure_command_context_off
             },
         )
+    }
+
+    /**
+     * One display line for [endpoint], e.g. "Endpoint: https://api.openai.com/v1/audio/transcriptions".
+     * The URL is isolated as left-to-right text so it reads correctly inside RTL sentences.
+     */
+    fun endpointLine(resources: Resources, endpoint: EndpointDisclosure): String {
+        val label = resources.getString(endpoint.label ?: R.string.privacy_endpoint_label)
+        val target = when (endpoint.status) {
+            EndpointStatus.CONFIGURED -> BidiFormatter.getInstance()
+                .unicodeWrap("${endpoint.baseUrl}${endpoint.path}", TextDirectionHeuristics.LTR)
+            EndpointStatus.NOT_CONFIGURED -> resources.getString(R.string.privacy_endpoint_not_configured)
+            EndpointStatus.INVALID -> resources.getString(R.string.privacy_endpoint_invalid)
+        }
+        return resources.getString(R.string.privacy_endpoint_line, label, target)
     }
 
     private fun resolveEndpoint(
         provider: ServiceProvider?,
         selectedModelId: String,
         mode: Mode,
-        label: String? = null,
+        @StringRes label: Int? = null,
     ): EndpointDisclosure {
         if (provider == null || provider.endpoint.isBlank()) {
-            return EndpointDisclosure(label = label, baseUrl = "Not configured", path = "Not configured")
+            return EndpointDisclosure(label = label, baseUrl = "", path = "", status = EndpointStatus.NOT_CONFIGURED)
         }
 
         val parsed = provider.endpoint.toHttpUrlOrNull()
-            ?: return EndpointDisclosure(label = label, baseUrl = "Invalid endpoint", path = "Invalid endpoint")
+            ?: return EndpointDisclosure(label = label, baseUrl = "", path = "", status = EndpointStatus.INVALID)
 
         val baseUrl = toBaseUrl(parsed)
         val basePath = parsed.encodedPath.ifBlank { "/" }

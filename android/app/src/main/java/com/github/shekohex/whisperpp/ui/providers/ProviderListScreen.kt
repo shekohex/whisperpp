@@ -13,14 +13,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmarks
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
@@ -38,7 +39,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,18 +48,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
+import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SPEECH_TO_TEXT_BACKEND
 import com.github.shekohex.whisperpp.data.Presets
+import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.ui.components.EmptyState
 import com.github.shekohex.whisperpp.ui.components.LoadingState
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.components.PreviewSurface
+import com.github.shekohex.whisperpp.ui.components.WidthPreviews
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
 
@@ -72,95 +83,47 @@ fun ProviderListScreen(
 ) {
     val providers by viewModel.providers.collectAsStateWithLifecycle()
     val prefs by viewModel.prefs.collectAsStateWithLifecycle()
-    val activeBackendId = prefs?.get(SPEECH_TO_TEXT_BACKEND)
 
-    var blockedDelete by remember { mutableStateOf<Pair<ServiceProvider, List<String>>?>(null) }
+    var blockedDelete by remember { mutableStateOf<Pair<ServiceProvider, List<Int>>?>(null) }
     var showAddOptions by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            DetailTopBar(
-                title = "Providers",
-                onBack = onBack,
-                helpTopic = SettingsHelpTopic.PROVIDERS,
-                actions = {
-                    IconButton(onClick = { onNavigate(Destination.ProviderSelections) }) {
-                        Icon(Icons.Default.SettingsSuggest, stringResource(R.string.provider_list_selections_action))
-                    }
-                },
-            )
+    PageScaffold(
+        title = stringResource(R.string.provider_list_title),
+        onBack = onBack,
+        actions = {
+            SettingsHelpAction(SettingsHelpTopic.PROVIDERS)
+            IconButton(onClick = { onNavigate(Destination.ProviderSelections) }) {
+                Icon(Icons.Default.SettingsSuggest, stringResource(R.string.provider_list_selections_action))
+            }
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddOptions = true }) {
                 Icon(Icons.Default.Add, stringResource(R.string.provider_list_add))
             }
         },
-        contentWindowInsets = WindowInsets.statusBars
-    ) { padding ->
-        val loaded = providers
-        when {
-            loaded == null -> LoadingState(Modifier.padding(padding))
-            loaded.isEmpty() -> EmptyState(
-                icon = Icons.Default.CloudOff,
-                title = stringResource(R.string.provider_list_empty_title),
-                body = stringResource(R.string.provider_list_empty_message),
-                modifier = Modifier.fillMaxSize().padding(padding),
-                action = {
-                    Button(onClick = { showAddOptions = true }) {
-                        Text(stringResource(R.string.provider_list_add))
-                    }
-                },
-            )
-            else -> LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                item {
-                    Text(
-                        text = "Add or test providers here, then open Provider selections to choose the active defaults Whisper++ should use.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                items(loaded) { provider ->
-                    ProviderCard(
-                        provider = provider,
-                        isActive = provider.id == activeBackendId,
-                        onSelectActive = { viewModel.selectActive(provider) },
-                        onClick = { onNavigate(Destination.ProviderEdit(id = provider.id)) },
-                        onDelete = {
-                            val refs = viewModel.delete(provider)
-                            if (refs.isNotEmpty()) blockedDelete = provider to refs
-                        }
-                    )
-                }
-            }
-        }
+    ) {
+        ProviderListContent(
+            providers = providers,
+            activeProviderId = prefs?.get(SPEECH_TO_TEXT_BACKEND),
+            onAdd = { showAddOptions = true },
+            onSelectActive = viewModel::selectActive,
+            onOpen = { onNavigate(Destination.ProviderEdit(id = it.id)) },
+            onDelete = { provider ->
+                val refs = viewModel.delete(provider)
+                if (refs.isNotEmpty()) blockedDelete = provider to refs
+            },
+        )
     }
 
     blockedDelete?.let { (provider, refs) ->
-        AlertDialog(
-            onDismissRequest = { blockedDelete = null },
-            icon = { Icon(Icons.Default.Warning, null) },
-            title = { Text("Can't delete selected provider") },
-            text = { Text("${provider.name} is selected for: ${refs.joinToString(", ")}. Reassign or clear the selection first.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    blockedDelete = null
-                    onNavigate(Destination.ProviderSelections)
-                }) {
-                    Text("Go to selections")
-                }
+        BlockedDeleteDialog(
+            title = stringResource(R.string.provider_delete_blocked_title),
+            message = stringResource(R.string.provider_delete_blocked_message, provider.name, selectionNames(refs)),
+            onDismiss = { blockedDelete = null },
+            onGoToSelections = {
+                blockedDelete = null
+                onNavigate(Destination.ProviderSelections)
             },
-            dismissButton = {
-                TextButton(onClick = { blockedDelete = null }) {
-                    Text("Cancel")
-                }
-            }
         )
     }
 
@@ -181,6 +144,84 @@ fun ProviderListScreen(
     }
 }
 
+/** Stateless list body; `null` [providers] means still loading. */
+@Composable
+private fun ProviderListContent(
+    providers: List<ServiceProvider>?,
+    activeProviderId: String?,
+    onAdd: () -> Unit,
+    onSelectActive: (ServiceProvider) -> Unit,
+    onOpen: (ServiceProvider) -> Unit,
+    onDelete: (ServiceProvider) -> Unit,
+) {
+    when {
+        providers == null -> LoadingState()
+        providers.isEmpty() -> EmptyState(
+            icon = Icons.Default.CloudOff,
+            title = stringResource(R.string.provider_list_empty_title),
+            body = stringResource(R.string.provider_list_empty_message),
+            modifier = Modifier.fillMaxSize(),
+            action = {
+                Button(onClick = onAdd) {
+                    Text(stringResource(R.string.provider_list_add))
+                }
+            },
+        )
+        else -> LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(
+                top = 16.dp,
+                bottom = 80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+            ),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item {
+                Text(
+                    text = stringResource(R.string.provider_list_intro),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            items(providers, key = { it.id }) { provider ->
+                ProviderCard(
+                    provider = provider,
+                    isActive = provider.id == activeProviderId,
+                    onSelectActive = { onSelectActive(provider) },
+                    onClick = { onOpen(provider) },
+                    onDelete = { onDelete(provider) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun BlockedDeleteDialog(
+    title: String,
+    message: String,
+    onDismiss: () -> Unit,
+    onGoToSelections: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Warning, null) },
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onGoToSelections) {
+                Text(stringResource(R.string.provider_go_to_selections))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.component_cancel))
+            }
+        },
+    )
+}
+
 @Composable
 private fun AddProviderDialog(
     onDismiss: () -> Unit,
@@ -189,31 +230,56 @@ private fun AddProviderDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Provider") },
+        title = { Text(stringResource(R.string.provider_list_add)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ListItem(
-                    headlineContent = { Text("Custom Provider") },
-                    leadingContent = { Icon(Icons.Default.Edit, null) },
-                    modifier = Modifier.clickable(onClick = onCustom)
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AddOptionRow(
+                    title = stringResource(R.string.provider_add_custom),
+                    supporting = null,
+                    leadingIcon = { Icon(Icons.Default.Edit, null) },
+                    onClick = onCustom,
                 )
                 HorizontalDivider()
-                Text("Presets", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp))
+                Text(
+                    stringResource(R.string.provider_add_presets),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .semantics { heading() },
+                )
                 Presets.AllPresets.forEach { preset ->
-                    ListItem(
-                        headlineContent = { Text(preset.name) },
-                        supportingContent = { Text(preset.type.toString()) },
-                        leadingContent = { Icon(Icons.Default.Bookmarks, null) },
-                        modifier = Modifier.clickable { onPreset(preset) }
+                    AddOptionRow(
+                        title = preset.name,
+                        supporting = stringResource(preset.type.labelRes()),
+                        leadingIcon = { Icon(Icons.Default.Bookmarks, null) },
+                        onClick = { onPreset(preset) },
                     )
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close")
+                Text(stringResource(R.string.settings_close))
             }
-        }
+        },
+    )
+}
+
+@Composable
+private fun AddOptionRow(
+    title: String,
+    supporting: String?,
+    leadingIcon: @Composable () -> Unit,
+    onClick: () -> Unit,
+) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = supporting?.let { text -> { Text(text) } },
+        leadingContent = leadingIcon,
+        modifier = Modifier.clickable(role = Role.Button, onClick = onClick),
     )
 }
 
@@ -225,33 +291,76 @@ private fun ProviderCard(
     onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val activeLabel = stringResource(R.string.provider_list_active)
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = isActive, onClick = onSelectActive)
+                RadioButton(
+                    selected = isActive,
+                    onClick = onSelectActive,
+                    modifier = Modifier.semantics { contentDescription = activeLabel },
+                )
                 Spacer(Modifier.width(8.dp))
                 Icon(Icons.Default.Dns, null, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(provider.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(provider.type.toString(), style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        provider.name,
+                        style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(stringResource(provider.type.labelRes()), style = MaterialTheme.typography.bodySmall)
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+                    Icon(
+                        Icons.Default.Delete,
+                        stringResource(R.string.provider_delete_named, provider.name),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
                 }
-                Icon(Icons.Default.ChevronRight, null)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
             }
             if (provider.models.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "${provider.models.size} Models Configured",
+                    pluralStringResource(R.plurals.provider_models_configured, provider.models.size, provider.models.size),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
         }
+    }
+}
+
+@WidthPreviews
+@Composable
+private fun ProviderListContentPreview() {
+    PreviewSurface {
+        ProviderListContent(
+            providers = listOf(
+                ServiceProvider(
+                    id = "openai",
+                    name = "OpenAI",
+                    type = ProviderType.OPENAI,
+                    endpoint = "https://api.openai.com/v1",
+                    models = listOf(ModelConfig("whisper-1", "whisper-1"), ModelConfig("gpt-4o", "GPT-4o")),
+                ),
+                ServiceProvider(
+                    id = "local",
+                    name = "Local Whisper server with a long name",
+                    type = ProviderType.WHISPER_ASR,
+                    endpoint = "http://192.168.1.10:9000/asr",
+                    models = emptyList(),
+                ),
+            ),
+            activeProviderId = "openai",
+            onAdd = {},
+            onSelectActive = {},
+            onOpen = {},
+            onDelete = {},
+        )
     }
 }

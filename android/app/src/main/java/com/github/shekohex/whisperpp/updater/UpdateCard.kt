@@ -28,6 +28,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.github.shekohex.whisperpp.R
 import dev.jeziellago.compose.markdowntext.MarkdownText
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 @Composable
 fun UpdateAvailableCard(
@@ -62,7 +66,7 @@ fun UpdateAvailableCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = release.pubDate
+                text = release.pubDate?.let(::formatReleaseDate)
                     ?: stringResource(R.string.update_release_date_unknown),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -125,7 +129,7 @@ fun UpdateAvailableCard(
                             onClick = onCancel,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(stringResource(android.R.string.cancel))
+                            Text(stringResource(R.string.component_cancel))
                         }
                     }
                 }
@@ -156,7 +160,7 @@ fun UpdateAvailableCard(
                 is DownloadState.Failed -> {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            text = stringResource(R.string.update_failed, downloadState.message),
+                            text = stringResource(R.string.update_failed, downloadFailureText(downloadState.reason)),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -173,3 +177,8 @@ fun UpdateAvailableCard(
         }
     }
 }
+
+/** `yyyy-MM-dd` from the release metadata, shown in the user's locale (raw text if unparsable). */
+private fun formatReleaseDate(isoDate: String): String = runCatching {
+    LocalDate.parse(isoDate).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.getDefault()))
+}.getOrDefault(isoDate)

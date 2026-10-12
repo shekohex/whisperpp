@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home -->
+    <string name="home_hero_sentence_join">%1$s %2$s</string>
+    <plurals name="home_hero_equivalent_words">
+        <item quantity="zero">أمليت %1$s كلمة، أي ما يعادل %2$s.</item>
+        <item quantity="one">أمليت %1$s كلمة، أي ما يعادل %2$s.</item>
+        <item quantity="two">أمليت %1$s كلمتين، أي ما يعادل %2$s.</item>
+        <item quantity="few">أمليت %1$s كلمات، أي ما يعادل %2$s.</item>
+        <item quantity="many">أمليت %1$s كلمة، أي ما يعادل %2$s.</item>
+        <item quantity="other">أمليت %1$s كلمة، أي ما يعادل %2$s.</item>
+    </plurals>
+    <plurals name="home_hero_dictated_words">
+        <item quantity="zero">أمليت %1$s كلمة.</item>
+        <item quantity="one">أمليت %1$s كلمة.</item>
+        <item quantity="two">أمليت %1$s كلمتين.</item>
+        <item quantity="few">أمليت %1$s كلمات.</item>
+        <item quantity="many">أمليت %1$s كلمة.</item>
+        <item quantity="other">أمليت %1$s كلمة.</item>
+    </plurals>
+    <plurals name="home_hero_words_to_go">
+        <item quantity="zero">تبقّت %1$s كلمة للوصول إلى %2$s.</item>
+        <item quantity="one">تبقّت %1$s كلمة للوصول إلى %2$s.</item>
+        <item quantity="two">تبقّت %1$s كلمتان للوصول إلى %2$s.</item>
+        <item quantity="few">تبقّت %1$s كلمات للوصول إلى %2$s.</item>
+        <item quantity="many">تبقّت %1$s كلمة للوصول إلى %2$s.</item>
+        <item quantity="other">تبقّت %1$s كلمة للوصول إلى %2$s.</item>
+    </plurals>
+
+    <!-- Insights -->
+    <string name="insights_period_7d_description">آخر 7 أيام</string>
+    <string name="insights_period_30d_description">آخر 30 يومًا</string>
+    <string name="insights_period_90d_description">آخر 90 يومًا</string>
+    <string name="insights_period_all_description">كل الأوقات</string>
+    <string name="insights_summary_join">%1$s %2$s</string>
+    <string name="insights_summary_separator">"؛ "</string>
+    <string name="insights_chart_entry">%1$s: %2$s</string>
+    <string name="insights_chart_summary">%1$s. %2$s</string>
+    <string name="insights_latency_row_label">%1$s · %2$s</string>
+    <plurals name="insights_calendar_active_summary">
+        <item quantity="zero">نشِط في %1$d من آخر %2$d يوم.</item>
+        <item quantity="one">نشِط في %1$d من آخر %2$d يوم.</item>
+        <item quantity="two">نشِط في %1$d من آخر %2$d يومين.</item>
+        <item quantity="few">نشِط في %1$d من آخر %2$d أيام.</item>
+        <item quantity="many">نشِط في %1$d من آخر %2$d يومًا.</item>
+        <item quantity="other">نشِط في %1$d من آخر %2$d يوم.</item>
+    </plurals>
+    <plurals name="insights_calendar_busiest_sessions">
+        <item quantity="zero">أكثر الأيام نشاطًا: %1$s بـ%2$d جلسة.</item>
+        <item quantity="one">أكثر الأيام نشاطًا: %1$s بـ%2$d جلسة.</item>
+        <item quantity="two">أكثر الأيام نشاطًا: %1$s بـ%2$d جلستين.</item>
+        <item quantity="few">أكثر الأيام نشاطًا: %1$s بـ%2$d جلسات.</item>
+        <item quantity="many">أكثر الأيام نشاطًا: %1$s بـ%2$d جلسة.</item>
+        <item quantity="other">أكثر الأيام نشاطًا: %1$s بـ%2$d جلسة.</item>
+    </plurals>
+    <plurals name="insights_peak_hours_sessions_summary">
+        <item quantity="zero">ذروة النشاط حوالي %1$s (%2$d جلسة).</item>
+        <item quantity="one">ذروة النشاط حوالي %1$s (%2$d جلسة).</item>
+        <item quantity="two">ذروة النشاط حوالي %1$s (%2$d جلستان).</item>
+        <item quantity="few">ذروة النشاط حوالي %1$s (%2$d جلسات).</item>
+        <item quantity="many">ذروة النشاط حوالي %1$s (%2$d جلسة).</item>
+        <item quantity="other">ذروة النشاط حوالي %1$s (%2$d جلسة).</item>
+    </plurals>
+
+    <!-- History -->
+    <string name="history_row_select">تحديد</string>
+    <string name="history_row_deselect">إلغاء التحديد</string>
+    <string name="history_audio_progress">%1$s / %2$s</string>
+
+    <!-- Modes -->
+    <string name="modes_card_enabled_description">تفعيل «%1$s»</string>
+    <string name="modes_list_separator">"، "</string>
+    <string name="modes_migration_in_progress">جارٍ التحويل…</string>
+    <string name="modes_edit_apps_remove_named">إزالة %1$s</string>
+    <plurals name="modes_migration_banner_rules">
+        <item quantity="zero">يمكن تحويل %1$d قاعدة للتطبيقات أو اللغات أو الموجّهات إلى أوضاع.</item>
+        <item quantity="one">يمكن تحويل %1$d قاعدة للتطبيقات أو اللغات أو الموجّهات إلى وضع.</item>
+        <item quantity="two">يمكن تحويل %1$d قاعدتين للتطبيقات أو اللغات أو الموجّهات إلى أوضاع.</item>
+        <item quantity="few">يمكن تحويل %1$d قواعد للتطبيقات أو اللغات أو الموجّهات إلى أوضاع.</item>
+        <item quantity="many">يمكن تحويل %1$d قاعدة للتطبيقات أو اللغات أو الموجّهات إلى أوضاع.</item>
+        <item quantity="other">يمكن تحويل %1$d قاعدة للتطبيقات أو اللغات أو الموجّهات إلى أوضاع.</item>
+    </plurals>
+    <plurals name="modes_error_name_too_long">
+        <item quantity="zero">استخدم %1$d حرف على الأكثر</item>
+        <item quantity="one">استخدم %1$d حرف على الأكثر</item>
+        <item quantity="two">استخدم %1$d حرفين على الأكثر</item>
+        <item quantity="few">استخدم %1$d أحرف على الأكثر</item>
+        <item quantity="many">استخدم %1$d حرفًا على الأكثر</item>
+        <item quantity="other">استخدم %1$d حرف على الأكثر</item>
+    </plurals>
+
+    <!-- Dictionary -->
+    <string name="dictionary_import_done_summary">تم استيراد %1$s و%2$s</string>
+    <plurals name="dictionary_replacement_count">
+        <item quantity="zero">%1$d استبدال</item>
+        <item quantity="one">%1$d استبدال</item>
+        <item quantity="two">%1$d استبدالين</item>
+        <item quantity="few">%1$d استبدالات</item>
+        <item quantity="many">%1$d استبدالًا</item>
+        <item quantity="other">%1$d استبدال</item>
+    </plurals>
+</resources>

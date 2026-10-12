@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.github.shekohex.whisperpp.R
@@ -56,7 +57,10 @@ fun HistoryDetailMetadata(
 
 @Composable
 private fun MetadataRow(label: String, value: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.lg), modifier = Modifier.fillMaxWidth()) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(Spacing.lg),
+        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,

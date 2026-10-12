@@ -102,5 +102,26 @@ sealed class DownloadState {
     data class Downloading(val progress: Float, val bytesDownloaded: Long, val totalBytes: Long) : DownloadState()
     data class Verifying(val filePath: String) : DownloadState()
     data class Ready(val filePath: String) : DownloadState()
-    data class Failed(val message: String, val cause: Throwable? = null) : DownloadState()
+    /** [message] is technical (logs); the UI shows text for [reason]. */
+    data class Failed(
+        val message: String,
+        val cause: Throwable? = null,
+        val reason: DownloadFailure = DownloadFailure.UNKNOWN,
+    ) : DownloadState()
+}
+
+/** Why a download failed, mapped to a localized message by the UI. */
+enum class DownloadFailure {
+    INSECURE_URL,
+    STORAGE_UNAVAILABLE,
+    INSUFFICIENT_SPACE,
+    START_FAILED,
+    NOT_FOUND,
+    NETWORK,
+    FILE_ERROR,
+    FILE_MISSING,
+    CHECKSUM_MISMATCH,
+    INVALID_CHECKSUM,
+    VERIFICATION_FAILED,
+    UNKNOWN,
 }

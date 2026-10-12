@@ -31,7 +31,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,20 +42,18 @@ import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ImportAnalysis
 import com.github.shekohex.whisperpp.data.RestoreMode
 import com.github.shekohex.whisperpp.data.RestoreRepairArea
-import com.github.shekohex.whisperpp.data.RestoreSelectionType
 import com.github.shekohex.whisperpp.data.RestoreSummary
-import com.github.shekohex.whisperpp.data.SettingsBackupCategoryManifestEntry
 import com.github.shekohex.whisperpp.ui.backup.BackupNotice.Tone
 import com.github.shekohex.whisperpp.ui.navigation.Destination
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 private val backupFileNameFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").withZone(ZoneId.of("UTC"))
 
-private val backupDisplayFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault())
 
 @Composable
 internal fun BackupIdentityRow(
@@ -80,7 +81,7 @@ internal fun BackupCategoryRow(
                 Text(summary)
                 if (sensitive) {
                     Text(
-                        text = "Sensitive content",
+                        text = stringResource(R.string.backup_sensitive_content),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -179,7 +180,6 @@ internal fun ImportPreviewCard(
     selectedMergeCategories: Set<String>,
     onToggleCategory: (String) -> Unit,
     onConfirmRestore: () -> Unit,
-    categoryLabelById: Map<String, SettingsBackupCategoryManifestEntry>,
     isApplyingImport: Boolean,
 ) {
     val canConfirm = analysis.restoreMode == RestoreMode.OVERWRITE || selectedMergeCategories.isNotEmpty()
@@ -189,16 +189,21 @@ internal fun ImportPreviewCard(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         BackupNoticeCard(
-            title = "Preview before restore",
-            message = "Backup from ${formatBackupDisplayTime(analysis.exportedAtUtc)} · app ${analysis.backupAppVersionName} · ${restoreModeLabel(analysis.restoreMode)}",
+            title = stringResource(R.string.backup_preview_title),
+            message = stringResource(
+                R.string.backup_preview_message,
+                formatBackupDisplayTime(analysis.exportedAtUtc),
+                analysis.backupAppVersionName,
+                stringResource(restoreModeLabel(analysis.restoreMode)),
+            ),
             tone = Tone.Info,
             leadingIcon = Icons.Default.Info,
         )
 
         if (analysis.restoreMode == RestoreMode.MERGE) {
             BackupNoticeCard(
-                title = "Conflict behavior",
-                message = "Merge restores only the categories you keep selected here. When the same item exists locally, the imported value wins.",
+                title = stringResource(R.string.backup_conflict_title),
+                message = stringResource(R.string.backup_conflict_message),
                 tone = Tone.Info,
                 leadingIcon = Icons.Default.Warning,
             )
@@ -206,19 +211,15 @@ internal fun ImportPreviewCard(
 
         if (analysis.warnings.isNotEmpty()) {
             SummarySectionCard(
-                title = "Warnings",
-                items = analysis.warnings.map { it.message },
+                title = stringResource(R.string.backup_warnings_title),
+                items = analysis.warnings.map { restoreWarningText(it, analysis) },
             )
         }
 
         if (analysis.skippedItems.isNotEmpty()) {
             SummarySectionCard(
-                title = "Skipped invalid or unsupported items",
-                items = analysis.skippedItems.map { skipped ->
-                    val label = categoryLabelById[skipped.categoryId]?.label ?: skipped.categoryId
-                    val itemKey = skipped.itemKey?.let { " ($it)" }.orEmpty()
-                    "$label$itemKey: ${skipped.reason}"
-                },
+                title = stringResource(R.string.backup_skipped_invalid_title),
+                items = analysis.skippedItems.map { skippedItemText(it) },
             )
         }
 
@@ -228,11 +229,13 @@ internal fun ImportPreviewCard(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    text = "Categories in this backup",
+                    text = stringResource(R.string.backup_categories_title),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.semantics { heading() },
                 )
                 analysis.categoryPreviews.forEachIndexed { index, preview ->
+                    val label = backupCategoryLabel(preview.categoryId, preview.label)
                     if (preview.isAvailable && !preview.includedByDefault) {
                         // Opt-in category (transcript history): unchecked until the user asks for it.
                         BackupOptInRow(
@@ -251,7 +254,12 @@ internal fun ImportPreviewCard(
                             onClick = { onToggleCategory(preview.categoryId) },
                             label = {
                                 Text(
-                                    "${preview.label} · ${preview.resultingItemCount} resulting ${backupPluralize(preview.resultingItemCount, "item", "items")}",
+                                    pluralStringResource(
+                                        R.plurals.backup_merge_chip_label,
+                                        preview.resultingItemCount,
+                                        label,
+                                        preview.resultingItemCount,
+                                    ),
                                 )
                             },
                             leadingIcon = if (preview.containsSensitiveContent) {
@@ -262,19 +270,30 @@ internal fun ImportPreviewCard(
                         )
                     } else {
                         ListItem(
-                            headlineContent = { Text(preview.label, fontWeight = FontWeight.Medium) },
+                            headlineContent = { Text(label, fontWeight = FontWeight.Medium) },
                             supportingContent = {
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(
                                         text = when {
-                                            !preview.isAvailable -> "Not present in this backup."
-                                            preview.conflictKeys.isNotEmpty() -> "${preview.importedItemCount} imported, ${preview.existingItemCount} existing, ${preview.conflictKeys.size} conflict ${backupPluralize(preview.conflictKeys.size, "item", "items")}."
-                                            else -> "${preview.importedItemCount} imported, ${preview.existingItemCount} existing, ${preview.resultingItemCount} after restore."
+                                            !preview.isAvailable -> stringResource(R.string.backup_preview_not_present)
+                                            preview.conflictKeys.isNotEmpty() -> pluralStringResource(
+                                                R.plurals.backup_preview_counts_conflicts,
+                                                preview.conflictKeys.size,
+                                                preview.importedItemCount,
+                                                preview.existingItemCount,
+                                                preview.conflictKeys.size,
+                                            )
+                                            else -> stringResource(
+                                                R.string.backup_preview_counts,
+                                                preview.importedItemCount,
+                                                preview.existingItemCount,
+                                                preview.resultingItemCount,
+                                            )
                                         },
                                     )
                                     if (preview.containsSensitiveContent) {
                                         Text(
-                                            text = "Sensitive content included.",
+                                            text = stringResource(R.string.backup_sensitive_included),
                                             style = MaterialTheme.typography.labelMedium,
                                             color = MaterialTheme.colorScheme.error,
                                         )
@@ -308,13 +327,17 @@ internal fun ImportPreviewCard(
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
                 Spacer(Modifier.size(12.dp))
-                Text("Applying restore…")
+                Text(stringResource(R.string.backup_applying_restore))
             } else {
                 Text(
                     if (analysis.restoreMode == RestoreMode.OVERWRITE) {
-                        "Confirm overwrite restore"
+                        stringResource(R.string.backup_confirm_overwrite)
                     } else {
-                        "Confirm restore for ${selectedMergeCategories.size} ${backupPluralize(selectedMergeCategories.size, "category", "categories")}"
+                        pluralStringResource(
+                            R.plurals.backup_confirm_merge,
+                            selectedMergeCategories.size,
+                            selectedMergeCategories.size,
+                        )
                     },
                 )
             }
@@ -325,9 +348,13 @@ internal fun ImportPreviewCard(
 @Composable
 internal fun RestoreSummaryCard(
     summary: RestoreSummary,
-    categoryLabelById: Map<String, SettingsBackupCategoryManifestEntry>,
     onNavigate: (Destination) -> Unit,
 ) {
+    val missingCredentials = missingCredentialProviderIds(summary.repairChecklist)
+    val providerNames = summary.repairChecklist
+        .mapNotNull { entry -> entry.providerId?.let { id -> entry.providerName?.let { name -> id to name } } }
+        .toMap()
+    val none = listOf(stringResource(R.string.backup_summary_none))
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -338,50 +365,45 @@ internal fun RestoreSummaryCard(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = "Completion summary",
+                text = stringResource(R.string.backup_summary_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.semantics { heading() },
             )
             Text(
                 text = if (summary.repairChecklist.isNotEmpty()) {
-                    "Restore finished, but some selections or credentials still need repair."
+                    stringResource(R.string.backup_summary_needs_repair)
                 } else {
-                    "Restore finished and Whisper++ kept you in settings to review the outcome."
+                    stringResource(R.string.backup_summary_done)
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             SummarySectionCard(
-                title = "Applied categories",
-                items = summary.appliedCategories.map { categoryId ->
-                    categoryLabelById[categoryId]?.label ?: categoryId
-                }.ifEmpty { listOf("None") },
+                title = stringResource(R.string.backup_summary_applied),
+                items = summary.appliedCategories.map { backupCategoryLabel(it) }.ifEmpty { none },
             )
             SummarySectionCard(
-                title = "Skipped items",
-                items = summary.skippedItems.map { skipped ->
-                    val label = categoryLabelById[skipped.categoryId]?.label ?: skipped.categoryId
-                    val itemKey = skipped.itemKey?.let { " ($it)" }.orEmpty()
-                    "$label$itemKey: ${skipped.reason}"
-                }.ifEmpty { listOf("None") },
+                title = stringResource(R.string.backup_summary_skipped),
+                items = summary.skippedItems.map { skippedItemText(it) }.ifEmpty { none },
             )
             SummarySectionCard(
-                title = "Cleared selections",
-                items = summary.clearedSelections.map { cleared ->
-                    "${restoreSelectionLabel(cleared.selectionType)}: ${cleared.reason}"
-                }.ifEmpty { listOf("None") },
+                title = stringResource(R.string.backup_summary_cleared),
+                items = summary.clearedSelections.map { clearedSelectionText(it, missingCredentials, providerNames) }
+                    .ifEmpty { none },
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "Repair checklist",
+                    text = stringResource(R.string.backup_summary_repair),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.semantics { heading() },
                 )
                 if (summary.repairChecklist.isEmpty()) {
                     Text(
-                        text = "None",
+                        text = none.first(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -397,12 +419,12 @@ internal fun RestoreSummaryCard(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Text(
-                                    text = repairEntry.message,
+                                    text = repairEntryText(repairEntry, missingCredentials),
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                                 val (destination, label) = action
                                 TextButton(onClick = { onNavigate(destination) }) {
-                                    Text(label)
+                                    Text(stringResource(label))
                                 }
                             }
                         }
@@ -427,10 +449,11 @@ private fun SummarySectionCard(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.semantics { heading() },
             )
             items.forEach { item ->
                 Text(
-                    text = "• $item",
+                    text = stringResource(R.string.backup_bullet_item, item),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -439,28 +462,13 @@ private fun SummarySectionCard(
     }
 }
 
-private fun repairActionFor(area: RestoreRepairArea): Pair<Destination, String> {
+private fun repairActionFor(area: RestoreRepairArea): Pair<Destination, Int> {
     return when (area) {
-        RestoreRepairArea.PROVIDER_CREDENTIALS -> Destination.ProviderList to "Open providers"
+        RestoreRepairArea.PROVIDER_CREDENTIALS -> Destination.ProviderList to R.string.backup_repair_open_providers
         RestoreRepairArea.ACTIVE_STT,
         RestoreRepairArea.ACTIVE_TEXT,
         RestoreRepairArea.COMMAND_TEXT
-        -> Destination.ProviderSelections to "Open provider selections"
-    }
-}
-
-private fun restoreSelectionLabel(type: RestoreSelectionType): String {
-    return when (type) {
-        RestoreSelectionType.ACTIVE_STT -> "Dictation"
-        RestoreSelectionType.ACTIVE_TEXT -> "Enhancement"
-        RestoreSelectionType.COMMAND_TEXT -> "Command mode"
-    }
-}
-
-private fun restoreModeLabel(mode: RestoreMode): String {
-    return when (mode) {
-        RestoreMode.OVERWRITE -> "Overwrite"
-        RestoreMode.MERGE -> "Merge"
+        -> Destination.ProviderSelections to R.string.backup_repair_open_selections
     }
 }
 
@@ -471,9 +479,9 @@ internal fun buildBackupFileName(exportedAtUtc: String): String {
 
 internal fun formatBackupDisplayTime(exportedAtUtc: String): String {
     val instant = runCatching { Instant.parse(exportedAtUtc) }.getOrElse { return exportedAtUtc }
-    return backupDisplayFormatter.format(instant)
-}
-
-internal fun backupPluralize(count: Int, singular: String, plural: String): String {
-    return if (count == 1) singular else plural
+    // Built per call so it follows the current (per-app) locale and time zone.
+    return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+        .withLocale(Locale.getDefault())
+        .withZone(ZoneId.systemDefault())
+        .format(instant)
 }

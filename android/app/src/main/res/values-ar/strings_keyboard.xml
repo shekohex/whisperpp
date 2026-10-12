@@ -1,0 +1,72 @@
+<resources>
+    <!-- Keyboard bar: language · mode pill and its in-keyboard sheet -->
+    <string name="keyboard_sheet_close">إغلاق</string>
+    <string name="keyboard_context_pill_description">اللغة %1$s، الوضع %2$s</string>
+    <string name="keyboard_language_pill_description">اللغة %1$s</string>
+    <string name="keyboard_context_pill_action">تغيير اللغة أو الوضع</string>
+    <string name="keyboard_language_mode_title">اللغة والوضع</string>
+    <string name="keyboard_language_section">لغة الإملاء</string>
+    <string name="keyboard_command_exit">الخروج من وضع الأوامر</string>
+    <string name="keyboard_notice_dismiss">إخفاء</string>
+
+    <!-- Record button state for TalkBack -->
+    <string name="keyboard_record_state_idle">في وضع الاستعداد</string>
+    <string name="keyboard_record_state_recording">جارٍ التسجيل</string>
+    <string name="keyboard_record_state_locked">جارٍ التسجيل، مقفل</string>
+    <string name="keyboard_record_state_paused">متوقف مؤقتًا</string>
+    <string name="keyboard_record_state_processing">جارٍ المعالجة</string>
+    <string name="keyboard_status_recording_locked">جارٍ التسجيل (مقفل)</string>
+
+    <!-- First-use disclosure sheet -->
+    <string name="keyboard_disclosure_continue">متابعة</string>
+    <string name="keyboard_disclosure_open_privacy">فتح الخصوصية والأمان</string>
+    <string name="keyboard_disclosure_cancel">إلغاء</string>
+
+    <!-- Keyboard notices -->
+    <string name="keyboard_enhancement_undo_unavailable">لا يمكن التراجع عن التحسين هنا</string>
+    <string name="keyboard_enhancement_kept_raw">انتهى تحسين %1$s بعد مغادرتك الحقل، فتم الإبقاء على النص الأصلي</string>
+    <string name="keyboard_sending_blocked_app">الإرسال محظور لهذا التطبيق</string>
+    <string name="keyboard_warning_missing_profile">ملف الموجّه الخاص بالتطبيق غير موجود؛ سيُستخدم الموجّه الأساسي.</string>
+    <string name="keyboard_warning_stt_provider_missing">لم يُعثر على مزوّد الإملاء؛ سيُستخدم بديل.</string>
+    <string name="keyboard_warning_text_provider_missing">لم يُعثر على مزوّد التحسين؛ سيُستخدم بديل.</string>
+    <string name="keyboard_warning_stt_model_missing">لم يُعثر على نموذج الإملاء؛ سيُستخدم بديل.</string>
+    <string name="keyboard_warning_text_model_missing">لم يُعثر على نموذج التحسين؛ سيُستخدم بديل.</string>
+    <string name="keyboard_warning_stt_model_incompatible">النموذج المحدد لا يدعم تحويل الصوت إلى نص؛ سيُستخدم بديل.</string>
+    <string name="keyboard_warning_text_model_incompatible">النموذج المحدد لا يدعم تحسين النص؛ سيُستخدم بديل.</string>
+    <string name="keyboard_warning_stt_selection_missing">لم يتم اختيار مزوّد أو نموذج للإملاء؛ ستُستخدم الإعدادات الافتراضية.</string>
+    <string name="keyboard_warning_text_selection_missing">لم يتم اختيار مزوّد أو نموذج للتحسين؛ ستُستخدم الإعدادات الافتراضية.</string>
+
+    <!-- Rotating words shown while the transcript is being enhanced -->
+    <string-array name="keyboard_enhancing_words">
+        <item>جارٍ التلميع</item>
+        <item>جارٍ التنقيح</item>
+        <item>جارٍ الصياغة</item>
+        <item>جارٍ الترتيب</item>
+        <item>جارٍ التدقيق</item>
+        <item>جارٍ التحسين</item>
+        <item>جارٍ التنسيق</item>
+        <item>جارٍ التوضيح</item>
+        <item>جارٍ الإتقان</item>
+        <item>جارٍ التحليل</item>
+        <item>جارٍ المعالجة</item>
+        <item>جارٍ التقطير</item>
+        <item>جارٍ الضبط</item>
+        <item>جارٍ التهذيب</item>
+        <item>جارٍ الربط</item>
+        <item>جارٍ التفكير</item>
+        <item>جارٍ الاستماع</item>
+        <item>جارٍ التأليف</item>
+        <item>جارٍ النسج</item>
+        <item>جارٍ النحت</item>
+        <item>جارٍ فكّ التشابك</item>
+        <item>جارٍ التبلور</item>
+        <item>جارٍ الصقل</item>
+        <item>جارٍ الموازنة</item>
+        <item>جارٍ التصفية</item>
+        <item>جارٍ إعادة البناء</item>
+        <item>جارٍ التنعيم</item>
+        <item>جارٍ المواءمة</item>
+        <item>جارٍ التحرير</item>
+        <item>جارٍ التجميع</item>
+    </string-array>
+</resources>

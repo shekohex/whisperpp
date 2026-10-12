@@ -1,5 +1,6 @@
 package com.github.shekohex.whisperpp.ui.analytics
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -46,7 +48,7 @@ fun ModelUsageChart(
         val label = share.key?.let { labels[it] ?: it } ?: otherLabel
         BarRow(label, stringResource(R.string.insights_percent, share.percent), share.percent / 100f)
     }
-    val summary = rows.joinToString(separator = "; ") { "${it.label}: ${it.value}" }
+    val summary = chartSummary(R.string.insights_model_usage_title, rows)
     BarList(rows = rows, color = MaterialTheme.colorScheme.primary, summary = summary, modifier = modifier)
 }
 
@@ -64,19 +66,34 @@ fun ModelPerformanceChart(
     val entries = usages.flatMap { usage ->
         val label = labels[usage.key] ?: usage.key
         listOfNotNull(
-            usage.averageTranscriptionLatencyMs?.let { "$label · $transcription" to it },
-            usage.averageEnhancementLatencyMs?.let { "$label · $enhancement" to it },
+            usage.averageTranscriptionLatencyMs?.let {
+                resources.getString(R.string.insights_latency_row_label, label, transcription) to it
+            },
+            usage.averageEnhancementLatencyMs?.let {
+                resources.getString(R.string.insights_latency_row_label, label, enhancement) to it
+            },
         )
     }.take(ModelShare.MAX_ROWS * 2)
     val max = entries.maxOfOrNull { it.second }?.coerceAtLeast(1L) ?: 1L
     val rows = entries.map { (label, ms) ->
         BarRow(label, resources.getString(R.string.insights_seconds, StatFormat.formatSeconds(ms, locale)), ms / max.toFloat())
     }
-    val summary = rows.joinToString(separator = "; ") { "${it.label}: ${it.value}" }
+    val summary = chartSummary(R.string.insights_model_performance_title, rows)
     BarList(rows = rows, color = MaterialTheme.colorScheme.tertiary, summary = summary, modifier = modifier)
 }
 
 private data class BarRow(val label: String, val value: String, val fraction: Float)
+
+/** Screen-reader summary: the chart title, then "label: value" per row. */
+@Composable
+private fun chartSummary(@StringRes titleRes: Int, rows: List<BarRow>): String {
+    val resources = LocalResources.current
+    val separator = stringResource(R.string.insights_summary_separator)
+    val entries = rows.joinToString(separator = separator) { row ->
+        resources.getString(R.string.insights_chart_entry, row.label, row.value)
+    }
+    return stringResource(R.string.insights_chart_summary, stringResource(titleRes), entries)
+}
 
 @Composable
 private fun BarList(rows: List<BarRow>, color: Color, summary: String, modifier: Modifier) {
@@ -91,7 +108,7 @@ private fun BarList(rows: List<BarRow>, color: Color, summary: String, modifier:
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Text(
                         text = row.label,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),

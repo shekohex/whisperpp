@@ -3,21 +3,16 @@ package com.github.shekohex.whisperpp.ui.settings.common
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.navigation.Destination
 
 /** One row of a hub tab (Modes / More) that opens [destination]. */
@@ -28,18 +23,17 @@ data class HubEntry(
     val destination: Destination,
 )
 
-/** Large-title scaffold for top-level tabs; the bottom bar / rail is drawn by the nav host. */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Large-title scaffold for top-level tabs (a [PageScaffold] without back arrow, width-capped on
+ * large screens); the bottom bar / rail is drawn by the nav host.
+ */
 @Composable
 fun TopLevelPage(
     title: String,
     content: @Composable (Modifier) -> Unit,
 ) {
-    Scaffold(
-        topBar = { LargeTopAppBar(title = { Text(title) }) },
-        contentWindowInsets = WindowInsets.systemBars,
-    ) { padding ->
-        content(Modifier.fillMaxSize().padding(padding))
+    PageScaffold(title = title) {
+        content(Modifier.fillMaxSize())
     }
 }
 

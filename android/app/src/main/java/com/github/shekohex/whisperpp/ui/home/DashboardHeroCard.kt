@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -86,14 +87,20 @@ private fun HeroNumbers(lifetimeWords: Long, timeSavedSeconds: Long) {
     val words = StatFormat.formatCompact(lifetimeWords, locale)
     val progress = Milestones.progress(lifetimeWords)
     val reached = progress.lastReached
+    val wordCount = lifetimeWords.toPluralQuantity()
     val line = if (reached != null) {
-        stringResource(R.string.home_hero_equivalent, words, milestoneTitle(reached))
+        pluralStringResource(R.plurals.home_hero_equivalent_words, wordCount, words, milestoneTitle(reached))
     } else {
+        val toGo = progress.wordsToGo.toPluralQuantity()
         stringResource(
-            R.string.home_hero_progress,
-            words,
-            StatFormat.formatCompact(progress.wordsToGo, locale),
-            milestoneTitle(progress.next),
+            R.string.home_hero_sentence_join,
+            pluralStringResource(R.plurals.home_hero_dictated_words, wordCount, words),
+            pluralStringResource(
+                R.plurals.home_hero_words_to_go,
+                toGo,
+                StatFormat.formatCompact(progress.wordsToGo, locale),
+                milestoneTitle(progress.next),
+            ),
         )
     }
     Text(text = line, style = MaterialTheme.typography.bodyMedium)
@@ -104,6 +111,9 @@ private fun HeroNumbers(lifetimeWords: Long, timeSavedSeconds: Long) {
         )
     }
 }
+
+/** Plural selection only needs the magnitude; huge counts clamp to Int. */
+private fun Long.toPluralQuantity(): Int = coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
 
 @Composable
 private fun milestoneTitle(milestone: Milestones.Milestone): String {

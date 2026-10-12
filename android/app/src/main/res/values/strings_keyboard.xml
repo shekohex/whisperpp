@@ -1,0 +1,73 @@
+<resources>
+    <!-- Keyboard bar: language · mode pill and its in-keyboard sheet -->
+    <string name="keyboard_sheet_close">Close</string>
+    <string name="keyboard_context_pill_description">Language %1$s, mode %2$s</string>
+    <string name="keyboard_language_pill_description">Language %1$s</string>
+    <string name="keyboard_context_pill_action">change language or mode</string>
+    <string name="keyboard_context_pill_label" translatable="false">%1$s · %2$s</string>
+    <string name="keyboard_language_mode_title">Language &amp; mode</string>
+    <string name="keyboard_language_section">Dictation language</string>
+    <string name="keyboard_command_exit">Exit command mode</string>
+    <string name="keyboard_notice_dismiss">dismiss</string>
+
+    <!-- Record button state for TalkBack -->
+    <string name="keyboard_record_state_idle">Idle</string>
+    <string name="keyboard_record_state_recording">Recording</string>
+    <string name="keyboard_record_state_locked">Recording, locked</string>
+    <string name="keyboard_record_state_paused">Paused</string>
+    <string name="keyboard_record_state_processing">Processing</string>
+    <string name="keyboard_status_recording_locked">Recording (locked)</string>
+
+    <!-- First-use disclosure sheet -->
+    <string name="keyboard_disclosure_continue">Continue</string>
+    <string name="keyboard_disclosure_open_privacy">Open Privacy &amp; safety</string>
+    <string name="keyboard_disclosure_cancel">Cancel</string>
+
+    <!-- Keyboard notices -->
+    <string name="keyboard_enhancement_undo_unavailable">Can\'t undo the enhancement here</string>
+    <string name="keyboard_enhancement_kept_raw">Enhancement for %1$s finished after you left the field; the original text was kept</string>
+    <string name="keyboard_sending_blocked_app">Sending is blocked for this app</string>
+    <string name="keyboard_warning_missing_profile">The app\'s prompt profile is missing; using the base prompt.</string>
+    <string name="keyboard_warning_stt_provider_missing">Dictation provider not found; using a fallback.</string>
+    <string name="keyboard_warning_text_provider_missing">Enhancement provider not found; using a fallback.</string>
+    <string name="keyboard_warning_stt_model_missing">Dictation model not found; using a fallback.</string>
+    <string name="keyboard_warning_text_model_missing">Enhancement model not found; using a fallback.</string>
+    <string name="keyboard_warning_stt_model_incompatible">The selected model can\'t transcribe audio; using a fallback.</string>
+    <string name="keyboard_warning_text_model_incompatible">The selected model can\'t enhance text; using a fallback.</string>
+    <string name="keyboard_warning_stt_selection_missing">No dictation provider or model selected; using defaults.</string>
+    <string name="keyboard_warning_text_selection_missing">No enhancement provider or model selected; using defaults.</string>
+
+    <!-- Rotating words shown while the transcript is being enhanced (keep values-ar the same length) -->
+    <string-array name="keyboard_enhancing_words">
+        <item>Polishing</item>
+        <item>Refining</item>
+        <item>Synthesizing</item>
+        <item>De-umm-ing</item>
+        <item>Structuring</item>
+        <item>Enhancing</item>
+        <item>Harmonizing</item>
+        <item>Clarifying</item>
+        <item>Perfecting</item>
+        <item>Analyzing</item>
+        <item>Processing</item>
+        <item>Distilling</item>
+        <item>Calibrating</item>
+        <item>Fine-tuning</item>
+        <item>Connecting</item>
+        <item>Thinking</item>
+        <item>Listening</item>
+        <item>Composing</item>
+        <item>Weaving</item>
+        <item>Sculpting</item>
+        <item>Untangling</item>
+        <item>Crystallizing</item>
+        <item>Smoothing</item>
+        <item>Balancing</item>
+        <item>Filtering</item>
+        <item>Reconstructing</item>
+        <item>Aligning</item>
+        <item>Crafting</item>
+        <item>Mending</item>
+        <item>Assembling</item>
+    </string-array>
+</resources>

@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,7 +16,6 @@ import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,11 +32,12 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_MODEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ENHANCEMENT_PROMPT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.USE_CONTEXT
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsDropdown
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsEditDialog
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsItem
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsToggle
@@ -59,66 +58,68 @@ fun EnhancementScreen(
     val selectedProvider = providers.find { it.id == selectedProviderId } ?: providers.firstOrNull()
     var showPromptDialog by rememberSaveable { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = { DetailTopBar(title = "Enhancement", onBack = onBack, helpTopic = SettingsHelpTopic.ENHANCEMENT) },
-        contentWindowInsets = WindowInsets.statusBars
-    ) { padding ->
+    PageScaffold(
+        title = stringResource(R.string.enhancement_title),
+        onBack = onBack,
+        actions = { SettingsHelpAction(SettingsHelpTopic.ENHANCEMENT) },
+    ) {
         Column(
-            modifier = Modifier.padding(padding).padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
+            modifier = Modifier.padding(horizontal = 16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "Changes apply immediately. Use a custom prompt only when the default cleanup behavior is not enough.",
+                text = stringResource(R.string.enhancement_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SettingsGroup(title = "Behavior") {
+            SettingsGroup(title = stringResource(R.string.enhancement_group_behavior)) {
                 SettingsToggle(
                     icon = Icons.Default.AutoFixHigh,
-                    title = "Enable enhancement",
+                    title = stringResource(R.string.settings_enhancement_enabled),
                     checked = prefs?.get(ENHANCEMENT_ENABLED) ?: false,
                     onCheckedChange = { viewModel.set(ENHANCEMENT_ENABLED, it) }
                 )
                 SettingsToggle(
                     icon = Icons.Default.History,
-                    title = "Use Context",
+                    title = stringResource(R.string.enhancement_use_context),
                     checked = prefs?.get(USE_CONTEXT) ?: false,
                     onCheckedChange = { viewModel.set(USE_CONTEXT, it) }
                 )
                 SettingsItem(
                     icon = Icons.Default.EditNote,
-                    title = "Custom Prompt",
-                    subtitle = (prefs?.get(ENHANCEMENT_PROMPT) ?: "Default").take(20) + "...",
+                    title = stringResource(R.string.enhancement_custom_prompt),
+                    subtitle = promptPreview(prefs?.get(ENHANCEMENT_PROMPT))
+                        ?: stringResource(R.string.enhancement_prompt_default),
                     onClick = { showPromptDialog = true }
                 )
             }
 
-            SettingsGroup(title = "LLM Configuration") {
+            SettingsGroup(title = stringResource(R.string.enhancement_group_model)) {
                 val itemModifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 SettingsDropdown(
-                    label = "Backend Provider",
-                    value = selectedProvider?.name ?: "Select Provider",
+                    label = stringResource(R.string.provider_label),
+                    value = selectedProvider?.name ?: stringResource(R.string.provider_select_provider),
                     options = providers,
                     optionLabel = { it.name },
                     onSelect = viewModel::selectProvider,
                     modifier = itemModifier,
-                    emptyLabel = "No Providers Configured",
+                    emptyLabel = stringResource(R.string.provider_no_providers),
                 )
                 val currentModelName = selectedProvider?.models?.find { it.id == selectedModelId }?.name ?: selectedModelId
                 SettingsDropdown(
-                    label = "Model",
-                    value = currentModelName.ifEmpty { "Select Model" },
+                    label = stringResource(R.string.provider_model_label),
+                    value = currentModelName.ifEmpty { stringResource(R.string.provider_select_model) },
                     options = selectedProvider?.models.orEmpty(),
                     optionLabel = { it.name },
                     onSelect = { viewModel.set(ENHANCEMENT_MODEL, it.id) },
                     modifier = itemModifier,
                     enabled = selectedProvider != null,
-                    emptyLabel = "No Models",
+                    emptyLabel = stringResource(R.string.enhancement_no_models),
                 )
             }
 
-            SettingsGroup(title = "Prompts") {
+            SettingsGroup(title = stringResource(R.string.enhancement_group_prompts)) {
                 SettingsItem(
                     icon = Icons.Default.TextFields,
                     title = stringResource(R.string.enhancement_prompts_link_title),
@@ -138,7 +139,7 @@ fun EnhancementScreen(
 
     if (showPromptDialog) {
         SettingsEditDialog(
-            title = "Custom System Prompt",
+            title = stringResource(R.string.enhancement_custom_prompt_dialog),
             initialValue = prefs?.get(ENHANCEMENT_PROMPT) ?: "",
             onDismiss = { showPromptDialog = false },
             onConfirm = { newValue ->
@@ -147,4 +148,13 @@ fun EnhancementScreen(
             }
         )
     }
+}
+
+private const val PROMPT_PREVIEW_LENGTH = 40
+
+/** First characters of a custom prompt for the row subtitle; `null` when no prompt is set. */
+private fun promptPreview(prompt: String?): String? {
+    val trimmed = prompt?.trim().orEmpty()
+    if (trimmed.isEmpty()) return null
+    return if (trimmed.length > PROMPT_PREVIEW_LENGTH) trimmed.take(PROMPT_PREVIEW_LENGTH) + "…" else trimmed
 }

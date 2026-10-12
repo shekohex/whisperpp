@@ -66,7 +66,11 @@ fun HistoryAudioCard(player: HistoryAudioPlayer, modifier: Modifier = Modifier) 
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = "${formatClock(state.positionMs)} / ${formatClock(state.durationMs)}",
+                    text = stringResource(
+                        R.string.history_audio_progress,
+                        formatClock(state.positionMs),
+                        formatClock(state.durationMs),
+                    ),
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(end = 4.dp),
                 )

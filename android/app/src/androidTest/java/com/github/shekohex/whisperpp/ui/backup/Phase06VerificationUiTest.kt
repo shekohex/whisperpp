@@ -1,6 +1,8 @@
 package com.github.shekohex.whisperpp.ui.backup
 
+import android.content.Context
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -8,11 +10,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.analytics.AnalyticsRepository
 import com.github.shekohex.whisperpp.analytics.analyticsDataStore
 import com.github.shekohex.whisperpp.core.permissions.AndroidSetupSystemChecks
@@ -40,6 +46,8 @@ import com.github.shekohex.whisperpp.dataStore
 import com.github.shekohex.whisperpp.domain.setup.SetupStatusChecker
 import com.github.shekohex.whisperpp.ui.home.HomeScreen
 import com.github.shekohex.whisperpp.ui.home.HomeViewModel
+import com.github.shekohex.whisperpp.ui.navigation.AppNavHost
+import com.github.shekohex.whisperpp.ui.navigation.Destination
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,20 +58,38 @@ class Phase06VerificationUiTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun settingsHome_showsBackupStatusAndRepairBanner() {
-        setSettingsHomeContent(
-            backupStatus = "Restore complete · 2 repair items",
-            repairCount = 2,
-        )
+    fun home_showsRestoreRepairIssue() {
+        setHomeContent(backupStatus = "Restore complete · 2 repair items", repairCount = 2)
 
-        composeRule.onNodeWithText("Setup essentials").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Personalization").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Behavior & safety").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Backup & restore").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("backup_restore_home_card").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Restore complete · 2 repair items").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithTag("settings_home_setup_banner").assertIsDisplayed()
-        composeRule.onNodeWithText("Last restore still needs 2 repair steps.").assertIsDisplayed()
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repairs = context.resources.getQuantityString(R.plurals.home_issue_restore_repairs, 2, 2)
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText(repairs).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(repairs).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun backupRestore_isReachedFromMoreSettingsGroup() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        composeRule.setContent {
+            MaterialTheme {
+                AppNavHost(
+                    widthSizeClass = WindowWidthSizeClass.Compact,
+                    startDestination = Destination.Home,
+                    launchRequest = null,
+                    onLaunchRequestHandled = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(context.getString(R.string.nav_more)).performClick()
+        composeRule.onNodeWithText(context.getString(R.string.more_group_settings)).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(context.getString(R.string.more_backup_title)).performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithText(context.getString(R.string.more_backup_title))
+            .onFirst()
+            .assertIsDisplayed()
     }
 
     @Test
@@ -72,7 +98,7 @@ class Phase06VerificationUiTest {
 
         composeRule.onNodeWithTag("backup_restore_preview_card").assertIsDisplayed()
         composeRule.onNodeWithText("Warnings").assertIsDisplayed()
-        composeRule.onNodeWithText("Backup was created by a newer app version.").assertIsDisplayed()
+        composeRule.onNodeWithText("This backup was made with a newer app version (1.0.0).").assertIsDisplayed()
         composeRule.onNodeWithText("Skipped invalid or unsupported items").assertIsDisplayed()
         composeRule.onNodeWithText("Provider credentials (legacy-provider): Unsupported credential format").assertIsDisplayed()
         composeRule.onNodeWithText("Provider credentials · 1 resulting item").assertIsDisplayed()
@@ -91,19 +117,19 @@ class Phase06VerificationUiTest {
         composeRule.onNodeWithText("Skipped items").assertIsDisplayed()
         composeRule.onNodeWithText("Provider credentials (openai): Credential missing from secure restore source").assertIsDisplayed()
         composeRule.onNodeWithText("Cleared selections").assertIsDisplayed()
-        composeRule.onNodeWithText("Enhancement: Imported provider is unavailable after restore").assertIsDisplayed()
+        composeRule.onNodeWithText("Enhancement: The restored provider or model is not available on this device.").assertIsDisplayed()
         composeRule.onNodeWithText("Repair checklist").assertIsDisplayed()
-        composeRule.onNodeWithText("Re-enter provider credentials for OpenAI.").assertIsDisplayed()
-        composeRule.onNodeWithText("Choose a new enhancement selection.").assertIsDisplayed()
+        composeRule.onNodeWithText("Re-enter the API key for OpenAI before using it.").assertIsDisplayed()
+        composeRule.onNodeWithText("Enhancement: choose a new provider and model.").assertIsDisplayed()
         composeRule.onNodeWithText("Open providers").assertIsDisplayed()
-        composeRule.onNodeWithText("Open provider selections").assertIsDisplayed()
+        composeRule.onNodeWithText("Open default models").assertIsDisplayed()
     }
 
-    private fun setSettingsHomeContent(
+    private fun setHomeContent(
         backupStatus: String,
         repairCount: Int,
     ) {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val context = ApplicationProvider.getApplicationContext<Context>()
         val viewModel = HomeViewModel(
             dataStore = context.dataStore,
             settingsRepository = SettingsRepository(context.dataStore),
@@ -116,11 +142,7 @@ class Phase06VerificationUiTest {
                 HomeScreen(onNavigate = {}, viewModel = viewModel)
             }
         }
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            runCatching {
-                composeRule.onNodeWithText(backupStatus).assertIsDisplayed()
-            }.isSuccess
-        }
+        composeRule.waitForIdle()
     }
 
     private fun setImportPreviewContent(selectedMergeCategories: Set<String>) {
@@ -138,7 +160,6 @@ class Phase06VerificationUiTest {
                         }
                     },
                     onConfirmRestore = {},
-                    categoryLabelById = SETTINGS_BACKUP_CATEGORY_MANIFEST.associateBy { it.id },
                     isApplyingImport = false,
                 )
             }
@@ -151,7 +172,6 @@ class Phase06VerificationUiTest {
             MaterialTheme {
                 RestoreSummaryCard(
                     summary = restoreSummaryFixture(),
-                    categoryLabelById = SETTINGS_BACKUP_CATEGORY_MANIFEST.associateBy { it.id },
                     onNavigate = {},
                 )
             }

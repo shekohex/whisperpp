@@ -26,6 +26,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -85,7 +87,9 @@ fun AutoLearnReviewContent(
         Text(
             text = stringResource(R.string.autolearn_review_title),
             style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(horizontal = Spacing.lg),
+            modifier = Modifier
+                .padding(horizontal = Spacing.lg)
+                .semantics { heading() },
         )
         Text(
             text = stringResource(R.string.autolearn_review_subtitle),

@@ -21,6 +21,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -119,6 +120,7 @@ private fun AddTermRow(onAdd: (input: String, onResult: (DictionaryViewModel.Add
             },
             label = { Text(stringResource(R.string.dictionary_vocabulary_label)) },
             placeholder = { Text(stringResource(R.string.dictionary_vocabulary_hint)) },
+            textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content),
             singleLine = true,
             isError = error != null,
             supportingText = error?.let { result -> { Text(stringResource(result.messageRes())) } },

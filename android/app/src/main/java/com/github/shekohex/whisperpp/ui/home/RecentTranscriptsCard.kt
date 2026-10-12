@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -74,6 +75,7 @@ private fun RecentTranscriptRow(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
+                role = Role.Button,
                 onClickLabel = stringResource(R.string.home_recent_open),
                 onLongClickLabel = stringResource(R.string.home_recent_copy),
                 onLongClick = onCopy,

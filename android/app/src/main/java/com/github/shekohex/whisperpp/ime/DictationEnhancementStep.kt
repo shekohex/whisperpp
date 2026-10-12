@@ -9,7 +9,6 @@ import com.github.shekohex.whisperpp.data.PromptComposer
 import com.github.shekohex.whisperpp.data.RuntimeChannel
 import com.github.shekohex.whisperpp.data.RuntimeConfigLoader
 import com.github.shekohex.whisperpp.data.presetById
-import com.github.shekohex.whisperpp.data.toNoticeText
 import com.github.shekohex.whisperpp.dictation.EnhancementOutcome
 import com.github.shekohex.whisperpp.dictation.EnhancementRunner
 import com.github.shekohex.whisperpp.dictation.FailureReason
@@ -64,7 +63,9 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
         deps.blockedNotice()?.let { notice ->
             return kept(context.getString(R.string.enhancement_skipped_blocked, providerLabel, modelLabel, notice), isError = false)
         }
-        snapshot.effective.warnings.toNoticeText(RuntimeChannel.TEXT).takeIf { it.isNotBlank() }?.let(deps.onWarning)
+        runtimeWarningNotice(context, snapshot.effective.warnings, RuntimeChannel.TEXT)
+            .takeIf { it.isNotBlank() }
+            ?.let(deps.onWarning)
         val model = provider?.models?.find { it.id == textModelId }
         if (provider == null || model == null) {
             return kept(context.getString(R.string.enhancement_unavailable, textProviderId.ifBlank { unknownProvider }, modelLabel))

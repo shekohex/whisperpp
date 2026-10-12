@@ -31,7 +31,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.modes.LegacyModesMigration
@@ -191,12 +194,14 @@ private fun MigrationBanner(preview: LegacyModesMigration.Preview, onReview: () 
                 .padding(Spacing.lg),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
-            Text(stringResource(R.string.modes_migration_banner_title), style = MaterialTheme.typography.titleMedium)
             Text(
-                text = stringResource(
-                    R.string.modes_migration_banner_body,
-                    preview.appMappingCount + preview.languageProfileCount + preview.presetCount,
-                ),
+                text = stringResource(R.string.modes_migration_banner_title),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.semantics { heading() },
+            )
+            val ruleCount = preview.appMappingCount + preview.languageProfileCount + preview.presetCount
+            Text(
+                text = pluralStringResource(R.plurals.modes_migration_banner_rules, ruleCount, ruleCount),
                 style = MaterialTheme.typography.bodyMedium,
             )
             FilledTonalButton(onClick = onReview) { Text(stringResource(R.string.modes_migration_review)) }

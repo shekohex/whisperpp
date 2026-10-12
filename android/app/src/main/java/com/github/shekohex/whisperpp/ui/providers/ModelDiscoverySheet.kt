@@ -2,7 +2,6 @@ package com.github.shekohex.whisperpp.ui.providers
 
 import android.text.format.DateUtils
 import androidx.annotation.StringRes
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -25,12 +25,17 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
@@ -64,7 +69,9 @@ fun ModelDiscoverySheet(
                 Text(
                     stringResource(R.string.model_discovery_title),
                     style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .semantics { heading() },
                 )
                 TextButton(enabled = state != UiState.Loading, onClick = viewModel::refresh) {
                     Text(stringResource(R.string.model_discovery_refresh))
@@ -169,13 +176,18 @@ private fun DiscoveredModelRow(model: DiscoveredModel, checked: Boolean, added: 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = !added, onClick = onToggle)
+            .toggleable(value = checked, enabled = !added, role = Role.Checkbox, onValueChange = { onToggle() })
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(checked = checked, enabled = !added, onCheckedChange = { onToggle() })
+        Checkbox(
+            checked = checked,
+            enabled = !added,
+            onCheckedChange = null,
+            modifier = Modifier.minimumInteractiveComponentSize(),
+        )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(model.displayName, style = MaterialTheme.typography.bodyLarge)
+            Text(model.displayName, style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content))
             if (model.displayName != model.id) {
                 Text(model.id, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }

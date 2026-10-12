@@ -20,6 +20,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -57,7 +58,12 @@ fun PeakHoursChart(
     val summary = if (peakHour == null) {
         stringResource(R.string.insights_peak_hours_empty)
     } else {
-        stringResource(R.string.insights_peak_hours_summary, formatter.format(LocalTime.of(peakHour, 0)), bins[peakHour])
+        pluralStringResource(
+            R.plurals.insights_peak_hours_sessions_summary,
+            bins[peakHour],
+            formatter.format(LocalTime.of(peakHour, 0)),
+            bins[peakHour],
+        )
     }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
@@ -113,6 +119,8 @@ fun PeakHoursChart(
             text = summary,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // The chart above already announces this summary.
+            modifier = Modifier.clearAndSetSemantics {},
         )
     }
 }

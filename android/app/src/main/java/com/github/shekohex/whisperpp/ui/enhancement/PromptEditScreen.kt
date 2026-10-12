@@ -10,13 +10,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,10 +23,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
+import com.github.shekohex.whisperpp.R
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
 
@@ -44,37 +47,31 @@ fun PromptEditScreen(
 
     LaunchedEffect(notFound) {
         if (notFound) {
-            Toast.makeText(context, "Profile not found", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.prompts_not_found, Toast.LENGTH_SHORT).show()
             onBack()
         }
     }
 
-    Scaffold(
-        topBar = {
-            DetailTopBar(
-                title = if (viewModel.isNew) "New profile" else "Edit profile",
-                onBack = onBack,
-                helpTopic = SettingsHelpTopic.PROMPTS_PROFILES,
-                actions = {
-                    TextButton(
-                        onClick = {
-                            viewModel.save {
-                                Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
-                                onBack()
-                            }
-                        },
-                        enabled = name.trim().isNotBlank(),
-                    ) {
-                        Text("Save")
+    PageScaffold(
+        title = stringResource(if (viewModel.isNew) R.string.prompts_new_title else R.string.prompts_edit_title),
+        onBack = onBack,
+        actions = {
+            SettingsHelpAction(SettingsHelpTopic.PROMPTS_PROFILES)
+            TextButton(
+                onClick = {
+                    viewModel.save {
+                        Toast.makeText(context, R.string.prompts_saved, Toast.LENGTH_SHORT).show()
+                        onBack()
                     }
-                }
-            )
+                },
+                enabled = name.trim().isNotBlank(),
+            ) {
+                Text(stringResource(R.string.prompts_save))
+            }
         },
-        contentWindowInsets = WindowInsets.statusBars
-    ) { padding ->
+    ) {
         Column(
             modifier = Modifier
-                .padding(padding)
                 .padding(horizontal = 16.dp)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
@@ -82,11 +79,11 @@ fun PromptEditScreen(
         ) {
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "Save stores this profile immediately so it can be reused in app mappings.",
+                text = stringResource(R.string.prompts_edit_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SettingsGroup(title = "Profile") {
+            SettingsGroup(title = stringResource(R.string.prompts_group_profile)) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -96,7 +93,8 @@ fun PromptEditScreen(
                         onValueChange = viewModel::setName,
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        label = { Text("Name") },
+                        label = { Text(stringResource(R.string.prompts_name)) },
+                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content),
                     )
                     OutlinedTextField(
                         value = append,
@@ -104,7 +102,8 @@ fun PromptEditScreen(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 4,
                         maxLines = 10,
-                        label = { Text("Prompt append (optional)") },
+                        label = { Text(stringResource(R.string.prompts_append_label)) },
+                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content),
                     )
                 }
             }

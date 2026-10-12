@@ -24,6 +24,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SwipeToDismissBox
@@ -40,8 +41,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
@@ -131,6 +134,7 @@ private fun AddReplacementRow(
                 error = null
             },
             label = { Text(stringResource(R.string.dictionary_original_label)) },
+            textStyle = contentTextStyle(),
             placeholder = { Text(stringResource(R.string.dictionary_original_hint)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -148,6 +152,7 @@ private fun AddReplacementRow(
                     error = null
                 },
                 label = { Text(stringResource(R.string.dictionary_replacement_label)) },
+                textStyle = contentTextStyle(),
                 singleLine = true,
                 isError = error != null,
                 supportingText = error?.let { result -> { Text(stringResource(result.messageRes())) } },
@@ -197,7 +202,11 @@ private fun ReplacementRow(
         onDismiss = { onDelete() },
     ) {
         ListItem(
-            modifier = Modifier.clickable(onClick = onClick),
+            modifier = Modifier.clickable(
+                role = Role.Button,
+                onClickLabel = stringResource(R.string.dictionary_edit_replacement),
+                onClick = onClick,
+            ),
             headlineContent = {
                 Text(
                     text = stringResource(R.string.dictionary_rule_format, rule.originals.joinToString(", "), rule.replacement),
@@ -227,6 +236,7 @@ private fun ReplacementEditDialog(
                     value = originals,
                     onValueChange = { originals = it },
                     label = { Text(stringResource(R.string.dictionary_original_label)) },
+                    textStyle = contentTextStyle(),
                     supportingText = { Text(stringResource(R.string.dictionary_original_hint)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -234,6 +244,7 @@ private fun ReplacementEditDialog(
                     value = replacement,
                     onValueChange = { replacement = it },
                     label = { Text(stringResource(R.string.dictionary_replacement_label)) },
+                    textStyle = contentTextStyle(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -252,6 +263,10 @@ private fun ReplacementEditDialog(
         },
     )
 }
+
+/** User-typed words may be Arabic, English or mixed: follow the content's direction. */
+@Composable
+private fun contentTextStyle(): TextStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
 
 private fun Replacement.key(): String = originals.joinToString("\u0000") { it.lowercase() } + "\u0001" + replacement
 

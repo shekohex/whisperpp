@@ -20,9 +20,9 @@ class ProviderListViewModel(private val container: AppContainer) : PreferencesVi
 
     /**
      * Deletes [provider] unless an active selection still uses it; returns the blocking selection
-     * names in that case so the screen can explain why.
+     * names (string resources) in that case so the screen can explain why.
      */
-    fun delete(provider: ServiceProvider): List<String> {
+    fun delete(provider: ServiceProvider): List<Int> {
         val refs = prefs.value?.let { selectionReferencesProvider(provider.id, it) }.orEmpty()
         if (refs.isNotEmpty()) return refs
         viewModelScope.launch {

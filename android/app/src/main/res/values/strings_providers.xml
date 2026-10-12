@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- WP-3.7 providers: provider list -->
+    <string name="provider_list_title">Providers</string>
+    <string name="provider_list_intro">Add or test providers here, then open Default models to choose what Whisper++ uses.</string>
+    <string name="provider_list_active">Active provider</string>
+    <string name="provider_delete_named">Delete %1$s</string>
+    <plurals name="provider_models_configured">
+        <item quantity="one">%1$d model configured</item>
+        <item quantity="other">%1$d models configured</item>
+    </plurals>
+    <string name="provider_delete_blocked_title">Can\'t delete this provider</string>
+    <string name="provider_delete_blocked_message">%1$s is used by: %2$s. Choose another provider or clear the selection first.</string>
+    <string name="provider_go_to_selections">Go to default models</string>
+    <string name="provider_add_custom">Custom provider</string>
+    <string name="provider_add_presets">Presets</string>
+    <string name="provider_list_separator">, </string>
+
+    <!-- Provider types -->
+    <string name="provider_type_openai" translatable="false">OpenAI</string>
+    <string name="provider_type_whisper_asr" translatable="false">Whisper ASR</string>
+    <string name="provider_type_gemini" translatable="false">Google Gemini</string>
+    <string name="provider_type_custom">Custom</string>
+
+    <!-- Selection references -->
+    <string name="provider_selection_ref_dictation">Dictation (speech-to-text)</string>
+    <string name="provider_selection_ref_enhancement">Enhancement (text)</string>
+    <string name="provider_selection_ref_command">Command override</string>
+
+    <!-- Provider editor -->
+    <string name="provider_edit_title_edit">Edit provider</string>
+    <string name="provider_edit_title_duplicate">Duplicate provider</string>
+    <string name="provider_edit_title_new">New provider</string>
+    <string name="provider_duplicate">Duplicate</string>
+    <string name="provider_save">Save</string>
+    <string name="provider_edit_intro">Save stores this provider for default models and tests. Use Test or Discover models to check the setup before leaving.</string>
+    <string name="provider_name_label">Provider name</string>
+    <string name="provider_type_label">Type</string>
+    <string name="provider_language_label">Transcription language</string>
+    <string name="provider_base_url_label">Base URL</string>
+    <string name="provider_base_url_required">Base URL is required</string>
+    <string name="provider_base_url_invalid">Use a valid https:// URL</string>
+    <string name="provider_duplicate_warning">%1$s already uses this type and base URL</string>
+    <string name="provider_auth_title">Authentication</string>
+    <string name="provider_auth_api_key">API key</string>
+    <string name="provider_auth_none">No authentication</string>
+    <string name="provider_key_status_set_last4">API key set (ends with %1$s)</string>
+    <string name="provider_key_status_set">API key set</string>
+    <string name="provider_key_status_reuse_last4">The copied API key will be reused (ends with %1$s)</string>
+    <string name="provider_key_status_reuse">The copied API key will be reused</string>
+    <string name="provider_key_status_not_set">API key not set</string>
+    <string name="provider_key_replace">Replace API key</string>
+    <string name="provider_key_set">Set API key</string>
+    <string name="provider_key_clear">Clear stored key</string>
+
+    <!-- Provider tests -->
+    <string name="provider_test_title">Test</string>
+    <string name="provider_test_text">Test text</string>
+    <string name="provider_test_stt">Test transcription</string>
+    <string name="provider_test_custom_text">Custom text model</string>
+    <string name="provider_test_custom_stt">Custom transcription model</string>
+    <string name="provider_test_pick_audio">Pick audio</string>
+    <string name="provider_test_change_audio">Change audio</string>
+    <string name="provider_test_text_model_id">Text model ID</string>
+    <string name="provider_test_stt_model_id">Transcription model ID</string>
+    <string name="provider_test_running">Running…</string>
+    <string name="provider_test_text_title">Text test</string>
+    <string name="provider_test_stt_title">Transcription test</string>
+    <string name="provider_test_audio_open_failed">Couldn\'t open the audio file</string>
+    <string name="provider_test_model_required">Model ID is required</string>
+    <string name="provider_test_http_status" translatable="false">HTTP %1$d</string>
+    <string name="provider_test_empty_response">Empty response</string>
+
+    <!-- Provider tuning -->
+    <string name="provider_timeout_label">Timeout (ms)</string>
+    <string name="provider_temperature">Temperature: %1$s</string>
+    <string name="provider_prompt_label">System prompt / context</string>
+    <string name="provider_thinking_title">Thinking</string>
+    <string name="provider_thinking_enable">Enable thinking</string>
+    <string name="provider_thinking_mode">Thinking mode</string>
+    <string name="provider_thinking_type_level">Level</string>
+    <string name="provider_thinking_type_budget">Budget (tokens)</string>
+    <string name="provider_thinking_level_label">Thinking level</string>
+    <string name="provider_thinking_level_minimal">Minimal</string>
+    <string name="provider_thinking_level_low">Low</string>
+    <string name="provider_thinking_level_medium">Medium</string>
+    <string name="provider_thinking_level_high">High</string>
+    <string name="provider_thinking_level_xhigh">Extra high</string>
+    <plurals name="provider_thinking_budget_tokens">
+        <item quantity="one">Budget: %1$d token</item>
+        <item quantity="other">Budget: %1$d tokens</item>
+    </plurals>
+
+    <!-- Provider models -->
+    <string name="provider_models_title">Models</string>
+    <string name="provider_model_add">Add model</string>
+    <string name="provider_model_default_name">New model</string>
+    <string name="provider_model_name">Model name</string>
+    <string name="provider_model_delete">Delete model</string>
+    <string name="provider_model_id">Model ID (API)</string>
+    <string name="provider_model_kind">Kind</string>
+    <string name="provider_model_kind_stt">Speech-to-text</string>
+    <string name="provider_model_kind_text">Text</string>
+    <string name="provider_model_kind_multimodal">Multimodal</string>
+    <string name="provider_model_streaming">Streaming partials supported</string>
+    <string name="provider_model_thinking">Thinking model</string>
+    <string name="provider_model_delete_blocked_title">Can\'t delete this model</string>
+    <string name="provider_model_delete_blocked_message">%1$s is used by: %2$s. Choose another model or clear the selection first.</string>
+
+    <!-- Default model selections -->
+    <string name="provider_selections_intro">Selections save immediately. Choose a provider first, then one of its compatible models.</string>
+    <string name="provider_selections_advanced">Advanced</string>
+    <string name="provider_label">Provider</string>
+    <string name="provider_model_label">Model</string>
+    <string name="provider_none">None</string>
+    <string name="provider_no_providers">No providers configured</string>
+    <string name="provider_select_provider_first">Select a provider first</string>
+    <string name="provider_select_provider">Select a provider</string>
+    <string name="provider_select_model">Select a model</string>
+    <string name="provider_inherit">Inherit</string>
+    <string name="provider_inherit_enhancement">Same as enhancement</string>
+    <string name="provider_command_inherit_info">Command mode uses the enhancement selection by default.</string>
+    <string name="provider_command_override_info">A command override is set. Clear it to follow the enhancement selection again.</string>
+    <string name="provider_command_provider">Command provider</string>
+    <string name="provider_command_model">Command model</string>
+
+    <!-- App mappings -->
+    <plurals name="apps_selected_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <string name="apps_assign">Assign</string>
+    <string name="apps_cancel_selection">Cancel selection</string>
+    <string name="apps_multi_select">Select multiple</string>
+    <string name="apps_search_group">Search</string>
+    <string name="apps_search_label">Search installed apps</string>
+    <string name="apps_add_package_label">Add by package name</string>
+    <string name="apps_add">Add</string>
+    <string name="apps_installed_group">Installed apps</string>
+    <string name="apps_no_matching">No matching apps</string>
+    <string name="apps_profile_none">None</string>
+    <string name="apps_profile_missing">Missing</string>
+    <string name="apps_profile_missing_description">Profile missing</string>
+    <plurals name="apps_assigned">
+        <item quantity="one">Profile assigned to %1$d app</item>
+        <item quantity="other">Profile assigned to %1$d apps</item>
+    </plurals>
+    <string name="apps_assign_profile_title">Assign profile</string>
+    <string name="apps_no_append">No append</string>
+    <string name="apps_mapping_title">App mapping</string>
+    <string name="apps_save">Save</string>
+    <string name="apps_saved">Saved</string>
+    <string name="apps_mapping_intro">Save applies this mapping right away. Leave any field empty to inherit the global defaults.</string>
+    <string name="apps_group_app">App</string>
+    <string name="apps_group_profile">Profile</string>
+    <string name="apps_group_prompt_append">Prompt append</string>
+    <string name="apps_stt_override">Dictation override (speech-to-text)</string>
+    <string name="apps_text_override">Enhancement override (text)</string>
+    <string name="apps_mapping_removed">Mapping removed</string>
+    <string name="apps_remove_mapping">Remove mapping</string>
+    <string name="apps_prompt_profile">Prompt profile</string>
+    <string name="apps_missing_profile_warning">This profile no longer exists. The app uses the defaults until you choose another one.</string>
+    <string name="apps_append">Append</string>
+    <string name="apps_append_disabled">Append is off for this app. The base prompt still applies.</string>
+    <string name="apps_append_label">App-specific append (optional)</string>
+    <string name="apps_clear">Clear</string>
+
+    <!-- Per-language defaults -->
+    <string name="apps_language_add">Add language</string>
+    <string name="apps_language_intro">Add a language when one global setup isn\'t enough. Changes save as soon as you choose them.</string>
+    <string name="apps_languages_group">Languages</string>
+    <string name="apps_language_empty">No per-language defaults yet</string>
+    <string name="apps_language_removed">Language removed</string>
+    <string name="apps_language_added">Language added</string>
+    <string name="apps_language_exists">This language already exists</string>
+    <string name="apps_language_subtitle">Speech-to-text and text defaults</string>
+    <string name="apps_language_expand">Show settings</string>
+    <string name="apps_language_collapse">Hide settings</string>
+    <string name="apps_language_delete">Delete %1$s</string>
+    <string name="apps_language_code">Language code</string>
+    <string name="apps_language_code_hint">e.g. en, en-US, ar</string>
+
+    <!-- Enhancement -->
+    <string name="enhancement_title">Enhancement</string>
+    <string name="enhancement_intro">Changes apply immediately. Use a custom prompt only when the default cleanup isn\'t enough.</string>
+    <string name="enhancement_group_behavior">Behavior</string>
+    <string name="enhancement_use_context">Use context</string>
+    <string name="enhancement_custom_prompt">Custom prompt</string>
+    <string name="enhancement_prompt_default">Default</string>
+    <string name="enhancement_group_model">Language model</string>
+    <string name="enhancement_no_models">No models</string>
+    <string name="enhancement_group_prompts">Prompts</string>
+    <string name="enhancement_custom_prompt_dialog">Custom system prompt</string>
+
+    <!-- Presets -->
+    <string name="presets_intro">Preset changes apply to the next enhancement or command run.</string>
+    <string name="presets_summary">%1$s • %2$s</string>
+
+    <!-- Prompts & profiles -->
+    <string name="prompts_save">Save</string>
+    <string name="prompts_saved">Saved</string>
+    <string name="prompts_intro">Tap Save to apply base prompt edits. Profiles and app mappings update when you edit their entries.</string>
+    <string name="prompts_base_group">Global base prompt</string>
+    <string name="prompts_base_label">Base prompt</string>
+    <string name="prompts_base_hint">e.g. Improve clarity, fix punctuation, keep the tone.</string>
+    <string name="prompts_base_helper">Used as the foundation for enhancement prompts.</string>
+    <string name="prompts_profiles_group">Prompt profiles</string>
+    <string name="prompts_delete_title">Delete profile?</string>
+    <string name="prompts_delete_message">Delete “%1$s”? App mappings that use it are kept and fall back to the defaults until updated.</string>
+    <string name="prompts_delete">Delete</string>
+    <string name="prompts_deleted">Profile deleted</string>
+    <string name="prompts_add">Add profile</string>
+    <string name="prompts_add_summary">Name and optional prompt append</string>
+    <string name="prompts_empty_title">No profiles yet</string>
+    <string name="prompts_empty_body">Create one to reuse prompt append text across apps.</string>
+    <string name="prompts_no_append">No append</string>
+    <string name="prompts_edit_named">Edit %1$s</string>
+    <string name="prompts_delete_named">Delete %1$s</string>
+    <string name="prompts_not_found">Profile not found</string>
+    <string name="prompts_new_title">New profile</string>
+    <string name="prompts_edit_title">Edit profile</string>
+    <string name="prompts_edit_intro">Save stores this profile right away so you can use it in app mappings.</string>
+    <string name="prompts_group_profile">Profile</string>
+    <string name="prompts_name">Name</string>
+    <string name="prompts_append_label">Prompt append (optional)</string>
+
+    <!-- Dictation & audio settings -->
+    <string name="dictation_group_automation">Automation</string>
+    <string name="dictation_auto_start">Auto-start recording</string>
+    <string name="dictation_auto_switch_back">Auto switch back</string>
+    <string name="dictation_auto_transcribe">Auto transcribe</string>
+    <string name="dictation_group_extras">Extras</string>
+    <string name="dictation_trailing_space">Add trailing space</string>
+    <string name="dictation_cancel_confirmation">Confirm before cancelling</string>
+    <string name="dictation_audio_group_feedback">Feedback</string>
+    <string name="dictation_audio_haptics">Haptic feedback</string>
+    <string name="dictation_audio_sounds">Sound effects</string>
+</resources>

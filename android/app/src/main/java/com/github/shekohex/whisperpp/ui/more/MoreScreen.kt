@@ -13,6 +13,8 @@ import androidx.compose.material.icons.filled.SettingsSuggest
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.github.shekohex.whisperpp.R
+import com.github.shekohex.whisperpp.ui.components.PreviewSurface
+import com.github.shekohex.whisperpp.ui.components.WidthPreviews
 import com.github.shekohex.whisperpp.ui.navigation.Destination
 import com.github.shekohex.whisperpp.ui.settings.common.HubEntry
 import com.github.shekohex.whisperpp.ui.settings.common.HubSection
@@ -51,4 +53,10 @@ fun MoreScreen(onNavigate: (Destination) -> Unit) {
             modifier = modifier,
         )
     }
+}
+
+@WidthPreviews
+@Composable
+private fun MoreScreenPreview() {
+    PreviewSurface { MoreScreen(onNavigate = {}) }
 }

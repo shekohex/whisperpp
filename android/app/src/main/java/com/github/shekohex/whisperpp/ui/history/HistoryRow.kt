@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDirection
@@ -125,7 +126,19 @@ private fun HistoryRowContent(
         modifier = Modifier
             .fillMaxWidth()
             .semantics { selected = isSelected }
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            .combinedClickable(
+                role = Role.Button,
+                onClickLabel = when {
+                    !isSelecting -> stringResource(R.string.home_recent_open)
+                    isSelected -> stringResource(R.string.history_row_deselect)
+                    else -> stringResource(R.string.history_row_select)
+                },
+                onLongClickLabel = stringResource(
+                    if (isSelected) R.string.history_row_deselect else R.string.history_row_select,
+                ),
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
     ) {
         Row(
             modifier = Modifier.padding(Spacing.lg),

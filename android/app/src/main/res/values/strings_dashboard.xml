@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home -->
+    <string name="home_hero_sentence_join">%1$s %2$s</string>
+    <plurals name="home_hero_equivalent_words">
+        <item quantity="one">Dictated %1$s word, equivalent to %2$s.</item>
+        <item quantity="other">Dictated %1$s words, equivalent to %2$s.</item>
+    </plurals>
+    <plurals name="home_hero_dictated_words">
+        <item quantity="one">Dictated %1$s word.</item>
+        <item quantity="other">Dictated %1$s words.</item>
+    </plurals>
+    <plurals name="home_hero_words_to_go">
+        <item quantity="one">%1$s word to go until %2$s.</item>
+        <item quantity="other">%1$s words to go until %2$s.</item>
+    </plurals>
+
+    <!-- Insights -->
+    <string name="insights_period_7d_description">Last 7 days</string>
+    <string name="insights_period_30d_description">Last 30 days</string>
+    <string name="insights_period_90d_description">Last 90 days</string>
+    <string name="insights_period_all_description">All time</string>
+    <string name="insights_summary_join">%1$s %2$s</string>
+    <string name="insights_summary_separator">"; "</string>
+    <string name="insights_chart_entry">%1$s: %2$s</string>
+    <string name="insights_chart_summary">%1$s. %2$s</string>
+    <string name="insights_latency_row_label">%1$s · %2$s</string>
+    <plurals name="insights_calendar_active_summary">
+        <item quantity="one">Active on %1$d of the last %2$d day.</item>
+        <item quantity="other">Active on %1$d of the last %2$d days.</item>
+    </plurals>
+    <plurals name="insights_calendar_busiest_sessions">
+        <item quantity="one">Busiest day: %1$s with %2$d session.</item>
+        <item quantity="other">Busiest day: %1$s with %2$d sessions.</item>
+    </plurals>
+    <plurals name="insights_peak_hours_sessions_summary">
+        <item quantity="one">Most active around %1$s (%2$d session).</item>
+        <item quantity="other">Most active around %1$s (%2$d sessions).</item>
+    </plurals>
+
+    <!-- History -->
+    <string name="history_row_select">Select</string>
+    <string name="history_row_deselect">Deselect</string>
+    <string name="history_audio_progress">%1$s / %2$s</string>
+
+    <!-- Modes -->
+    <string name="modes_card_enabled_description">Enable “%1$s”</string>
+    <string name="modes_list_separator">", "</string>
+    <string name="modes_migration_in_progress">Migrating…</string>
+    <string name="modes_edit_apps_remove_named">Remove %1$s</string>
+    <plurals name="modes_migration_banner_rules">
+        <item quantity="one">%1$d app, language or prompt rule can become a mode.</item>
+        <item quantity="other">%1$d app, language or prompt rules can become modes.</item>
+    </plurals>
+    <plurals name="modes_error_name_too_long">
+        <item quantity="one">Use at most %1$d character</item>
+        <item quantity="other">Use at most %1$d characters</item>
+    </plurals>
+
+    <!-- Dictionary -->
+    <string name="dictionary_import_done_summary">Imported %1$s and %2$s</string>
+    <plurals name="dictionary_replacement_count">
+        <item quantity="one">%1$d replacement</item>
+        <item quantity="other">%1$d replacements</item>
+    </plurals>
+</resources>

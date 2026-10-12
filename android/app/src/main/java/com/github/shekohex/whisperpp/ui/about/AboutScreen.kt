@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,7 +26,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,8 +44,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsDropdown
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsItem
@@ -59,6 +56,7 @@ import com.github.shekohex.whisperpp.updater.InstallResult
 import com.github.shekohex.whisperpp.updater.UpdateAvailableCard
 import com.github.shekohex.whisperpp.updater.UpdateCheckResult
 import com.github.shekohex.whisperpp.updater.UpdateCheckWorker
+import com.github.shekohex.whisperpp.updater.updateErrorText
 
 /** Version, update channel / check / download, advanced options and licenses. */
 @Composable
@@ -75,12 +73,9 @@ fun AboutScreen(
     var showLicenses by rememberSaveable { mutableStateOf(false) }
     if (showLicenses) OpenSourceLicensesDialog(onDismiss = { showLicenses = false })
 
-    Scaffold(
-        topBar = { DetailTopBar(title = stringResource(R.string.about_title), onBack = onBack) },
-        contentWindowInsets = WindowInsets.navigationBars,
-    ) { padding ->
+    PageScaffold(title = stringResource(R.string.about_title), onBack = onBack) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -177,7 +172,7 @@ private fun UpdateSection(viewModel: AboutViewModel, showUpdate: Boolean) {
             },
             dismissButton = {
                 TextButton(onClick = { showPermissionDialog = false }) {
-                    Text(stringResource(android.R.string.cancel))
+                    Text(stringResource(R.string.component_cancel))
                 }
             },
         )
@@ -239,12 +234,20 @@ private fun UpdateSection(viewModel: AboutViewModel, showUpdate: Boolean) {
                 modifier = Modifier.padding(16.dp),
             )
             is UpdateCheckResult.Error -> Text(
-                text = stringResource(R.string.update_failed, result.message),
+                text = updateErrorText(result.error),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(16.dp),
             )
             null -> Unit
+        }
+        if (installResult is InstallResult.Error) {
+            Text(
+                text = stringResource(R.string.update_install_failed),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(16.dp),
+            )
         }
     }
 }

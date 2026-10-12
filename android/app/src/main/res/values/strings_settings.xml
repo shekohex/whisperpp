@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Backup & restore (WP-3.7) -->
+    <string name="backup_intro">Create password-encrypted backups, then restore them step by step: pick a file, choose a restore mode, enter the password, review the preview and confirm.</string>
+    <string name="backup_export_group">Export encrypted backup</string>
+    <string name="backup_import_group">Import backup</string>
+    <string name="backup_included_title">Included categories</string>
+    <string name="backup_included_message">Every backup lists its categories, so the import preview can show exactly what the file contains, including sensitive content.</string>
+    <string name="backup_app_version">App version</string>
+    <string name="backup_export_time">Export time</string>
+    <string name="backup_export_time_value">Set when you create the file</string>
+    <string name="backup_credentials_summary">Sensitive content included. Provider credentials stay inside the encrypted backup only.</string>
+    <string name="backup_category_default_summary">Included in every encrypted backup file.</string>
+    <string name="backup_sensitive_content">Sensitive content</string>
+    <string name="backup_sensitive_included">Sensitive content included.</string>
+    <string name="backup_create">Create encrypted backup</string>
+    <string name="backup_creating">Creating encrypted backup…</string>
+    <string name="backup_restore_flow_title">How restoring works</string>
+    <string name="backup_restore_flow_message">Choose a file first. Then select Overwrite or Merge, enter the password, preview the changes and confirm the restore.</string>
+    <string name="backup_choose_file">Choose backup file</string>
+    <string name="backup_decrypting">Decrypting backup…</string>
+    <string name="backup_change_mode">Change mode</string>
+    <string name="backup_enter_password">Enter password</string>
+    <string name="backup_notice_with_extra" translatable="false">%1$s %2$s</string>
+
+    <!-- Backup: dialogs and restore mode sheet -->
+    <string name="backup_export_password_title">Protect backup with a password</string>
+    <string name="backup_export_password_message">Every export is encrypted. Provider credentials can be included, so there is no unencrypted export.</string>
+    <string name="backup_password_label">Backup password</string>
+    <string name="backup_password_confirm_label">Confirm password</string>
+    <string name="backup_show_password">Show password</string>
+    <string name="backup_hide_password">Hide password</string>
+    <string name="backup_continue">Continue</string>
+    <string name="backup_import_password_title">Unlock backup preview</string>
+    <string name="backup_import_password_message">Enter the password before previewing or applying anything from this backup.</string>
+    <string name="backup_preview_restore">Preview restore</string>
+    <string name="backup_mode_sheet_title">Choose how to restore this backup</string>
+    <string name="backup_mode_sheet_message">Overwrite restores every category found in the file. Merge lets you preview and include or exclude whole categories before applying anything.</string>
+    <string name="backup_mode_overwrite">Overwrite</string>
+    <string name="backup_mode_overwrite_summary">Replace every category present in the backup file.</string>
+    <string name="backup_mode_merge">Merge</string>
+    <string name="backup_mode_merge_summary">Preview the backup first, then choose which categories to include. Imported values win conflicts.</string>
+
+    <!-- Backup: errors (the technical cause is only logged) -->
+    <string name="backup_error_password_blank">Enter a password before creating the backup.</string>
+    <string name="backup_error_password_mismatch">Passwords do not match.</string>
+    <string name="backup_error_import_password_blank">Enter the backup password to continue.</string>
+    <string name="backup_error_no_file">Choose a backup file and restore mode first.</string>
+    <string name="backup_error_wrong_password">Wrong password, or the backup file is damaged.</string>
+    <string name="backup_error_unsupported_encryption">This backup uses encryption settings that this version of Whisper++ does not support.</string>
+    <string name="backup_error_read_failed">Could not read the selected backup file.</string>
+    <string name="backup_error_invalid_file">This file is not a valid Whisper++ backup.</string>
+    <string name="backup_error_open_destination">Could not open the selected destination.</string>
+    <string name="backup_error_write_failed">Could not write the backup file.</string>
+    <string name="backup_error_export_failed">Could not create the encrypted backup.</string>
+    <string name="backup_error_apply_failed">The backup could not be applied.</string>
+
+    <!-- Backup: notices, toasts and status -->
+    <string name="backup_export_ready_title">Encrypted backup ready</string>
+    <string name="backup_export_ready_message">Backup created %1$s and saved as a .whisperpp-backup file.</string>
+    <string name="backup_export_failed_title">Export failed</string>
+    <string name="backup_preview_ready_title">Preview ready</string>
+    <string name="backup_preview_ready_message">Review the restore preview before confirming any changes.</string>
+    <string name="backup_preview_failed_title">Could not preview backup</string>
+    <string name="backup_restore_complete_title">Restore complete</string>
+    <string name="backup_restore_complete_message">Review the summary below to see what was restored.</string>
+    <string name="backup_restore_complete_followup_title">Restore complete, follow-up needed</string>
+    <string name="backup_restore_complete_followup_message">Review the repair checklist below before relying on the restored selections.</string>
+    <string name="backup_restore_failed_title">Restore failed</string>
+    <string name="backup_toast_exported">Backup exported</string>
+    <string name="backup_toast_export_failed">Backup export failed</string>
+    <string name="backup_toast_restored">Restore complete</string>
+    <string name="backup_toast_restored_with_repairs">Restore complete, some items need repair</string>
+    <string name="backup_toast_restore_failed">Restore failed</string>
+    <string name="backup_status_last_export">Last export %1$s</string>
+    <string name="backup_status_restore_complete">Restore complete</string>
+    <plurals name="backup_status_restore_repairs">
+        <item quantity="one">Restore complete · %1$d repair item</item>
+        <item quantity="other">Restore complete · %1$d repair items</item>
+    </plurals>
+
+    <!-- Backup: import preview -->
+    <string name="backup_preview_title">Preview before restore</string>
+    <string name="backup_preview_message">Backup from %1$s · app %2$s · %3$s</string>
+    <string name="backup_conflict_title">Conflict behavior</string>
+    <string name="backup_conflict_message">Merge restores only the categories you keep selected here. When the same item exists on this device, the imported value wins.</string>
+    <string name="backup_warnings_title">Warnings</string>
+    <string name="backup_warning_newer_app">This backup was made with a newer app version (%1$s).</string>
+    <string name="backup_warning_older_app">This backup was made with an older app version (%1$s).</string>
+    <string name="backup_warning_newer_format">This backup uses a newer file format than this app supports. Some items may be skipped.</string>
+    <string name="backup_warning_older_format">This backup uses an older file format.</string>
+    <string name="backup_skipped_invalid_title">Skipped invalid or unsupported items</string>
+    <string name="backup_skipped_item" translatable="false">%1$s: %2$s</string>
+    <string name="backup_skipped_item_with_key" translatable="false">%1$s (%2$s): %3$s</string>
+    <string name="backup_categories_title">Categories in this backup</string>
+    <plurals name="backup_merge_chip_label">
+        <item quantity="one">%1$s · %2$d resulting item</item>
+        <item quantity="other">%1$s · %2$d resulting items</item>
+    </plurals>
+    <string name="backup_preview_not_present">Not present in this backup.</string>
+    <plurals name="backup_preview_counts_conflicts">
+        <item quantity="one">%1$d imported, %2$d existing, %3$d conflicting item.</item>
+        <item quantity="other">%1$d imported, %2$d existing, %3$d conflicting items.</item>
+    </plurals>
+    <string name="backup_preview_counts">Imported: %1$d · Existing: %2$d · After restore: %3$d</string>
+    <string name="backup_applying_restore">Applying restore…</string>
+    <string name="backup_confirm_overwrite">Confirm overwrite restore</string>
+    <plurals name="backup_confirm_merge">
+        <item quantity="one">Confirm restore for %d category</item>
+        <item quantity="other">Confirm restore for %d categories</item>
+    </plurals>
+
+    <!-- Backup: completion summary -->
+    <string name="backup_summary_title">Completion summary</string>
+    <string name="backup_summary_needs_repair">Restore finished, but some selections or credentials still need repair.</string>
+    <string name="backup_summary_done">Restore finished. Review the outcome below.</string>
+    <string name="backup_summary_applied">Applied categories</string>
+    <string name="backup_summary_skipped">Skipped items</string>
+    <string name="backup_summary_cleared">Cleared selections</string>
+    <string name="backup_summary_repair">Repair checklist</string>
+    <string name="backup_summary_none">None</string>
+    <string name="backup_summary_entry" translatable="false">%1$s: %2$s</string>
+    <string name="backup_bullet_item" translatable="false">• %1$s</string>
+    <string name="backup_cleared_missing_key">Missing API key for %1$s.</string>
+    <string name="backup_cleared_unavailable">The restored provider or model is not available on this device.</string>
+    <string name="backup_repair_reenter_key">Re-enter the API key for %1$s before using it.</string>
+    <string name="backup_repair_key_then_select">%2$s: add the API key for %1$s, then select it again.</string>
+    <string name="backup_repair_choose_selection">%1$s: choose a new provider and model.</string>
+    <string name="backup_repair_open_providers">Open providers</string>
+    <string name="backup_repair_open_selections">Open default models</string>
+    <string name="backup_selection_dictation">Dictation</string>
+    <string name="backup_selection_enhancement">Enhancement</string>
+    <string name="backup_selection_command">Command mode</string>
+
+    <!-- Backup: category labels (ids stay in the file; labels are display only) -->
+    <string name="backup_category_providers_models">Providers &amp; models</string>
+    <string name="backup_category_provider_credentials">Provider credentials</string>
+    <string name="backup_category_active_selections">Default models</string>
+    <string name="backup_category_language_defaults">Language defaults</string>
+    <string name="backup_category_prompts_profiles">Prompts &amp; profiles</string>
+    <string name="backup_category_app_mappings">App mappings</string>
+    <string name="backup_category_transform_presets">Transform presets</string>
+    <string name="backup_category_keyboard_behavior">Keyboard behavior</string>
+    <string name="backup_category_privacy_safety">Privacy &amp; safety</string>
+    <string name="backup_category_advanced_preferences">Advanced preferences</string>
+    <string name="backup_category_dictionary">Dictionary</string>
+    <string name="backup_category_modes">Modes</string>
+    <string name="backup_category_history">Transcript history</string>
+
+    <!-- Privacy & Safety (WP-3.7) -->
+    <string name="privacy_disclosure_group">What is sent</string>
+    <string name="privacy_diagnostics_group">Diagnostics</string>
+    <string name="privacy_verbose_logs_summary">When on, only redacted request headers are logged. Request and response bodies are never logged.</string>
+    <string name="privacy_reset_disclosures">Reset first-use disclosures</string>
+    <string name="privacy_reset_disclosures_summary">Changes apply immediately. Reset shows each first-use disclosure again the next time that feature runs.</string>
+    <string name="privacy_send_policy_group">Per-app send policy</string>
+    <string name="privacy_send_policy_hint">Sending to cloud providers is allowed by default. Turn it off for an app to block it.</string>
+    <string name="privacy_search_apps">Search installed apps</string>
+    <string name="privacy_no_matching_apps">No matching apps</string>
+    <string name="privacy_allow_external_sending">Allow sending</string>
+    <string name="privacy_add_rule_group">Block an app by package name</string>
+    <string name="privacy_package_name">Package name</string>
+    <string name="privacy_block_package">Block package</string>
+
+    <!-- Privacy disclosures: shown in Privacy & Safety and the keyboard's first-use overlay -->
+    <string name="privacy_disclosure_dictation_title">Dictation (audio)</string>
+    <string name="privacy_disclosure_dictation_data">Recorded audio is uploaded for transcription.</string>
+    <string name="privacy_disclosure_dictation_context_on">Use Context is on. Recent text before the cursor is sent with the request.</string>
+    <string name="privacy_disclosure_dictation_context_off">Use Context is off. No text before the cursor is sent.</string>
+    <string name="privacy_disclosure_enhancement_title">Enhancement (text)</string>
+    <string name="privacy_disclosure_enhancement_data">Transcript text is sent for enhancement.</string>
+    <string name="privacy_disclosure_enhancement_context_on">Use Context is on. Context text may be sent with the transcript text.</string>
+    <string name="privacy_disclosure_enhancement_context_off">Use Context is off. Only the transcript text is sent.</string>
+    <string name="privacy_disclosure_command_title">Command mode</string>
+    <string name="privacy_disclosure_command_data">Instruction audio is uploaded for transcription. Then the selected text and the transcribed instruction are sent for transformation.</string>
+    <string name="privacy_disclosure_command_context_on">Use Context is on. Context text may be sent with the selected text and transcribed instruction.</string>
+    <string name="privacy_disclosure_command_context_off">Use Context is off. Only the selected text and transcribed instruction are sent after transcription.</string>
+    <string name="privacy_endpoint_label">Endpoint</string>
+    <string name="privacy_endpoint_instruction_audio">Instruction audio transcription</string>
+    <string name="privacy_endpoint_text_transform">Text transform</string>
+    <string name="privacy_endpoint_line" translatable="false">%1$s: %2$s</string>
+    <string name="privacy_endpoint_not_configured">Not configured</string>
+    <string name="privacy_endpoint_invalid">Invalid endpoint</string>
+
+    <!-- Updates (WP-3.7) -->
+    <string name="update_error_network">Could not reach the update server. Check your connection and try again.</string>
+    <string name="update_error_server">The update server is not responding (HTTP %1$d). Try again later.</string>
+    <string name="update_error_client">Update information is unavailable (HTTP %1$d).</string>
+    <string name="update_error_metadata">The update information is invalid.</string>
+    <string name="update_error_no_apk">No update is available for this device.</string>
+    <string name="update_error_unexpected">Could not check for updates.</string>
+    <string name="update_download_error_insecure">The download link is not secure.</string>
+    <string name="update_download_error_storage">Storage is not available.</string>
+    <string name="update_download_error_space">Not enough storage space.</string>
+    <string name="update_download_error_start">The download could not start.</string>
+    <string name="update_download_error_not_found">The download was not found.</string>
+    <string name="update_download_error_network">The download was interrupted.</string>
+    <string name="update_download_error_file">The file could not be saved.</string>
+    <string name="update_download_error_missing">The downloaded file is missing.</string>
+    <string name="update_download_error_checksum">The downloaded file did not pass verification and was deleted.</string>
+    <string name="update_download_error_invalid_checksum">The update information has an invalid checksum.</string>
+    <string name="update_download_error_verification">The downloaded file could not be verified.</string>
+    <string name="update_download_error_unknown">Unknown error.</string>
+    <string name="update_download_notification_title">Whisper++ update</string>
+    <string name="update_download_notification_description">Downloading version %1$s</string>
+    <string name="update_install_failed">Could not start the installer. Download the update again and retry.</string>
+
+    <!-- Shared settings components (WP-3.7) -->
+    <string name="settings_dialog_confirm">Confirm</string>
+    <string name="settings_provider_label">Provider</string>
+    <string name="settings_model_label">Model</string>
+    <string name="settings_no_providers">No providers configured</string>
+    <string name="settings_no_compatible_models">No compatible models</string>
+    <string name="settings_language_auto">Auto-detect</string>
+
+    <!-- Contextual help sheets -->
+    <string name="settings_help_home_title">Home</string>
+    <string name="settings_help_home_summary">Home shows your dictation progress, recent transcripts and anything that needs attention.</string>
+    <string name="settings_help_home_tip1">Finish the setup checklist first; Whisper++ needs the keyboard, the microphone and a provider.</string>
+    <string name="settings_help_home_tip2">Items under Needs attention link straight to the screen that fixes them.</string>
+    <string name="settings_help_home_tip3">Open Insights for detailed statistics. All statistics stay on this device.</string>
+    <string name="settings_help_providers_title">Providers &amp; models</string>
+    <string name="settings_help_providers_summary">Add providers here, then choose which ones Whisper++ uses in Default models.</string>
+    <string name="settings_help_providers_tip1">Default models sets the dictation, enhancement and command defaults.</string>
+    <string name="settings_help_providers_tip2">Keep model lists accurate so status summaries and validation stay useful.</string>
+    <string name="settings_help_providers_tip3">If a provider is still selected, clear or reassign that selection before deleting it.</string>
+    <string name="settings_help_provider_selections_title">Default models</string>
+    <string name="settings_help_provider_selections_summary">Choose the default dictation, enhancement and optional command models Whisper++ uses.</string>
+    <string name="settings_help_provider_selections_tip1">Pick a provider first, then choose one of its compatible models.</string>
+    <string name="settings_help_provider_selections_tip2">Leave the command override empty to use the enhancement model.</string>
+    <string name="settings_help_provider_selections_tip3">Per-language defaults can override these defaults for specific languages.</string>
+    <string name="settings_help_language_defaults_title">Per-language defaults</string>
+    <string name="settings_help_language_defaults_summary">Set language-specific dictation and enhancement defaults when one global setup is not enough.</string>
+    <string name="settings_help_language_defaults_tip1">Add only the languages you actually switch between.</string>
+    <string name="settings_help_language_defaults_tip2">Each language can override both dictation and enhancement defaults.</string>
+    <string name="settings_help_language_defaults_tip3">If a provider or model is removed later, revisit the rule and update it.</string>
+    <string name="settings_help_prompts_profiles_title">Prompts &amp; profiles</string>
+    <string name="settings_help_prompts_profiles_summary">Shape how enhancement behaves everywhere, then reuse focused prompt profiles across apps.</string>
+    <string name="settings_help_prompts_profiles_tip1">The base prompt applies everywhere unless a screen says otherwise.</string>
+    <string name="settings_help_prompts_profiles_tip2">Profiles are reusable prompt additions for app mappings.</string>
+    <string name="settings_help_prompts_profiles_tip3">Use App mappings when one app needs a different profile or provider.</string>
+    <string name="settings_help_app_mappings_title">App mappings</string>
+    <string name="settings_help_app_mappings_summary">Map individual apps to prompt profiles and optional provider overrides.</string>
+    <string name="settings_help_app_mappings_tip1">Choose a profile when an app needs a different tone or cleanup style.</string>
+    <string name="settings_help_app_mappings_tip2">Overrides are optional; leave them empty to use the global defaults.</string>
+    <string name="settings_help_app_mappings_tip3">Enter a package name for apps that do not appear in the picker.</string>
+    <string name="settings_help_presets_title">Transform presets</string>
+    <string name="settings_help_presets_summary">Set the default preset for enhancement after dictation and for command mode.</string>
+    <string name="settings_help_presets_tip1">The enhancement default applies after dictation when enhancement runs.</string>
+    <string name="settings_help_presets_tip2">The command default shapes selected-text transforms before your spoken instruction adds detail.</string>
+    <string name="settings_help_presets_tip3">Changing a preset affects the next run; existing text is not rewritten.</string>
+    <string name="settings_help_dictation_title">Keyboard behavior</string>
+    <string name="settings_help_dictation_summary">Tune how the keyboard behaves while recording, inserting text and giving feedback.</string>
+    <string name="settings_help_dictation_tip1">Automation options control how quickly Whisper++ moves from recording to insertion.</string>
+    <string name="settings_help_dictation_tip2">Insertion options keep typing behavior predictable across apps.</string>
+    <string name="settings_help_dictation_tip3">Feedback options stay on this device and do not affect your providers.</string>
+    <string name="settings_help_enhancement_title">Enhancement</string>
+    <string name="settings_help_enhancement_summary">Control enhancement and the provider used to clean up dictation.</string>
+    <string name="settings_help_enhancement_tip1">Turn on enhancement only when you want automatic cleanup after dictation.</string>
+    <string name="settings_help_enhancement_tip2">Keep custom prompts short and focused on instructions.</string>
+    <string name="settings_help_enhancement_tip3">Choose the enhancement model in Default models.</string>
+    <string name="settings_help_privacy_safety_title">Privacy &amp; safety</string>
+    <string name="settings_help_privacy_safety_summary">Review what data is sent, manage blocked apps and reset first-use disclosures.</string>
+    <string name="settings_help_privacy_safety_tip1">Blocked apps never send anything to cloud providers, even when dictation works elsewhere.</string>
+    <string name="settings_help_privacy_safety_tip2">Verbose logs only include redacted headers; request bodies are never logged.</string>
+    <string name="settings_help_privacy_safety_tip3">Check this screen after importing a backup or changing providers.</string>
+    <string name="settings_help_backup_restore_title">Backup &amp; restore</string>
+    <string name="settings_help_backup_restore_summary">Exports are always password-encrypted. A restore goes from file to mode, password and preview before anything is applied.</string>
+    <string name="settings_help_backup_restore_tip1">Provider credentials can be included in encrypted backups, so use a strong password you will remember.</string>
+    <string name="settings_help_backup_restore_tip2">Merge mode lets you include or exclude whole categories before restoring anything.</string>
+    <string name="settings_help_backup_restore_tip3">After a restore, stay on this screen to review skipped items, cleared selections and repair steps.</string>
+    <string name="settings_help_analytics_title">Insights</string>
+    <string name="settings_help_analytics_summary">Insights summarizes your dictation for the selected period. Everything is calculated on this device.</string>
+    <string name="settings_help_analytics_tip1">Switch between 7 days, 30 days, 90 days and all time with the period chips.</string>
+    <string name="settings_help_analytics_tip2">The activity calendar and peak hours show when you dictate most.</string>
+    <string name="settings_help_analytics_tip3">Model usage and performance compare the providers you use for transcription and enhancement.</string>
+</resources>

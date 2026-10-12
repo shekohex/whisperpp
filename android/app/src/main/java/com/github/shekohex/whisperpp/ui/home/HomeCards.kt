@@ -19,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.ui.components.PreviewSurface
 import com.github.shekohex.whisperpp.ui.components.ThemePreviews
@@ -57,7 +59,11 @@ internal fun HomeSetupBanner(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(imageVector = Icons.Default.Warning, contentDescription = null)
-                Text(text = stringResource(R.string.home_issues_title), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = stringResource(R.string.home_issues_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.semantics { heading() },
+                )
             }
             issues.take(MAX_ISSUES).forEach { issue ->
                 Text(text = issue.message, style = MaterialTheme.typography.bodyMedium)

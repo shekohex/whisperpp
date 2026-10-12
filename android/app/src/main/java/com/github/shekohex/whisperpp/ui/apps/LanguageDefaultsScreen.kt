@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,9 +24,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,13 +38,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.LanguageProfile
 import com.github.shekohex.whisperpp.data.ServiceProvider
-import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
 import java.util.Locale
@@ -62,24 +65,18 @@ fun LanguageDefaultsScreen(
     var showAddDialog by rememberSaveable { mutableStateOf(false) }
     var expandedCode by rememberSaveable { mutableStateOf<String?>(null) }
 
-    Scaffold(
-        topBar = {
-            DetailTopBar(
-                title = "Per-language defaults",
-                onBack = onBack,
-                helpTopic = SettingsHelpTopic.LANGUAGE_DEFAULTS,
-                actions = {
-                    IconButton(onClick = { showAddDialog = true }) {
-                        Icon(Icons.Default.Add, "Add")
-                    }
-                },
-            )
+    PageScaffold(
+        title = stringResource(R.string.modes_language_defaults_title),
+        onBack = onBack,
+        actions = {
+            SettingsHelpAction(SettingsHelpTopic.LANGUAGE_DEFAULTS)
+            IconButton(onClick = { showAddDialog = true }) {
+                Icon(Icons.Default.Add, stringResource(R.string.apps_language_add))
+            }
         },
-        contentWindowInsets = WindowInsets.statusBars,
-    ) { padding ->
+    ) {
         Column(
             modifier = Modifier
-                .padding(padding)
                 .padding(horizontal = 16.dp)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
@@ -87,14 +84,14 @@ fun LanguageDefaultsScreen(
         ) {
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "Add a language when one global setup is not enough. Changes save as soon as you choose them.",
+                text = stringResource(R.string.apps_language_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (languageDefaults.isEmpty()) {
-                SettingsGroup(title = "Languages") {
+                SettingsGroup(title = stringResource(R.string.apps_languages_group)) {
                     Text(
-                        text = "No per-language defaults yet",
+                        text = stringResource(R.string.apps_language_empty),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -111,7 +108,7 @@ fun LanguageDefaultsScreen(
                         onToggleExpanded = { expandedCode = if (isExpanded) null else profile.languageCode },
                         onDelete = {
                             viewModel.delete(profile.languageCode) {
-                                Toast.makeText(context, "Removed", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, R.string.apps_language_removed, Toast.LENGTH_SHORT).show()
                             }
                         },
                         onUpdate = viewModel::upsert,
@@ -127,7 +124,8 @@ fun LanguageDefaultsScreen(
             onDismiss = { showAddDialog = false },
             onAdd = { code ->
                 viewModel.add(code) { added ->
-                    Toast.makeText(context, if (added) "Added" else "Already exists", Toast.LENGTH_SHORT).show()
+                    val message = if (added) R.string.apps_language_added else R.string.apps_language_exists
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                     expandedCode = code.trim()
                     showAddDialog = false
                 }
@@ -161,21 +159,26 @@ private fun LanguageDefaultCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = profile.languageCode, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
-                        text = "STT + Text defaults",
+                        text = stringResource(R.string.apps_language_subtitle),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 IconButton(onClick = onToggleExpanded) {
-                    Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, contentDescription = "Expand")
+                    Icon(
+                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = stringResource(
+                            if (expanded) R.string.apps_language_collapse else R.string.apps_language_expand,
+                        ),
+                    )
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, "Delete")
+                    Icon(Icons.Default.Delete, stringResource(R.string.apps_language_delete, profile.languageCode))
                 }
             }
             if (expanded) {
                 ProviderModelSelectionEditor(
-                    title = "Dictation (STT)",
+                    title = stringResource(R.string.provider_selection_ref_dictation),
                     providers = providers,
                     isCompatible = { it.capabilities.stt },
                     providerId = profile.transcriptionProviderId,
@@ -183,7 +186,7 @@ private fun LanguageDefaultCard(
                     onUpdate = { p, m -> onUpdate(profile.copy(transcriptionProviderId = p, transcriptionModelId = m)) },
                 )
                 ProviderModelSelectionEditor(
-                    title = "Enhancement (Text)",
+                    title = stringResource(R.string.provider_selection_ref_enhancement),
                     providers = providers,
                     isCompatible = { it.capabilities.text },
                     providerId = profile.enhancementProviderId,
@@ -200,25 +203,26 @@ private fun AddLanguageDialog(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
     var draftLanguageCode by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add language") },
+        title = { Text(stringResource(R.string.apps_language_add)) },
         text = {
             OutlinedTextField(
                 value = draftLanguageCode,
                 onValueChange = { draftLanguageCode = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text("Language code") },
-                placeholder = { Text("e.g. en, en-US, ar") },
+                label = { Text(stringResource(R.string.apps_language_code)) },
+                textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr),
+                placeholder = { Text(stringResource(R.string.apps_language_code_hint)) },
             )
         },
         confirmButton = {
             TextButton(onClick = { onAdd(draftLanguageCode) }, enabled = draftLanguageCode.trim().isNotBlank()) {
-                Text("Add")
+                Text(stringResource(R.string.apps_add))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.component_cancel))
             }
         },
     )

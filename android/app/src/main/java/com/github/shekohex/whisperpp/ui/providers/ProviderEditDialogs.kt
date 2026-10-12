@@ -5,16 +5,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
+import com.github.shekohex.whisperpp.R
 
 @Composable
 internal fun TestResultDialog(result: ProviderTestResult, onDismiss: () -> Unit) {
@@ -28,18 +28,29 @@ internal fun TestResultDialog(result: ProviderTestResult, onDismiss: () -> Unit)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                result.status?.let { Text("HTTP $it", style = MaterialTheme.typography.labelMedium) }
-                result.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                result.status?.let {
+                    Text(stringResource(R.string.provider_test_http_status, it), style = MaterialTheme.typography.labelMedium)
+                }
+                result.error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
                 if (result.body.isNotBlank()) {
-                    Text(result.body, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        result.body,
+                        style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Content),
+                    )
                 } else if (result.error == null) {
-                    Text("(empty response)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        stringResource(R.string.provider_test_empty_response),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close")
+                Text(stringResource(R.string.settings_close))
             }
         }
     )
@@ -48,24 +59,14 @@ internal fun TestResultDialog(result: ProviderTestResult, onDismiss: () -> Unit)
 @Composable
 internal fun BlockedModelDeleteDialog(
     modelName: String,
-    refs: List<String>,
+    refs: List<Int>,
     onDismiss: () -> Unit,
     onGoToSelections: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Default.Warning, null) },
-        title = { Text("Can't delete selected model") },
-        text = { Text("$modelName is selected for: ${refs.joinToString(", ")}. Reassign or clear the selection first.") },
-        confirmButton = {
-            TextButton(onClick = onGoToSelections) {
-                Text("Go to selections")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
+    BlockedDeleteDialog(
+        title = stringResource(R.string.provider_model_delete_blocked_title),
+        message = stringResource(R.string.provider_model_delete_blocked_message, modelName, selectionNames(refs)),
+        onDismiss = onDismiss,
+        onGoToSelections = onGoToSelections,
     )
 }

@@ -1,22 +1,18 @@
 package com.github.shekohex.whisperpp.ui.dictionary
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -43,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.app.appContainer
 import com.github.shekohex.whisperpp.ui.components.LoadingState
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
 import com.github.shekohex.whisperpp.ui.theme.Spacing
 import kotlinx.coroutines.launch
@@ -84,21 +81,16 @@ fun DictionaryScreen(viewModel: DictionaryViewModel = defaultDictionaryViewModel
         }
     }
 
-    Scaffold(
-        topBar = {
-            LargeTopAppBar(
-                title = { Text(stringResource(R.string.nav_dictionary)) },
-                actions = {
-                    IconButton(onClick = { showSettings = true }) {
-                        Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.dictionary_settings_title))
-                    }
-                },
-            )
+    PageScaffold(
+        title = stringResource(R.string.nav_dictionary),
+        actions = {
+            IconButton(onClick = { showSettings = true }) {
+                Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.dictionary_settings_title))
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        contentWindowInsets = WindowInsets.systemBars,
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
             if (proposalCount > 0) ReviewBanner(proposalCount)
             TabSelector(selected = tab, onSelect = { tab = it })
             val currentRules = rules

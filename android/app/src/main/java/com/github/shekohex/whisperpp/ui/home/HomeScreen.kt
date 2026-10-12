@@ -4,6 +4,7 @@ import android.content.ClipData
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -41,8 +42,11 @@ import com.github.shekohex.whisperpp.analytics.AnalyticsSnapshot
 import com.github.shekohex.whisperpp.data.history.TranscriptHistoryEntry
 import com.github.shekohex.whisperpp.domain.analytics.MomentumCopy
 import com.github.shekohex.whisperpp.domain.setup.SetupStatus
+import com.github.shekohex.whisperpp.ui.components.ContentMaxWidth
 import com.github.shekohex.whisperpp.ui.components.LoadingState
+import com.github.shekohex.whisperpp.ui.components.PreviewSurface
 import com.github.shekohex.whisperpp.ui.components.RefreshOnResume
+import com.github.shekohex.whisperpp.ui.components.WidthPreviews
 import com.github.shekohex.whisperpp.ui.navigation.Destination
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
@@ -51,6 +55,7 @@ import com.github.shekohex.whisperpp.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
 private val TWO_COLUMN_MAX_WIDTH = 1_200.dp
+private val EXPANDED_MIN_WIDTH = 840.dp
 
 /** Home = dashboard (§4.9): greeting, hero, setup checklist, recent transcripts. */
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
@@ -100,28 +105,34 @@ fun HomeScreen(
             onMicRequested = viewModel::setMicRequested,
             onMicResult = viewModel::refreshSetupStatus,
         )
-        Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
-            LazyColumn(
-                modifier = Modifier.widthIn(max = TWO_COLUMN_MAX_WIDTH).fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                item(key = "greeting") { Greeting(sections.snapshot) }
-                if (expanded) {
-                    item(key = "columns") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                                sections.Hero()
-                                sections.Setup()
-                            }
-                            Column(Modifier.weight(1f)) { sections.Recent() }
+        HomeContent(sections = sections, expanded = expanded, modifier = Modifier.fillMaxSize().padding(padding))
+    }
+}
+
+/** Stateless dashboard body: stacked on phones, two columns when [expanded]. */
+@Composable
+private fun HomeContent(sections: HomeSections, expanded: Boolean, modifier: Modifier = Modifier) {
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+        LazyColumn(
+            modifier = Modifier.widthIn(max = if (expanded) TWO_COLUMN_MAX_WIDTH else ContentMaxWidth).fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            item(key = "greeting") { Greeting(sections.snapshot) }
+            if (expanded) {
+                item(key = "columns") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                            sections.Hero()
+                            sections.Setup()
                         }
+                        Column(Modifier.weight(1f)) { sections.Recent() }
                     }
-                } else {
-                    item(key = "hero") { sections.Hero() }
-                    item(key = "setup") { sections.Setup() }
-                    item(key = "recent") { sections.Recent() }
                 }
+            } else {
+                item(key = "hero") { sections.Hero() }
+                item(key = "setup") { sections.Setup() }
+                item(key = "recent") { sections.Recent() }
             }
         }
     }
@@ -204,6 +215,29 @@ private fun MomentumCopy.Variant.textRes(): Int = when (this) {
     MomentumCopy.Variant.WELCOME_BACK -> R.string.home_momentum_welcome_back
     MomentumCopy.Variant.KEEP_GOING -> R.string.home_momentum_keep_going
     MomentumCopy.Variant.ON_A_ROLL -> R.string.home_momentum_on_a_roll
+}
+
+@WidthPreviews
+@Composable
+private fun HomeContentPreview() {
+    PreviewSurface {
+        BoxWithConstraints {
+            HomeContent(
+                sections = HomeSections(
+                    snapshot = AnalyticsSnapshot(lifetimeWords = 8_880, lifetimeTimeSavedSeconds = 2 * 3_600L + 5 * 60L),
+                    issues = emptyList(),
+                    setupStatus = null,
+                    hasProviders = true,
+                    recent = sampleTranscripts(),
+                    onNavigate = {},
+                    onCopy = {},
+                    onMicRequested = {},
+                    onMicResult = {},
+                ),
+                expanded = maxWidth >= EXPANDED_MIN_WIDTH,
+            )
+        }
+    }
 }
 
 @Composable

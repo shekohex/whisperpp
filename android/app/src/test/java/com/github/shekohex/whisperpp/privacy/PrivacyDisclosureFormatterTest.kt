@@ -1,11 +1,11 @@
 package com.github.shekohex.whisperpp.privacy
 
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.data.ModelCapabilities
 import com.github.shekohex.whisperpp.data.ProviderType
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PrivacyDisclosureFormatterTest {
@@ -100,17 +100,16 @@ class PrivacyDisclosureFormatterTest {
             useContext = true,
         )
 
-        assertEquals("Command mode", disclosure.title)
-        assertTrue(disclosure.dataSent.contains("instruction audio", ignoreCase = true))
-        assertTrue(disclosure.dataSent.contains("selected text", ignoreCase = true))
+        assertEquals(R.string.privacy_disclosure_command_title, disclosure.title)
+        assertEquals(R.string.privacy_disclosure_command_data, disclosure.dataSent)
         assertEquals(2, disclosure.endpoints.size)
-        assertEquals("Instruction audio transcription", disclosure.endpoints[0].label)
+        assertEquals(R.string.privacy_endpoint_instruction_audio, disclosure.endpoints[0].label)
         assertEquals("https://stt.example.com", disclosure.endpoints[0].baseUrl)
         assertEquals("/v1/audio/transcriptions", disclosure.endpoints[0].path)
-        assertEquals("Text transform", disclosure.endpoints[1].label)
+        assertEquals(R.string.privacy_endpoint_text_transform, disclosure.endpoints[1].label)
         assertEquals("https://generativelanguage.googleapis.com", disclosure.endpoints[1].baseUrl)
         assertEquals("/v1beta/models/gemini-1.5-pro:generateContent", disclosure.endpoints[1].path)
-        assertTrue(disclosure.contextLine.contains("Context text may be sent"))
+        assertEquals(R.string.privacy_disclosure_command_context_on, disclosure.contextLine)
     }
 
     @Test
@@ -131,9 +130,10 @@ class PrivacyDisclosureFormatterTest {
             useContext = false,
         )
 
-        assertEquals("Not configured", disclosure.endpoints[0].baseUrl)
-        assertEquals("Not configured", disclosure.endpoints[0].path)
-        assertEquals("Invalid endpoint", disclosure.endpoints[1].baseUrl)
-        assertEquals("Invalid endpoint", disclosure.endpoints[1].path)
+        assertEquals(PrivacyDisclosureFormatter.EndpointStatus.NOT_CONFIGURED, disclosure.endpoints[0].status)
+        assertEquals("", disclosure.endpoints[0].baseUrl)
+        assertEquals(PrivacyDisclosureFormatter.EndpointStatus.INVALID, disclosure.endpoints[1].status)
+        assertEquals("", disclosure.endpoints[1].path)
+        assertEquals(R.string.privacy_disclosure_command_context_off, disclosure.contextLine)
     }
 }

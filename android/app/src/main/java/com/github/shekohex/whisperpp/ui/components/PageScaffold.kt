@@ -43,6 +43,8 @@ fun PageScaffold(
     largeTitle: Boolean = true,
     snackbarHost: @Composable () -> Unit = {},
     floatingActionButton: @Composable () -> Unit = {},
+    /** Wider screens (e.g. two-column dashboards) may raise the default 640dp cap. */
+    maxContentWidth: Dp = ContentMaxWidth,
     content: @Composable () -> Unit,
 ) {
     val scrollBehavior = if (largeTitle) {
@@ -92,7 +94,7 @@ fun PageScaffold(
                 .padding(innerPadding),
             contentAlignment = Alignment.TopCenter,
         ) {
-            Box(modifier = Modifier.contentWidthLimit()) { content() }
+            Box(modifier = Modifier.contentWidthLimit(maxContentWidth)) { content() }
         }
     }
 }

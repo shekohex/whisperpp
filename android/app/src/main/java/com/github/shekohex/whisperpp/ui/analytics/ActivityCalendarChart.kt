@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalLocale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -99,12 +100,23 @@ fun ActivityCalendarChart(
 @Composable
 private fun calendarSummary(model: ActivityCalendarModel): String {
     val busiest = model.busiest
-    val base = stringResource(R.string.insights_calendar_summary, model.activeDays, model.totalDays)
+    val base = pluralStringResource(
+        R.plurals.insights_calendar_active_summary,
+        model.totalDays,
+        model.activeDays,
+        model.totalDays,
+    )
     if (busiest == null) return base
     val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
         .withLocale(LocalLocale.current.platformLocale)
         .format(busiest.date)
-    return base + " " + stringResource(R.string.insights_calendar_busiest, date, busiest.sessions)
+    val busiestText = pluralStringResource(
+        R.plurals.insights_calendar_busiest_sessions,
+        busiest.sessions,
+        date,
+        busiest.sessions,
+    )
+    return stringResource(R.string.insights_summary_join, base, busiestText)
 }
 
 @Composable

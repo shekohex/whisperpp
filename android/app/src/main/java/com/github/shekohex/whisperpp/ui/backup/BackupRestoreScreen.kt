@@ -9,13 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backup
@@ -30,7 +27,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,9 +45,10 @@ import com.github.shekohex.whisperpp.data.RestoreMode
 import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_MANIFEST
 import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS
 import com.github.shekohex.whisperpp.ui.backup.BackupNotice.Tone
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.appVersionName
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
@@ -69,8 +66,7 @@ fun BackupRestoreScreen(
         BackupRestoreViewModel(container, appContext, appVersionName(appContext))
     }
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val categoryLabelById = remember { SETTINGS_BACKUP_CATEGORY_MANIFEST.associateBy { it.id } }
-    val toast: (String) -> Unit = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    val toast: (Int) -> Unit = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
 
     var showExportPasswordDialog by rememberSaveable { mutableStateOf(false) }
     var pendingExport by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -78,7 +74,7 @@ fun BackupRestoreScreen(
     var pendingImportMode by rememberSaveable { mutableStateOf<RestoreMode?>(null) }
     var showRestoreModeSheet by rememberSaveable { mutableStateOf(false) }
     var showImportPasswordDialog by rememberSaveable { mutableStateOf(false) }
-    var importPasswordError by rememberSaveable { mutableStateOf<String?>(null) }
+    var importPasswordError by rememberSaveable { mutableStateOf<Int?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         val request = pendingExport
@@ -97,18 +93,19 @@ fun BackupRestoreScreen(
         showRestoreModeSheet = true
     }
 
-    Scaffold(
-        topBar = { DetailTopBar(title = "Backup & restore", onBack = onBack, helpTopic = SettingsHelpTopic.BACKUP_RESTORE) },
-        contentWindowInsets = WindowInsets.navigationBars,
-    ) { padding ->
+    PageScaffold(
+        title = stringResource(R.string.more_backup_title),
+        onBack = onBack,
+        actions = { SettingsHelpAction(SettingsHelpTopic.BACKUP_RESTORE) },
+    ) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
                 Text(
-                    text = "Create password-encrypted backups, then restore them through file pick, mode choice, password, preview, and confirmation without leaving settings.",
+                    text = stringResource(R.string.backup_intro),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -125,24 +122,24 @@ fun BackupRestoreScreen(
                 )
             }
             item {
-                SettingsGroup(title = "Import backup") {
+                SettingsGroup(title = stringResource(R.string.backup_import_group)) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         BackupNoticeCard(
-                            title = "Restore flow",
-                            message = "Choose a file first. Then select Overwrite or Merge, enter the password, preview the changes, and explicitly confirm the restore.",
+                            title = stringResource(R.string.backup_restore_flow_title),
+                            message = stringResource(R.string.backup_restore_flow_message),
                             tone = Tone.Info,
                             leadingIcon = Icons.Default.Download,
                         )
                         state.importNotice?.let { notice ->
-                            BackupNoticeCard(notice.title, notice.message, notice.tone, noticeIcon(notice, Icons.Default.Download))
+                            NoticeCard(notice, Icons.Default.Download)
                         }
                         ProgressButton(
                             busy = state.isAnalyzingImport,
-                            busyLabel = "Decrypting backup…",
-                            label = "Choose backup file",
+                            busyLabel = stringResource(R.string.backup_decrypting),
+                            label = stringResource(R.string.backup_choose_file),
                             icon = Icons.Default.Download,
                             enabled = !state.isBusy,
                             onClick = {
@@ -153,12 +150,15 @@ fun BackupRestoreScreen(
                         val awaitingPassword = pendingImportUri != null && pendingImportMode != null &&
                             state.importAnalysis == null && !showImportPasswordDialog && !state.isAnalyzingImport
                         if (awaitingPassword) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
                                 OutlinedButton(onClick = { showRestoreModeSheet = true }, modifier = Modifier.weight(1f)) {
-                                    Text("Change mode")
+                                    Text(stringResource(R.string.backup_change_mode))
                                 }
                                 OutlinedButton(onClick = { showImportPasswordDialog = true }, modifier = Modifier.weight(1f)) {
-                                    Text("Enter password")
+                                    Text(stringResource(R.string.backup_enter_password))
                                 }
                             }
                         }
@@ -176,18 +176,14 @@ fun BackupRestoreScreen(
                                         onMessage = toast,
                                     )
                                 },
-                                categoryLabelById = categoryLabelById,
                                 isApplyingImport = state.isApplyingImport,
                             )
                         }
                         state.restoreSummary?.let { summary ->
-                            RestoreSummaryCard(summary = summary, categoryLabelById = categoryLabelById, onNavigate = onNavigate)
+                            RestoreSummaryCard(summary = summary, onNavigate = onNavigate)
                         }
                     }
                 }
-            }
-            item {
-                Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
             }
         }
     }
@@ -233,8 +229,8 @@ fun BackupRestoreScreen(
                 val uri = pendingImportUri
                 val mode = pendingImportMode
                 when {
-                    password.isBlank() -> importPasswordError = "Enter the backup password to continue."
-                    uri == null || mode == null -> importPasswordError = "Choose a backup file and restore mode first."
+                    password.isBlank() -> importPasswordError = R.string.backup_error_import_password_blank
+                    uri == null || mode == null -> importPasswordError = R.string.backup_error_no_file
                     else -> {
                         showImportPasswordDialog = false
                         viewModel.analyze(uri, mode, password) { error ->
@@ -258,28 +254,36 @@ private fun ExportSection(
     enabled: Boolean,
     onExport: () -> Unit,
 ) {
-    SettingsGroup(title = "Export encrypted backup") {
+    SettingsGroup(title = stringResource(R.string.backup_export_group)) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             BackupNoticeCard(
-                title = "Included categories",
-                message = "Every backup uses the stable category manifest so import preview can list exactly what the file contains, including sensitive contents.",
+                title = stringResource(R.string.backup_included_title),
+                message = stringResource(R.string.backup_included_message),
                 tone = Tone.Info,
                 leadingIcon = Icons.Default.Info,
             )
-            BackupIdentityRow(label = "App version", value = appVersionName, icon = Icons.Default.Backup)
-            BackupIdentityRow(label = "Export timestamp", value = "Generated when you create the file", icon = Icons.Default.CheckCircle)
+            BackupIdentityRow(
+                label = stringResource(R.string.backup_app_version),
+                value = appVersionName,
+                icon = Icons.Default.Backup,
+            )
+            BackupIdentityRow(
+                label = stringResource(R.string.backup_export_time),
+                value = stringResource(R.string.backup_export_time_value),
+                icon = Icons.Default.CheckCircle,
+            )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val defaultCategories = SETTINGS_BACKUP_CATEGORY_MANIFEST.filter { it.includedByDefault }
                 defaultCategories.forEachIndexed { index, category ->
                     BackupCategoryRow(
-                        title = category.label,
+                        title = backupCategoryLabel(category.id, category.label),
                         summary = if (category.id == SETTINGS_BACKUP_CATEGORY_PROVIDER_CREDENTIALS) {
-                            "Sensitive content included. Provider credentials stay inside the encrypted backup only."
+                            stringResource(R.string.backup_credentials_summary)
                         } else {
-                            "Included in every encrypted backup file."
+                            stringResource(R.string.backup_category_default_summary)
                         },
                         sensitive = category.containsSensitiveContent,
                     )
@@ -296,11 +300,11 @@ private fun ExportSection(
                     enabled = enabled,
                 )
             }
-            notice?.let { BackupNoticeCard(it.title, it.message, it.tone, noticeIcon(it, Icons.Default.CloudUpload)) }
+            notice?.let { NoticeCard(it, Icons.Default.CloudUpload) }
             ProgressButton(
                 busy = isExporting,
-                busyLabel = "Creating encrypted backup…",
-                label = "Create encrypted backup",
+                busyLabel = stringResource(R.string.backup_creating),
+                label = stringResource(R.string.backup_create),
                 icon = Icons.Default.CloudUpload,
                 enabled = enabled,
                 onClick = onExport,
@@ -335,5 +339,14 @@ private fun ProgressButton(
     }
 }
 
-private fun noticeIcon(notice: BackupNotice, default: ImageVector): ImageVector =
-    if (notice.tone == Tone.Error) Icons.Default.Warning else default
+@Composable
+private fun NoticeCard(notice: BackupNotice, defaultIcon: ImageVector) {
+    val message = stringResource(notice.message, *notice.formatArgs.toTypedArray())
+    val extra = notice.extraMessage?.let { stringResource(it) }
+    BackupNoticeCard(
+        title = stringResource(notice.title),
+        message = if (extra == null) message else stringResource(R.string.backup_notice_with_extra, message, extra),
+        tone = notice.tone,
+        leadingIcon = if (notice.tone == Tone.Error) Icons.Default.Warning else defaultIcon,
+    )
+}

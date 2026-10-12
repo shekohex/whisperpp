@@ -11,13 +11,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,14 +26,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.domain.providers.DiscoveryUnsupported
 import com.github.shekohex.whisperpp.domain.providers.toProviderUserMessage
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
 import kotlinx.coroutines.flow.first
@@ -73,7 +73,7 @@ fun ProviderEditScreen(
 
     var showDiscoverySheet by rememberSaveable { mutableStateOf(false) }
     var pendingSttTestAfterPick by rememberSaveable { mutableStateOf(false) }
-    var blockedModel by remember { mutableStateOf<Pair<ModelConfig, List<String>>?>(null) }
+    var blockedModel by remember { mutableStateOf<Pair<ModelConfig, List<Int>>?>(null) }
 
     val audioPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -98,36 +98,31 @@ fun ProviderEditScreen(
         viewModel.isDiscoveryAvailable(draft.type, draft.baseUrl)
     }
 
-    Scaffold(
-        topBar = {
-            DetailTopBar(
-                title = when {
-                    viewModel.isEditingExisting -> "Edit Provider"
-                    viewModel.isCloning -> "Duplicate Provider"
-                    else -> "New Provider"
-                },
-                onBack = onBack,
-                helpTopic = SettingsHelpTopic.PROVIDERS,
-                actions = {
-                    viewModel.existingProviderId?.let { id ->
-                        TextButton(onClick = { onNavigate(Destination.ProviderEdit(id = null, cloneFromId = id)) }) {
-                            Text("Duplicate")
-                        }
-                    }
-                    TextButton(
-                        enabled = viewModel.canSave(draft, apiKeyInput, keyStatus),
-                        onClick = { viewModel.save(onSaved = onBack) },
-                    ) {
-                        Text("Save")
-                    }
+    val title = when {
+        viewModel.isEditingExisting -> stringResource(R.string.provider_edit_title_edit)
+        viewModel.isCloning -> stringResource(R.string.provider_edit_title_duplicate)
+        else -> stringResource(R.string.provider_edit_title_new)
+    }
+    PageScaffold(
+        title = title,
+        onBack = onBack,
+        actions = {
+            SettingsHelpAction(SettingsHelpTopic.PROVIDERS)
+            viewModel.existingProviderId?.let { id ->
+                TextButton(onClick = { onNavigate(Destination.ProviderEdit(id = null, cloneFromId = id)) }) {
+                    Text(stringResource(R.string.provider_duplicate))
                 }
-            )
+            }
+            TextButton(
+                enabled = viewModel.canSave(draft, apiKeyInput, keyStatus),
+                onClick = { viewModel.save(onSaved = onBack) },
+            ) {
+                Text(stringResource(R.string.provider_save))
+            }
         },
-        contentWindowInsets = WindowInsets.statusBars
-    ) { padding ->
+    ) {
         Column(
             modifier = Modifier
-                .padding(padding)
                 .padding(horizontal = 16.dp)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
@@ -135,7 +130,7 @@ fun ProviderEditScreen(
         ) {
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "Save stores this provider for selections and tests. Use Test or model import to verify the setup before leaving.",
+                text = stringResource(R.string.provider_edit_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

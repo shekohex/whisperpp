@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -27,9 +26,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,12 +38,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.PromptProfile
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
 import java.util.Locale
@@ -64,31 +68,25 @@ fun PromptsScreen(
     val hasChanges = draft != null && draft != basePrompt
     var pendingDeleteProfile by remember { mutableStateOf<PromptProfile?>(null) }
 
-    Scaffold(
-        topBar = {
-            DetailTopBar(
-                title = "Prompts & profiles",
-                onBack = onBack,
-                helpTopic = SettingsHelpTopic.PROMPTS_PROFILES,
-                actions = {
-                    TextButton(
-                        onClick = {
-                            viewModel.saveBasePrompt {
-                                Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        enabled = hasChanges,
-                    ) {
-                        Text("Save")
+    PageScaffold(
+        title = stringResource(R.string.enhancement_prompts_link_title),
+        onBack = onBack,
+        actions = {
+            SettingsHelpAction(SettingsHelpTopic.PROMPTS_PROFILES)
+            TextButton(
+                onClick = {
+                    viewModel.saveBasePrompt {
+                        Toast.makeText(context, R.string.prompts_saved, Toast.LENGTH_SHORT).show()
                     }
-                }
-            )
+                },
+                enabled = hasChanges,
+            ) {
+                Text(stringResource(R.string.prompts_save))
+            }
         },
-        contentWindowInsets = WindowInsets.statusBars
-    ) { padding ->
+    ) {
         Column(
             modifier = Modifier
-                .padding(padding)
                 .padding(horizontal = 16.dp)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState()),
@@ -96,11 +94,11 @@ fun PromptsScreen(
         ) {
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "Tap Save to apply base prompt edits. Profiles and app mappings update when you edit their entries.",
+                text = stringResource(R.string.prompts_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            SettingsGroup(title = "Global base prompt") {
+            SettingsGroup(title = stringResource(R.string.prompts_base_group)) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -111,17 +109,18 @@ fun PromptsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 6,
                         maxLines = 12,
-                        label = { Text("Base prompt") },
-                        placeholder = { Text("e.g. Improve clarity, fix punctuation, keep tone.") },
+                        label = { Text(stringResource(R.string.prompts_base_label)) },
+                        placeholder = { Text(stringResource(R.string.prompts_base_hint)) },
+                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content),
                     )
                     Text(
-                        text = "Used as the foundation for enhancement prompting.",
+                        text = stringResource(R.string.prompts_base_helper),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            SettingsGroup(title = "Prompt profiles") {
+            SettingsGroup(title = stringResource(R.string.prompts_profiles_group)) {
                 ProfileList(
                     profiles = promptProfiles,
                     onAdd = { onNavigate(Destination.PromptEdit(id = null)) },
@@ -137,21 +136,21 @@ fun PromptsScreen(
         AlertDialog(
             onDismissRequest = { pendingDeleteProfile = null },
             icon = { Icon(Icons.Default.Warning, null) },
-            title = { Text("Delete profile?") },
-            text = { Text("Delete \"${profile.name}\"? App mappings that reference it will be kept and will fallback until updated.") },
+            title = { Text(stringResource(R.string.prompts_delete_title)) },
+            text = { Text(stringResource(R.string.prompts_delete_message, profile.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     pendingDeleteProfile = null
                     viewModel.deleteProfile(profile.id) {
-                        Toast.makeText(context, "Deleted", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, R.string.prompts_deleted, Toast.LENGTH_SHORT).show()
                     }
                 }) {
-                    Text("Delete")
+                    Text(stringResource(R.string.prompts_delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDeleteProfile = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.component_cancel))
                 }
             }
         )
@@ -167,37 +166,45 @@ private fun ProfileList(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         ListItem(
-            headlineContent = { Text("Add profile") },
-            supportingContent = { Text("Name + optional prompt append") },
+            headlineContent = { Text(stringResource(R.string.prompts_add)) },
+            supportingContent = { Text(stringResource(R.string.prompts_add_summary)) },
             leadingContent = { Icon(Icons.Default.Add, null) },
-            modifier = Modifier.clickable(onClick = onAdd)
+            modifier = Modifier.clickable(role = Role.Button, onClick = onAdd)
         )
         HorizontalDivider()
         if (profiles.isEmpty()) {
             ListItem(
-                headlineContent = { Text("No profiles yet") },
-                supportingContent = { Text("Create one to reuse prompt append text across apps.") },
+                headlineContent = { Text(stringResource(R.string.prompts_empty_title)) },
+                supportingContent = { Text(stringResource(R.string.prompts_empty_body)) },
                 leadingContent = { Icon(Icons.Default.Bookmarks, null) },
             )
             return
         }
         val sortedProfiles = remember(profiles) { profiles.sortedBy { it.name.lowercase(Locale.getDefault()) } }
+        val noAppend = stringResource(R.string.prompts_no_append)
         sortedProfiles.forEachIndexed { index, profile ->
             ListItem(
-                headlineContent = { Text(profile.name) },
-                supportingContent = { Text(profile.promptAppend.ifBlank { "No append" }.take(80)) },
+                headlineContent = {
+                    Text(profile.name, style = LocalTextStyle.current.copy(textDirection = TextDirection.Content))
+                },
+                supportingContent = {
+                    Text(
+                        profile.promptAppend.ifBlank { noAppend }.take(80),
+                        style = LocalTextStyle.current.copy(textDirection = TextDirection.Content),
+                    )
+                },
                 leadingContent = { Icon(Icons.Default.Bookmarks, null) },
                 trailingContent = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row {
                         IconButton(onClick = { onEdit(profile) }) {
-                            Icon(Icons.Default.Edit, "Edit")
+                            Icon(Icons.Default.Edit, stringResource(R.string.prompts_edit_named, profile.name))
                         }
                         IconButton(onClick = { onDelete(profile) }) {
-                            Icon(Icons.Default.Delete, "Delete")
+                            Icon(Icons.Default.Delete, stringResource(R.string.prompts_delete_named, profile.name))
                         }
                     }
                 },
-                modifier = Modifier.clickable { onEdit(profile) }
+                modifier = Modifier.clickable(role = Role.Button) { onEdit(profile) }
             )
             if (index != sortedProfiles.lastIndex) {
                 HorizontalDivider()

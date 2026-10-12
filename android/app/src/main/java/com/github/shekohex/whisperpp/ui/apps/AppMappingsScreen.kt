@@ -11,11 +11,15 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -30,12 +34,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,13 +50,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.PromptProfile
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.navigation.Destination
-import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
 import com.github.shekohex.whisperpp.ui.settings.common.mergeAndFilterApps
@@ -63,6 +76,7 @@ fun AppMappingsScreen(
     onNavigate: (Destination) -> Unit,
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val appContext = context.applicationContext
     val viewModel = containerViewModel { container, _ -> AppMappingsViewModel(container, appContext) }
     val appMappings by viewModel.appMappings.collectAsStateWithLifecycle()
@@ -83,43 +97,41 @@ fun AppMappingsScreen(
         selectedPackages = if (packageName in selectedPackages) selectedPackages - packageName else selectedPackages + packageName
     }
 
-    Scaffold(
-        topBar = {
-            DetailTopBar(
-                title = if (selectionMode) "${selectedPackages.size} selected" else "App mappings",
-                onBack = onBack,
-                helpTopic = SettingsHelpTopic.APP_MAPPINGS,
-                actions = {
-                    if (selectionMode) {
-                        IconButton(onClick = { showBulkAssignDialog = true }, enabled = selectedPackages.isNotEmpty()) {
-                            Icon(Icons.AutoMirrored.Filled.Send, "Assign")
-                        }
-                        IconButton(onClick = {
-                            selectionMode = false
-                            selectedPackages = emptySet()
-                        }) {
-                            Icon(Icons.Default.Close, "Cancel")
-                        }
-                    } else {
-                        IconButton(onClick = { selectionMode = true }) {
-                            Icon(Icons.Default.DoneAll, "Multi-select")
-                        }
-                    }
-                }
-            )
+    PageScaffold(
+        title = if (selectionMode) {
+            pluralStringResource(R.plurals.apps_selected_count, selectedPackages.size, selectedPackages.size)
+        } else {
+            stringResource(R.string.modes_app_mappings_title)
         },
-        contentWindowInsets = WindowInsets.statusBars,
-    ) { padding ->
+        onBack = onBack,
+        actions = {
+            SettingsHelpAction(SettingsHelpTopic.APP_MAPPINGS)
+            if (selectionMode) {
+                IconButton(onClick = { showBulkAssignDialog = true }, enabled = selectedPackages.isNotEmpty()) {
+                    Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.apps_assign))
+                }
+                IconButton(onClick = {
+                    selectionMode = false
+                    selectedPackages = emptySet()
+                }) {
+                    Icon(Icons.Default.Close, stringResource(R.string.apps_cancel_selection))
+                }
+            } else {
+                IconButton(onClick = { selectionMode = true }) {
+                    Icon(Icons.Default.DoneAll, stringResource(R.string.apps_multi_select))
+                }
+            }
+        },
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(8.dp))
-            SettingsGroup(title = "Search") {
+            SettingsGroup(title = stringResource(R.string.apps_search_group)) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -128,7 +140,7 @@ fun AppMappingsScreen(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Search installed apps") },
+                        label = { Text(stringResource(R.string.apps_search_label)) },
                         leadingIcon = { Icon(Icons.Default.Search, null) },
                         singleLine = true,
                     )
@@ -136,7 +148,8 @@ fun AppMappingsScreen(
                         value = manualPackageName,
                         onValueChange = { manualPackageName = it },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Add by package name") },
+                        label = { Text(stringResource(R.string.apps_add_package_label)) },
+                        textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr),
                         singleLine = true,
                     )
                     Button(
@@ -149,12 +162,12 @@ fun AppMappingsScreen(
                         enabled = manualPackageName.trim().isNotBlank(),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Add")
+                        Text(stringResource(R.string.apps_add))
                     }
                 }
             }
 
-            SettingsGroup(title = "Installed apps") {
+            SettingsGroup(title = stringResource(R.string.apps_installed_group)) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -162,7 +175,7 @@ fun AppMappingsScreen(
                     if (visibleApps.isEmpty()) {
                         Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
                             Text(
-                                text = "No matching apps",
+                                text = stringResource(R.string.apps_no_matching),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -170,6 +183,8 @@ fun AppMappingsScreen(
                     } else {
                         val profileById = remember(promptProfiles) { promptProfiles.associateBy { it.id } }
                         val mappingByPackage = remember(appMappings) { appMappings.associateBy { it.packageName } }
+                        val noneLabel = stringResource(R.string.apps_profile_none)
+                        val missingLabel = stringResource(R.string.apps_profile_missing)
                         visibleApps.forEachIndexed { index, app ->
                             val mappedProfileId = mappingByPackage[app.packageName]?.profileId?.trim().orEmpty()
                             val resolvedProfile = mappedProfileId.takeIf { it.isNotBlank() }?.let { profileById[it] }
@@ -177,9 +192,9 @@ fun AppMappingsScreen(
                                 label = app.label,
                                 packageName = app.packageName,
                                 profileName = when {
-                                    mappedProfileId.isBlank() -> "None"
+                                    mappedProfileId.isBlank() -> noneLabel
                                     resolvedProfile != null -> resolvedProfile.name
-                                    else -> "Missing"
+                                    else -> missingLabel
                                 },
                                 missingProfile = mappedProfileId.isNotBlank() && resolvedProfile == null,
                                 selectionMode = selectionMode,
@@ -209,8 +224,10 @@ fun AppMappingsScreen(
             profiles = promptProfiles,
             onDismiss = { showBulkAssignDialog = false },
             onAssign = { profileId ->
+                val count = selectedPackages.size
                 viewModel.assignProfile(selectedPackages, profileId) {
-                    Toast.makeText(context, "Assigned", Toast.LENGTH_SHORT).show()
+                    val message = resources.getQuantityString(R.plurals.apps_assigned, count, count)
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                     showBulkAssignDialog = false
                     selectionMode = false
                     selectedPackages = emptySet()
@@ -231,25 +248,44 @@ private fun AppMappingRow(
     onClick: () -> Unit,
     onToggle: () -> Unit,
 ) {
+    val rowModifier = if (selectionMode) {
+        Modifier.toggleable(value = selected, role = Role.Checkbox, onValueChange = { onToggle() })
+    } else {
+        Modifier.clickable(role = Role.Button, onClick = onClick)
+    }
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .then(rowModifier),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (selectionMode) {
-            Checkbox(checked = selected, onCheckedChange = { onToggle() })
+            Checkbox(checked = selected, onCheckedChange = null, modifier = Modifier.minimumInteractiveComponentSize())
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall.copy(textDirection = TextDirection.Content),
+                fontWeight = FontWeight.Medium,
+            )
             Text(text = packageName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(
             text = profileName,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Content),
+            modifier = Modifier.widthIn(max = 120.dp),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
             color = if (missingProfile) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (missingProfile) {
-            Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            Icon(
+                imageVector = Icons.Default.Warning,
+                contentDescription = stringResource(R.string.apps_profile_missing_description),
+                tint = MaterialTheme.colorScheme.error,
+            )
         }
     }
 }
@@ -262,37 +298,54 @@ private fun BulkAssignDialog(
 ) {
     var selectedProfileId by remember { mutableStateOf<String?>(null) }
     val sortedProfiles = remember(profiles) { profiles.sortedBy { it.name.lowercase(Locale.getDefault()) } }
+    val noAppend = stringResource(R.string.apps_no_append)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Assign profile") },
+        title = { Text(stringResource(R.string.apps_assign_profile_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()).selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 ListItem(
-                    headlineContent = { Text("None") },
-                    leadingContent = { RadioButton(selected = selectedProfileId == null, onClick = { selectedProfileId = null }) },
-                    modifier = Modifier.clickable { selectedProfileId = null },
+                    headlineContent = { Text(stringResource(R.string.apps_profile_none)) },
+                    leadingContent = { RadioButton(selected = selectedProfileId == null, onClick = null) },
+                    modifier = Modifier.selectable(
+                        selected = selectedProfileId == null,
+                        role = Role.RadioButton,
+                        onClick = { selectedProfileId = null },
+                    ),
                 )
                 HorizontalDivider()
                 sortedProfiles.forEach { profile ->
                     ListItem(
-                        headlineContent = { Text(profile.name) },
-                        supportingContent = { Text(profile.promptAppend.ifBlank { "No append" }.take(80)) },
-                        leadingContent = {
-                            RadioButton(selected = selectedProfileId == profile.id, onClick = { selectedProfileId = profile.id })
+                        headlineContent = {
+                            Text(profile.name, style = LocalTextStyle.current.copy(textDirection = TextDirection.Content))
                         },
-                        modifier = Modifier.clickable { selectedProfileId = profile.id },
+                        supportingContent = {
+                            Text(
+                                profile.promptAppend.ifBlank { noAppend }.take(80),
+                                style = LocalTextStyle.current.copy(textDirection = TextDirection.Content),
+                            )
+                        },
+                        leadingContent = { RadioButton(selected = selectedProfileId == profile.id, onClick = null) },
+                        modifier = Modifier.selectable(
+                            selected = selectedProfileId == profile.id,
+                            role = Role.RadioButton,
+                            onClick = { selectedProfileId = profile.id },
+                        ),
                     )
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = { onAssign(selectedProfileId) }) {
-                Text("Assign")
+                Text(stringResource(R.string.apps_assign))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.component_cancel))
             }
         },
     )

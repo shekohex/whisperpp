@@ -1,5 +1,6 @@
 package com.github.shekohex.whisperpp.ime
 
+import android.content.res.Resources
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.datastore.core.DataStore
@@ -21,6 +22,7 @@ import kotlin.coroutines.resume
  * caller is cancelled, which hides the sheet). Only one sheet is pending at a time.
  */
 class FirstUseDisclosureGate(
+    private val resources: Resources,
     private val dataStore: DataStore<Preferences>,
     private val scope: CoroutineScope,
 ) {
@@ -82,12 +84,9 @@ class FirstUseDisclosureGate(
     }
 
     private fun PrivacyDisclosureFormatter.ModeDisclosure.toUiState() = FirstUseDisclosureUiState(
-        title = title,
-        dataSent = dataSent,
-        endpointLines = endpoints.map { endpoint ->
-            endpoint.label?.let { "$it: ${endpoint.baseUrl}${endpoint.path}" }
-                ?: "Endpoint: ${endpoint.baseUrl}${endpoint.path}"
-        },
-        contextLine = contextLine,
+        title = resources.getString(title),
+        dataSent = resources.getString(dataSent),
+        endpointLines = endpoints.map { PrivacyDisclosureFormatter.endpointLine(resources, it) },
+        contextLine = resources.getString(contextLine),
     )
 }

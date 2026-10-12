@@ -13,6 +13,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.data.ServiceProvider
 
@@ -88,11 +90,11 @@ fun ProviderModelDropdowns(
     onClearProvider: () -> Unit,
     onSelectProvider: (ServiceProvider) -> Unit,
     onSelectModel: (ModelConfig) -> Unit,
-    providerLabel: String = "Provider",
-    modelLabel: String = "Model",
+    providerLabel: String = stringResource(R.string.settings_provider_label),
+    modelLabel: String = stringResource(R.string.settings_model_label),
     modelClearLabel: String? = null,
     onClearModel: () -> Unit = {},
-    emptyProvidersLabel: String = "No Providers Configured",
+    emptyProvidersLabel: String = stringResource(R.string.settings_no_providers),
 ) {
     SettingsDropdown(
         label = providerLabel,
@@ -113,6 +115,6 @@ fun ProviderModelDropdowns(
         enabled = selectedProvider != null,
         clearLabel = modelClearLabel,
         onClear = onClearModel,
-        emptyLabel = "No compatible models",
+        emptyLabel = stringResource(R.string.settings_no_compatible_models),
     )
 }

@@ -2,6 +2,7 @@ package com.github.shekohex.whisperpp.ui.backup
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.shekohex.whisperpp.R
@@ -9,7 +10,6 @@ import com.github.shekohex.whisperpp.data.BackupStatusStore
 import com.github.shekohex.whisperpp.data.ImportAnalysis
 import com.github.shekohex.whisperpp.data.RestoreMode
 import com.github.shekohex.whisperpp.data.RestoreSummary
-import com.github.shekohex.whisperpp.data.SETTINGS_BACKUP_CATEGORY_MANIFEST
 import com.github.shekohex.whisperpp.data.SecretsStoreProviderCredentials
 import com.github.shekohex.whisperpp.data.SettingsBackupEnvelope
 import com.github.shekohex.whisperpp.data.SettingsBackupRepository
@@ -72,7 +72,7 @@ class BackupRestoreViewModel(
 
     fun onExportCancelled() = _state.update { it.copy(isExporting = false) }
 
-    fun export(uri: Uri, password: String, exportedAtUtc: String, onMessage: (String) -> Unit) {
+    fun export(uri: Uri, password: String, exportedAtUtc: String, onMessage: (Int) -> Unit) {
         val includeHistory = _state.value.includeHistory
         viewModelScope.launch {
             try {
@@ -84,36 +84,37 @@ class BackupRestoreViewModel(
                 )
                 withContext(Dispatchers.IO) {
                     val output = appContext.contentResolver.openOutputStream(uri)
-                        ?: error("Could not open the selected destination.")
+                        ?: throw BackupFileException(R.string.backup_error_open_destination)
                     output.use { it.write(gson.toJson(envelope).toByteArray()) }
                 }
-                val summary = "Last export ${formatBackupDisplayTime(exportedAtUtc)}"
-                val categoryCount = SETTINGS_BACKUP_CATEGORY_MANIFEST.count { it.includedByDefault || includeHistory }
-                val historyNote = if (includeHistory) " ${appContext.getString(R.string.backup_history_export_notice)}" else ""
+                val exportedAt = formatBackupDisplayTime(exportedAtUtc)
                 _state.update {
                     it.copy(
                         exportNotice = BackupNotice(
-                            title = "Encrypted backup ready",
-                            message = "$summary. All $categoryCount categories were written to a .whisperpp-backup file.$historyNote",
+                            title = R.string.backup_export_ready_title,
+                            message = R.string.backup_export_ready_message,
                             tone = Tone.Success,
+                            formatArgs = listOf(exportedAt),
+                            extraMessage = if (includeHistory) R.string.backup_history_export_notice else null,
                         ),
                     )
                 }
-                statusStore.update(summary, repairCount = 0)
-                onMessage("Backup exported")
+                statusStore.update(appContext.getString(R.string.backup_status_last_export, exportedAt), repairCount = 0)
+                onMessage(R.string.backup_toast_exported)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                Log.w(TAG, "Backup export failed", e)
                 _state.update {
                     it.copy(
                         exportNotice = BackupNotice(
-                            title = "Export failed",
-                            message = e.message ?: "Could not create the encrypted backup.",
+                            title = R.string.backup_export_failed_title,
+                            message = exportErrorMessage(e),
                             tone = Tone.Error,
                         ),
                     )
                 }
-                onMessage("Backup export failed: ${e.message ?: "unknown error"}")
+                onMessage(R.string.backup_toast_export_failed)
             } finally {
                 _state.update { it.copy(isExporting = false) }
             }
@@ -125,15 +126,16 @@ class BackupRestoreViewModel(
         it.copy(importAnalysis = null, restoreSummary = null, selectedMergeCategories = emptySet(), importNotice = null)
     }
 
-    /** Decrypts and previews [uri]; [onResult] gets `null` on success or the error to show. */
-    fun analyze(uri: Uri, mode: RestoreMode, password: String, onResult: (String?) -> Unit) {
+    /** Decrypts and previews [uri]; [onResult] gets `null` on success or the error message to show. */
+    fun analyze(uri: Uri, mode: RestoreMode, password: String, onResult: (Int?) -> Unit) {
         _state.update { it.copy(isAnalyzingImport = true) }
         viewModelScope.launch {
             try {
                 val raw = withContext(Dispatchers.IO) {
                     appContext.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                } ?: error("Could not read the selected backup file.")
-                val envelope = gson.fromJson(raw, SettingsBackupEnvelope::class.java) ?: error("Invalid backup file.")
+                } ?: throw BackupFileException(R.string.backup_error_read_failed)
+                val envelope = gson.fromJson(raw, SettingsBackupEnvelope::class.java)
+                    ?: throw BackupFileException(R.string.backup_error_invalid_file)
                 val analysis = repository.analyzeEncryptedBackup(envelope = envelope, password = password, restoreMode = mode)
                 _state.update {
                     it.copy(
@@ -144,8 +146,8 @@ class BackupRestoreViewModel(
                             .map { preview -> preview.categoryId }
                             .toSet(),
                         importNotice = BackupNotice(
-                            title = "Preview ready",
-                            message = "Review the restore preview before confirming any changes.",
+                            title = R.string.backup_preview_ready_title,
+                            message = R.string.backup_preview_ready_message,
                             tone = Tone.Info,
                         ),
                     )
@@ -154,9 +156,16 @@ class BackupRestoreViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                val message = e.message ?: "The backup could not be decrypted or parsed."
+                Log.w(TAG, "Backup preview failed", e)
+                val message = importErrorMessage(e)
                 _state.update {
-                    it.copy(importNotice = BackupNotice(title = "Could not preview backup", message = message, tone = Tone.Error))
+                    it.copy(
+                        importNotice = BackupNotice(
+                            title = R.string.backup_preview_failed_title,
+                            message = message,
+                            tone = Tone.Error,
+                        ),
+                    )
                 }
                 onResult(message)
             } finally {
@@ -171,7 +180,7 @@ class BackupRestoreViewModel(
     }
 
     /** Applies the current preview; [onApplied] runs after success so the screen can clear its wizard. */
-    fun applyImport(onApplied: () -> Unit, onMessage: (String) -> Unit) {
+    fun applyImport(onApplied: () -> Unit, onMessage: (Int) -> Unit) {
         val current = _state.value
         val analysis = current.importAnalysis ?: return
         _state.update { it.copy(isApplyingImport = true) }
@@ -184,9 +193,9 @@ class BackupRestoreViewModel(
                 )
                 val repairCount = summary.repairChecklist.size
                 val homeStatus = if (repairCount > 0) {
-                    "Restore complete · $repairCount ${backupPluralize(repairCount, "repair item", "repair items")}"
+                    appContext.resources.getQuantityString(R.plurals.backup_status_restore_repairs, repairCount, repairCount)
                 } else {
-                    "Restore complete"
+                    appContext.getString(R.string.backup_status_restore_complete)
                 }
                 statusStore.update(homeStatus, repairCount)
                 _state.update {
@@ -194,35 +203,44 @@ class BackupRestoreViewModel(
                         restoreSummary = summary,
                         importAnalysis = null,
                         selectedMergeCategories = emptySet(),
-                        importNotice = BackupNotice(
-                            title = if (repairCount > 0) "Restore complete with follow-up" else "Restore complete",
-                            message = if (repairCount > 0) {
-                                "Review the repair checklist below before relying on the restored selections."
-                            } else {
-                                "Restore finished and you stayed inside settings to review the completion summary."
-                            },
-                            tone = if (repairCount > 0) Tone.Warning else Tone.Success,
-                        ),
+                        importNotice = if (repairCount > 0) {
+                            BackupNotice(
+                                title = R.string.backup_restore_complete_followup_title,
+                                message = R.string.backup_restore_complete_followup_message,
+                                tone = Tone.Warning,
+                            )
+                        } else {
+                            BackupNotice(
+                                title = R.string.backup_restore_complete_title,
+                                message = R.string.backup_restore_complete_message,
+                                tone = Tone.Success,
+                            )
+                        },
                     )
                 }
                 onApplied()
-                onMessage(if (repairCount > 0) "Restore complete with repair items" else "Restore complete")
+                onMessage(if (repairCount > 0) R.string.backup_toast_restored_with_repairs else R.string.backup_toast_restored)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                Log.w(TAG, "Backup restore failed", e)
                 _state.update {
                     it.copy(
                         importNotice = BackupNotice(
-                            title = "Restore failed",
-                            message = e.message ?: "The backup could not be applied.",
+                            title = R.string.backup_restore_failed_title,
+                            message = R.string.backup_error_apply_failed,
                             tone = Tone.Error,
                         ),
                     )
                 }
-                onMessage("Restore failed: ${e.message ?: "unknown error"}")
+                onMessage(R.string.backup_toast_restore_failed)
             } finally {
                 _state.update { it.copy(isApplyingImport = false) }
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "BackupRestore"
     }
 }

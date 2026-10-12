@@ -41,6 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.shekohex.whisperpp.R
@@ -113,7 +116,7 @@ private fun ModeCardHeader(
         ) {
             Text(
                 text = mode.name,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -124,7 +127,12 @@ private fun ModeCardHeader(
             )
         }
         if (!mode.isDefault) {
-            Switch(checked = mode.enabled, onCheckedChange = onEnabledChange)
+            val switchDescription = stringResource(R.string.modes_card_enabled_description, mode.name)
+            Switch(
+                checked = mode.enabled,
+                onCheckedChange = onEnabledChange,
+                modifier = Modifier.semantics { contentDescription = switchDescription },
+            )
         }
         ModeCardMenu(
             isDefault = mode.isDefault,
@@ -211,7 +219,7 @@ private fun ModeCardChips(card: ModesViewModel.Card, modifier: Modifier = Modifi
             icon = Icons.Filled.Mic,
         )
         StatusChip(
-            text = card.language?.let(::languageLabel) ?: stringResource(R.string.modes_chip_keyboard_language),
+            text = card.language?.let { languageLabel(it) } ?: stringResource(R.string.modes_chip_keyboard_language),
             status = ChipStatus.Neutral,
             icon = Icons.Filled.Language,
         )
@@ -232,7 +240,7 @@ private fun ModeCardChips(card: ModesViewModel.Card, modifier: Modifier = Modifi
 
 @Composable
 private fun appsChipText(labels: List<String>): String {
-    val shown = labels.take(MAX_APP_LABELS).joinToString(", ")
+    val shown = labels.take(MAX_APP_LABELS).joinToString(stringResource(R.string.modes_list_separator))
     val more = labels.size - MAX_APP_LABELS
     return if (more > 0) stringResource(R.string.modes_chip_apps_more, shown, more) else shown
 }

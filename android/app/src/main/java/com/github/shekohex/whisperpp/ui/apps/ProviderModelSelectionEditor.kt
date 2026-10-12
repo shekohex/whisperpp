@@ -8,7 +8,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.data.ServiceProvider
 import com.github.shekohex.whisperpp.ui.settings.common.ProviderModelDropdowns
@@ -26,6 +28,7 @@ internal fun ProviderModelSelectionEditor(
 ) {
     val selectedProvider = providers.firstOrNull { it.id == providerId }
     val selectedModel = selectedProvider?.models?.firstOrNull { it.id == modelId }
+    val inherit = stringResource(R.string.provider_inherit)
     SettingsGroup(title = title) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -34,25 +37,27 @@ internal fun ProviderModelSelectionEditor(
             ProviderModelDropdowns(
                 providers = providers,
                 selectedProvider = selectedProvider,
-                providerValue = selectedProvider?.name ?: providerId.takeIf { it.isNotBlank() } ?: "Inherit",
+                providerValue = selectedProvider?.name ?: providerId.takeIf { it.isNotBlank() } ?: inherit,
                 modelValue = when {
-                    selectedProvider == null -> modelId.takeIf { it.isNotBlank() } ?: "Inherit"
+                    selectedProvider == null -> modelId.takeIf { it.isNotBlank() } ?: inherit
                     selectedModel != null -> selectedModel.name
                     modelId.isNotBlank() -> modelId
-                    else -> "Inherit"
+                    else -> inherit
                 },
                 isCompatible = isCompatible,
-                providerClearLabel = "Inherit",
+                providerClearLabel = inherit,
                 onClearProvider = { onUpdate("", "") },
                 onSelectProvider = { onUpdate(it.id, "") },
                 onSelectModel = { onUpdate(providerId, it.id) },
-                modelClearLabel = "Inherit",
+                modelClearLabel = inherit,
                 onClearModel = { onUpdate(providerId, "") },
-                emptyProvidersLabel = "No providers configured",
+                emptyProvidersLabel = stringResource(R.string.provider_no_providers),
+                providerLabel = stringResource(R.string.provider_label),
+                modelLabel = stringResource(R.string.provider_model_label),
             )
             if (providerId.isNotBlank() || modelId.isNotBlank()) {
                 OutlinedButton(onClick = { onUpdate("", "") }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Clear")
+                    Text(stringResource(R.string.apps_clear))
                 }
             }
         }

@@ -2,9 +2,11 @@ package com.github.shekohex.whisperpp.ui.providers
 
 import android.content.Context
 import android.net.Uri
+import androidx.annotation.StringRes
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ModelCapabilities
 import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.data.ProviderAuthMode
@@ -59,6 +61,7 @@ class ProviderEditViewModel(
     private val secretsStore = container.secretsStore
     private val gson = Gson()
     private val tests = ProviderTestRunner(appContext, container.providerFactory, repository)
+    private val newModelName = appContext.getString(R.string.provider_model_default_name)
 
     val existingProviderId: String? = providerId?.trim()?.takeIf { it.isNotEmpty() }
     val isEditingExisting: Boolean = existingProviderId != null
@@ -177,14 +180,14 @@ class ProviderEditViewModel(
 
     // Models.
 
-    fun addModel() = updateDraft { it.copy(models = it.models + ModelConfig(UUID.randomUUID().toString(), "New Model")) }
+    fun addModel() = updateDraft { it.copy(models = it.models + ModelConfig(UUID.randomUUID().toString(), newModelName)) }
 
     fun updateModel(index: Int, model: ModelConfig) = updateDraft { draft ->
         draft.copy(models = draft.models.toMutableList().also { if (index in it.indices) it[index] = model })
     }
 
-    /** Removes the model unless an active selection uses it; then reports the blocking selections. */
-    fun removeModel(index: Int, onBlocked: (List<String>) -> Unit) {
+    /** Removes the model unless an active selection uses it; then reports the blocking selections (string resources). */
+    fun removeModel(index: Int, onBlocked: (List<Int>) -> Unit) {
         val model = _draft.value.models.getOrNull(index) ?: return
         viewModelScope.launch {
             val prefs = container.settingsDataStore.data.first()
@@ -272,8 +275,8 @@ class ProviderEditViewModel(
         return if (useCustom(options) || defaultId.isBlank()) customId(options).trim() else defaultId
     }
 
-    private fun reportMissingModel(title: String) {
-        _testResult.value = ProviderTestResult(title, null, "", "Model ID is required")
+    private fun reportMissingModel(@StringRes titleRes: Int) {
+        _testResult.value = tests.missingModel(titleRes)
     }
 
     private fun runTest(block: suspend () -> ProviderTestResult) {

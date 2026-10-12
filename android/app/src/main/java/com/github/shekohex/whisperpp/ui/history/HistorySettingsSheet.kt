@@ -19,6 +19,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.HistorySettings
@@ -65,7 +67,9 @@ internal fun HistorySettingsContent(
         Text(
             text = stringResource(R.string.history_settings_title),
             style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+            modifier = Modifier
+                .padding(horizontal = Spacing.lg, vertical = Spacing.sm)
+                .semantics { heading() },
         )
         SettingsSwitchRow(
             title = stringResource(R.string.history_settings_enabled),
@@ -85,7 +89,9 @@ internal fun HistorySettingsContent(
         Text(
             text = stringResource(R.string.history_settings_retention),
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(start = Spacing.lg, end = Spacing.lg, top = Spacing.lg),
+            modifier = Modifier
+                .padding(start = Spacing.lg, end = Spacing.lg, top = Spacing.lg)
+                .semantics { heading() },
         )
         Text(
             text = stringResource(R.string.history_settings_retention_desc),

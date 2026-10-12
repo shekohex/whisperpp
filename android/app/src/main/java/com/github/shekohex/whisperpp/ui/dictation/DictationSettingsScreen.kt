@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,7 +25,6 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.ViewStream
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,10 +49,11 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.PAUSE_MEDIA_WHILE_RECOR
 import com.github.shekohex.whisperpp.data.PreferenceKeys.REALTIME_STT_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.TAP_TO_RECORD
-import com.github.shekohex.whisperpp.ui.settings.common.COMMON_LANGUAGES
-import com.github.shekohex.whisperpp.ui.settings.common.DetailTopBar
+import com.github.shekohex.whisperpp.ui.components.PageScaffold
+import com.github.shekohex.whisperpp.ui.settings.common.commonLanguages
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsDropdown
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsGroup
+import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpAction
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsHelpTopic
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsToggle
 import com.github.shekohex.whisperpp.ui.settings.common.containerViewModel
@@ -85,22 +84,32 @@ fun DictationSettingsScreen(
             SettingsDropdown(
                 label = stringResource(R.string.dictation_language_label),
                 value = languageLabel(prefs?.get(LANGUAGE_CODE) ?: "auto"),
-                options = COMMON_LANGUAGES,
+                options = commonLanguages(),
                 optionLabel = { it.second },
                 onSelect = { viewModel.set(LANGUAGE_CODE, it.first) },
                 modifier = Modifier.padding(16.dp),
             )
             Toggle(Icons.Default.GraphicEq, stringResource(R.string.settings_realtime_stt_enabled), REALTIME_STT_ENABLED, true)
         }
-        SettingsGroup(title = "Automation") {
-            Toggle(Icons.Default.Mic, "Auto Start Recording", AUTO_RECORDING_START, true)
+        SettingsGroup(title = stringResource(R.string.dictation_group_automation)) {
+            Toggle(Icons.Default.Mic, stringResource(R.string.dictation_auto_start), AUTO_RECORDING_START, true)
             Toggle(Icons.Default.TouchApp, stringResource(R.string.settings_tap_to_record), TAP_TO_RECORD, true)
-            Toggle(Icons.Default.SwapHoriz, "Auto Switch Back", AUTO_SWITCH_BACK, false)
-            Toggle(Icons.AutoMirrored.Filled.Send, "Auto Transcribe", AUTO_TRANSCRIBE_ON_PAUSE, true)
+            Toggle(Icons.Default.SwapHoriz, stringResource(R.string.dictation_auto_switch_back), AUTO_SWITCH_BACK, false)
+            Toggle(
+                Icons.AutoMirrored.Filled.Send,
+                stringResource(R.string.dictation_auto_transcribe),
+                AUTO_TRANSCRIBE_ON_PAUSE,
+                true,
+            )
         }
-        SettingsGroup(title = "UI Extras") {
-            Toggle(Icons.Default.SpaceBar, "Add Trailing Space", ADD_TRAILING_SPACE, false)
-            Toggle(Icons.Default.QuestionMark, "Cancel Confirmation", CANCEL_CONFIRMATION, true)
+        SettingsGroup(title = stringResource(R.string.dictation_group_extras)) {
+            Toggle(Icons.Default.SpaceBar, stringResource(R.string.dictation_trailing_space), ADD_TRAILING_SPACE, false)
+            Toggle(
+                Icons.Default.QuestionMark,
+                stringResource(R.string.dictation_cancel_confirmation),
+                CANCEL_CONFIRMATION,
+                true,
+            )
         }
         SettingsGroup(title = stringResource(R.string.settings_group_dictation)) {
             Toggle(Icons.Default.CleaningServices, stringResource(R.string.settings_filter_fillers), FILTER_FILLERS_ENABLED, false)
@@ -131,9 +140,9 @@ fun AudioSettingsScreen(
         intro = stringResource(R.string.audio_settings_intro),
         onBack = onBack,
     ) {
-        SettingsGroup(title = "Feedback") {
-            Toggle(Icons.Default.Vibration, "Haptic Feedback", HAPTIC_FEEDBACK_ENABLED, true)
-            Toggle(Icons.AutoMirrored.Filled.VolumeUp, "Sound Effects", SOUND_EFFECTS_ENABLED, true)
+        SettingsGroup(title = stringResource(R.string.dictation_audio_group_feedback)) {
+            Toggle(Icons.Default.Vibration, stringResource(R.string.dictation_audio_haptics), HAPTIC_FEEDBACK_ENABLED, true)
+            Toggle(Icons.AutoMirrored.Filled.VolumeUp, stringResource(R.string.dictation_audio_sounds), SOUND_EFFECTS_ENABLED, true)
             Toggle(Icons.Default.MusicOff, stringResource(R.string.settings_pause_media_while_recording), PAUSE_MEDIA_WHILE_RECORDING, true)
         }
     }
@@ -146,13 +155,13 @@ private fun SettingsPage(
     onBack: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Scaffold(
-        topBar = { DetailTopBar(title = title, onBack = onBack, helpTopic = SettingsHelpTopic.DICTATION) },
-        contentWindowInsets = WindowInsets.statusBars
-    ) { padding ->
+    PageScaffold(
+        title = title,
+        onBack = onBack,
+        actions = { SettingsHelpAction(SettingsHelpTopic.DICTATION) },
+    ) {
         Column(
             modifier = Modifier
-                .padding(padding)
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)

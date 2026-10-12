@@ -52,12 +52,13 @@ internal fun ModeAppsSection(state: ModeEditViewModel.UiState, onToggle: (String
         )
         state.draft.appPackages.forEach { pkg ->
             val previousOwner = state.ownerOf(pkg)
+            val appLabel = labels[pkg] ?: pkg
             SettingsRow(
-                title = labels[pkg] ?: pkg,
+                title = appLabel,
                 supporting = previousOwner?.let { stringResource(R.string.modes_edit_apps_moves_from, it.name) } ?: pkg,
                 trailing = {
                     IconButton(onClick = { onToggle(pkg) }) {
-                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.modes_edit_apps_remove))
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.modes_edit_apps_remove_named, appLabel))
                     }
                 },
             )

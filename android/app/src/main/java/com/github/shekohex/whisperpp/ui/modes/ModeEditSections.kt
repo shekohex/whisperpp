@@ -10,14 +10,17 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextDirection
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.data.ModelConfig
 import com.github.shekohex.whisperpp.data.PromptProfile
@@ -28,7 +31,7 @@ import com.github.shekohex.whisperpp.ui.components.SectionCard
 import com.github.shekohex.whisperpp.ui.components.SettingsRow
 import com.github.shekohex.whisperpp.ui.components.SettingsSwitchRow
 import com.github.shekohex.whisperpp.ui.modes.ModeEditViewModel.ValidationError
-import com.github.shekohex.whisperpp.ui.settings.common.COMMON_LANGUAGES
+import com.github.shekohex.whisperpp.ui.settings.common.commonLanguages
 import com.github.shekohex.whisperpp.ui.settings.common.ProviderModelDropdowns
 import com.github.shekohex.whisperpp.ui.settings.common.SettingsDropdown
 import com.github.shekohex.whisperpp.ui.settings.common.languageLabel
@@ -43,7 +46,11 @@ internal fun ModeIdentitySection(
 ) {
     val nameError = when {
         ValidationError.NAME_BLANK in errors -> stringResource(R.string.modes_error_name_blank)
-        ValidationError.NAME_TOO_LONG in errors -> stringResource(R.string.modes_error_name_long, ModeEditViewModel.MAX_NAME_LENGTH)
+        ValidationError.NAME_TOO_LONG in errors -> pluralStringResource(
+            R.plurals.modes_error_name_too_long,
+            ModeEditViewModel.MAX_NAME_LENGTH,
+            ModeEditViewModel.MAX_NAME_LENGTH,
+        )
         ValidationError.NAME_DUPLICATE in errors -> stringResource(R.string.modes_error_name_duplicate)
         else -> null
     }
@@ -56,6 +63,7 @@ internal fun ModeIdentitySection(
                 value = draft.name,
                 onValueChange = { name -> onUpdate { it.copy(name = name) } },
                 label = { Text(stringResource(R.string.modes_edit_name)) },
+                textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content),
                 singleLine = true,
                 isError = nameError != null,
                 supportingText = nameError?.let { { Text(it) } },
@@ -94,8 +102,8 @@ internal fun ModeTranscriptionSection(
         Column(modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
             SettingsDropdown(
                 label = stringResource(R.string.modes_edit_language),
-                value = draft.language?.let(::languageLabel) ?: stringResource(R.string.modes_edit_language_inherit),
-                options = COMMON_LANGUAGES,
+                value = draft.language?.let { languageLabel(it) } ?: stringResource(R.string.modes_edit_language_inherit),
+                options = commonLanguages(),
                 optionLabel = { it.second },
                 onSelect = { (code, _) -> onUpdate { it.copy(language = code) } },
                 clearLabel = stringResource(R.string.modes_edit_language_inherit),

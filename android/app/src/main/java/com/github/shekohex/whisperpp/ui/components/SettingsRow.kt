@@ -3,7 +3,7 @@ package com.github.shekohex.whisperpp.ui.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -61,7 +61,7 @@ private fun SettingsRowPreview() {
             title = "Speech-to-text provider",
             supporting = "OpenAI · gpt-4o-transcribe",
             leadingIcon = Icons.Filled.Mic,
-            trailing = { Icon(Icons.Filled.ChevronRight, contentDescription = null) },
+            trailing = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
             onClick = {},
         )
     }
