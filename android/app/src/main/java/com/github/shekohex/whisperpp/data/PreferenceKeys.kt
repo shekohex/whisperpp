@@ -177,12 +177,14 @@ object PreferenceKeys {
         val EXPECTED_SIGNATURE = stringPreferencesKey("expected_signature")
         val TARGET_VERSION = stringPreferencesKey("target_version")
         val DESTINATION_PATH = stringPreferencesKey("destination_path")
+        val LAST_CHECK_ERROR = stringPreferencesKey("last_check_error")
 
         val ALL: List<PreferenceKey<*>> = listOf(
             DOWNLOAD_ID,
             EXPECTED_SIGNATURE,
             TARGET_VERSION,
             DESTINATION_PATH,
+            LAST_CHECK_ERROR,
         )
     }
 }

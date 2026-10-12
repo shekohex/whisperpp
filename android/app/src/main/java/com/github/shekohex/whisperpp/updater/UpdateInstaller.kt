@@ -1,5 +1,6 @@
 package com.github.shekohex.whisperpp.updater
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -10,6 +11,7 @@ import java.io.File
 
 sealed class InstallResult {
     data object Success : InstallResult()
+    /** Installing needs the "install unknown apps" permission; the user must grant it in Settings. */
     data object PermissionRequired : InstallResult()
     data class Error(val message: String) : InstallResult()
 }
@@ -24,20 +26,25 @@ class UpdateInstaller(private val context: Context) {
         }
     }
 
-    fun openInstallPermissionSettings() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                data = Uri.parse("package:${context.packageName}")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
+    /** Opens the "install unknown apps" page for this app; false if no activity could handle it. */
+    fun openInstallPermissionSettings(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+            data = Uri.parse("package:${context.packageName}")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        return try {
             context.startActivity(intent)
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
         }
     }
 
     fun install(apkPath: String): InstallResult {
         val file = File(apkPath)
-        if (!file.exists()) {
-            return InstallResult.Error("APK file not found: $apkPath")
+        if (!file.isFile) {
+            return InstallResult.Error("The downloaded update file is missing. Please download it again.")
         }
 
         if (!canInstallPackages()) {
@@ -63,7 +70,7 @@ class UpdateInstaller(private val context: Context) {
             context.startActivity(intent)
             InstallResult.Success
         } catch (e: Exception) {
-            InstallResult.Error(e.message ?: "Unknown error")
+            InstallResult.Error("Could not start the installer: ${e.message ?: "unknown error"}")
         }
     }
 }

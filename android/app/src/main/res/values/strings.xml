@@ -301,6 +301,7 @@
     <string name="update_download">Download</string>
     <string name="update_install">Install</string>
     <string name="update_downloading">Downloading… %1$d%%</string>
+    <string name="update_release_date_unknown">Release date unknown</string>
     <string name="update_verifying">Verifying…</string>
     <string name="update_failed">Update failed: %1$s</string>
 
@@ -386,4 +387,11 @@
     <string name="settings_filter_fillers">Remove filler words</string>
     <string name="settings_format_paragraphs">Format paragraphs</string>
     <string name="settings_auto_send">Auto-send after insert</string>
+
+    <!-- Shared UI components -->
+    <string name="component_retry">Retry</string>
+    <string name="component_back">Back</string>
+    <string name="component_cancel">Cancel</string>
+    <string name="component_show_secret">Show</string>
+    <string name="component_hide_secret">Hide</string>
 </resources>

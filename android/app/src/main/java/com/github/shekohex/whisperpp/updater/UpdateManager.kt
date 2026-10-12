@@ -6,6 +6,7 @@ import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -112,8 +113,13 @@ class UpdateManager(context: Context, httpClient: HttpClient) {
     }
 
     fun openInstallPermissionSettings() {
-        installer.openInstallPermissionSettings()
+        if (!installer.openInstallPermissionSettings()) {
+            _installResult.value = InstallResult.Error("Could not open the install permission settings.")
+        }
     }
+
+    /** Permanent failure recorded by the background check, for the UI to show. */
+    val lastCheckError: Flow<String?> = repository.lastCheckError
 
     fun canInstallPackages(): Boolean = installer.canInstallPackages()
 

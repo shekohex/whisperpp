@@ -34,24 +34,20 @@ class UpdateCheckWorker(
 
     override suspend fun doWork(): Result {
         val container = applicationContext.appContainer
-        val checker = UpdateChecker(container.updaterHttpClient)
+        val repository = UpdateRepository(applicationContext)
+        val runner = UpdateCheckRunner(
+            source = UpdateChecker(container.updaterHttpClient),
+            persistError = repository::saveCheckError,
+            notifyAvailable = ::showUpdateNotification
+        )
 
         val channelPref = container.settingsDataStore.data
             .map { it[UPDATE_CHANNEL] ?: BuildConfig.UPDATE_CHANNEL }
             .first()
-        val channel = UpdateChannel.fromString(channelPref)
 
-        return try {
-            when (val result = checker.checkForUpdate(channel)) {
-                is UpdateCheckResult.Available -> {
-                    showUpdateNotification(result.release.version)
-                    Result.success()
-                }
-                is UpdateCheckResult.UpToDate -> Result.success()
-                is UpdateCheckResult.Error -> Result.retry()
-            }
-        } catch (e: Exception) {
-            Result.retry()
+        return when (runner.run(UpdateChannel.fromString(channelPref))) {
+            UpdateCheckRunner.Outcome.SUCCESS -> Result.success()
+            UpdateCheckRunner.Outcome.RETRY -> Result.retry()
         }
     }
 

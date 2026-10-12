@@ -4,6 +4,7 @@ import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,21 +22,29 @@ class DownloadCompletedReceiver : BroadcastReceiver() {
         if (downloadId == -1L) return
 
         val pendingResult = goAsync()
-        val repository = UpdateRepository(context)
-        val downloader = UpdateDownloader(context, repository)
+        val repository = UpdateRepository(context.applicationContext)
 
         scope.launch {
             try {
                 val state = repository.updateState.first()
-                if (state.downloadId == downloadId && state.expectedSignature != null && state.destinationPath != null) {
-                    val file = File(state.destinationPath)
-                    if (file.exists()) {
-                        downloader.verifyAndComplete(file, state.expectedSignature)
-                    }
+                val signature = state.expectedSignature
+                val path = state.destinationPath
+                // Ignore completions for downloads this updater did not start.
+                if (state.downloadId != downloadId || signature == null || path == null) return@launch
+
+                val file = File(path)
+                if (file.exists()) {
+                    UpdateDownloader(context.applicationContext, repository).verifyAndComplete(file, signature)
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to process completed download", e)
             } finally {
                 pendingResult.finish()
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "DownloadCompleted"
     }
 }

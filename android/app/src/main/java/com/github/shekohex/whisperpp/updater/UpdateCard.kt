@@ -62,7 +62,8 @@ fun UpdateAvailableCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = release.pubDate.substringBefore("T"),
+                text = release.pubDate
+                    ?: stringResource(R.string.update_release_date_unknown),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
