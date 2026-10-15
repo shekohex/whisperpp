@@ -48,12 +48,12 @@ data class TranscriptHistoryEntry(
     val needsAttention: Boolean get() = status == HistoryStatus.FAILED
 
     /**
-     * Audio is there and nothing is working on the take: it failed, has no transcript, or has been
-     * mid-pipeline for so long that its run must be gone.
+     * Audio is there and the take is finished, failed, has no transcript, or has been mid-pipeline
+     * long enough that its run must be gone.
      */
     fun isRetryable(nowMillis: Long): Boolean =
         audioPath != null &&
-            (status == HistoryStatus.FAILED || !hasText || (status.isInFlight && nowMillis - createdAt > IN_FLIGHT_STALE_MS))
+            (!status.isInFlight || !hasText || nowMillis - createdAt > IN_FLIGHT_STALE_MS)
 
     companion object {
         const val TABLE = "transcript_history"

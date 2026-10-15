@@ -154,6 +154,8 @@ class HistoryDetailViewModel(
             viewModelScope.launch { messageChannel.send(Message.Res(R.string.history_retry_no_audio)) }
             return
         }
+        if (!entry.isRetryable(clock())) return
+        _state.value.player?.pause()
         _state.update { it.copy(isRetrying = true, canRetry = false) }
         retryJob = viewModelScope.launch { runRetry(entry, audio) }
     }
@@ -279,7 +281,11 @@ class HistoryDetailViewModel(
             audioFile = null
         }
         _state.update { s ->
-            s.copy(entry = entry, player = if (entry.audioPath == null) null else s.player)
+            s.copy(
+                entry = entry,
+                player = if (entry.audioPath == null) null else s.player,
+                canRetry = !s.isWorking && canRetry(entry),
+            )
         }
     }
 

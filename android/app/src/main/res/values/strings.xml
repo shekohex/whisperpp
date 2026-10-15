@@ -290,6 +290,8 @@
     <string name="history_detail_failed_title">This recording needs attention</string>
     <string name="history_detail_no_text_body">There is no transcript yet. Retry to transcribe the saved recording.</string>
     <string name="history_retry">Retry transcription</string>
+    <string name="history_retranscribe">Re-transcribe recording</string>
+    <string name="history_retranscribe_confirm_message">Send this recording to the mode’s current speech-to-text provider again? A successful transcription replaces the current raw and enhanced text.</string>
     <string name="history_retry_hint">Sends the saved recording to your current speech-to-text provider.</string>
     <string name="history_retry_running">Transcribing…</string>
     <string name="history_retry_done">Transcription saved</string>

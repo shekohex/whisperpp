@@ -138,8 +138,65 @@ class HistoryRetryViewModelTest {
         assertTrue("keep recordings is on", audio.exists())
         assertEquals("hello again", vm.state.value.entry?.rawText)
         assertFalse(vm.state.value.isRetrying)
-        assertFalse(vm.state.value.canRetry)
+        assertTrue(vm.state.value.canRetry)
         assertEquals(listOf<Message>(Message.Res(R.string.history_retry_done)), messages)
+    }
+
+    @Test
+    fun completedEntryWithAudio_canBeRetranscribed_andReplacesOldText() = runTest(dispatcher) {
+        val (id, _) = failedEntry()
+        repository.update(id) {
+            it.copy(rawText = "old raw", enhancedText = "Old enhanced.", status = HistoryStatus.COMPLETED)
+        }
+        val transcriber = FakeTranscriber { text("new raw") }
+        val vm = viewModel(id, transcriber)
+        advanceUntilIdle()
+
+        assertTrue(vm.state.value.canRetry)
+        vm.retryTranscription()
+        advanceUntilIdle()
+
+        assertEquals(1, transcriber.calls)
+        assertEquals("new raw", dao.snapshot.single().rawText)
+        assertNull(dao.snapshot.single().enhancedText)
+        assertEquals(HistoryStatus.COMPLETED, dao.snapshot.single().status)
+        assertTrue(vm.state.value.canRetry)
+    }
+
+    @Test
+    fun completedEntry_failedRetranscription_preservesExistingText() = runTest(dispatcher) {
+        val (id, audio) = failedEntry()
+        repository.update(id) {
+            it.copy(rawText = "old raw", enhancedText = "Old enhanced.", status = HistoryStatus.COMPLETED)
+        }
+        val vm = viewModel(id, FakeTranscriber {
+            HistoryTranscriber.Result.Failed("offline", HistoryFailureReason.NETWORK_ERROR)
+        })
+        advanceUntilIdle()
+
+        vm.retryTranscription()
+        advanceUntilIdle()
+
+        assertEquals("old raw", dao.snapshot.single().rawText)
+        assertEquals("Old enhanced.", dao.snapshot.single().enhancedText)
+        assertTrue(audio.exists())
+        assertTrue(vm.state.value.canRetry)
+    }
+
+    @Test
+    fun activeTake_cannotBeRetranscribed() = runTest(dispatcher) {
+        val (id, _) = failedEntry()
+        repository.update(id) { it.copy(status = HistoryStatus.TRANSCRIBED, rawText = "in progress") }
+        val transcriber = FakeTranscriber { text("new raw") }
+        val vm = viewModel(id, transcriber)
+        advanceUntilIdle()
+
+        assertFalse(vm.state.value.canRetry)
+        vm.retryTranscription()
+        advanceUntilIdle()
+
+        assertEquals(0, transcriber.calls)
+        assertEquals("in progress", dao.snapshot.single().rawText)
     }
 
     @Test
@@ -378,6 +435,7 @@ class HistoryRetryViewModelTest {
         assertEquals(HistoryStatus.COMPLETED, stored.status)
         assertNull(stored.audioPath)
         assertFalse(audio.exists())
+        assertFalse(vm.state.value.canRetry)
     }
 
     private fun TestScope.collectMessages(vm: HistoryDetailViewModel): List<Message> {

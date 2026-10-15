@@ -298,6 +298,8 @@
     <string name="history_detail_failed_title">هذا التسجيل يحتاج إلى انتباه</string>
     <string name="history_detail_no_text_body">لا يوجد نص بعد. أعد المحاولة لنسخ التسجيل المحفوظ.</string>
     <string name="history_retry">إعادة محاولة النسخ</string>
+    <string name="history_retranscribe">إعادة نسخ التسجيل</string>
+    <string name="history_retranscribe_confirm_message">إرسال التسجيل مجددًا إلى مزوّد تحويل الكلام إلى نص الحالي لهذا الوضع؟ سيحل النص الجديد محل النص الأصلي والمحسّن عند نجاح النسخ.</string>
     <string name="history_retry_hint">يرسل التسجيل المحفوظ إلى مزوّد تحويل الكلام إلى نص الحالي.</string>
     <string name="history_retry_running">جارٍ النسخ…</string>
     <string name="history_retry_done">تم حفظ النص</string>

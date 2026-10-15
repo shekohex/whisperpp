@@ -109,6 +109,7 @@ fun HistoryDetailScreen(entryId: Long, onBack: () -> Unit) {
     val copiedMessage = stringResource(R.string.history_copied)
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var confirmEnhance by rememberSaveable { mutableStateOf(false) }
+    var confirmRetranscribe by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.isGone) { if (state.isGone) onBack() }
     LaunchedEffect(viewModel) {
@@ -159,7 +160,9 @@ fun HistoryDetailScreen(entryId: Long, onBack: () -> Unit) {
                 },
                 onReEnhance = { confirmEnhance = true },
                 onCancelReEnhance = viewModel::cancelReEnhance,
-                onRetry = viewModel::retryTranscription,
+                onRetry = {
+                    if (entry.hasText) confirmRetranscribe = true else viewModel.retryTranscription()
+                },
                 onCancelRetry = viewModel::cancelRetry,
                 onMarkResolved = viewModel::markResolved,
             )
@@ -177,6 +180,18 @@ fun HistoryDetailScreen(entryId: Long, onBack: () -> Unit) {
                 viewModel.delete()
             },
             onDismiss = { confirmDelete = false },
+        )
+    }
+    if (confirmRetranscribe) {
+        ConfirmDialog(
+            title = stringResource(R.string.history_retranscribe),
+            text = stringResource(R.string.history_retranscribe_confirm_message),
+            confirmLabel = stringResource(R.string.history_retranscribe),
+            onConfirm = {
+                confirmRetranscribe = false
+                viewModel.retryTranscription()
+            },
+            onDismiss = { confirmRetranscribe = false },
         )
     }
     if (confirmEnhance) {

@@ -33,7 +33,7 @@ class PromptHistoryReEnhancer(
     private val runner: EnhancementRunner = EnhancementRunner(),
 ) : HistoryReEnhancer {
     override suspend fun reEnhance(entry: TranscriptHistoryEntry): HistoryReEnhancer.Result {
-        val snapshot = config.load(entry.appPackage)
+        val snapshot = config.load(entry.appPackage, entry.modeId)
         val providerId = snapshot.effective.textProviderId
         val modelId = snapshot.effective.textModelId
         val provider = snapshot.provider(providerId)

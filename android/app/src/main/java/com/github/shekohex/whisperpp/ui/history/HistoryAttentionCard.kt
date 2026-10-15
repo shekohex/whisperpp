@@ -28,7 +28,7 @@ import com.github.shekohex.whisperpp.ui.theme.Spacing
 /**
  * What is wrong with a take and what to do about it: the status with its reason, Retry (the saved
  * recording is transcribed again without the keyboard) with progress and cancel, and "mark as
- * resolved" for a failed take that already has its text. Nothing for a plain success.
+ * resolved" for a failed take that already has its text.
  */
 @Composable
 internal fun HistoryAttentionCard(
@@ -38,7 +38,7 @@ internal fun HistoryAttentionCard(
     onCancelRetry: () -> Unit,
     onMarkResolved: () -> Unit,
 ) {
-    if (entry.statusLabel() == null && !state.isRetrying) return
+    if (entry.statusLabel() == null && !state.canRetry && !state.isRetrying) return
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -63,7 +63,7 @@ internal fun HistoryAttentionCard(
             }
             when {
                 state.isRetrying -> RetryProgress(isEnhancing = state.isEnhancing, onCancel = onCancelRetry)
-                state.canRetry -> RetryButton(onRetry)
+                state.canRetry -> RetryButton(hasText = entry.hasText, onRetry = onRetry)
             }
             if (entry.needsAttention && entry.hasText && !state.isWorking) {
                 OutlinedButton(onClick = onMarkResolved) {
@@ -75,11 +75,14 @@ internal fun HistoryAttentionCard(
 }
 
 @Composable
-private fun RetryButton(onRetry: () -> Unit) {
+private fun RetryButton(hasText: Boolean, onRetry: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         Button(onClick = onRetry) {
             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text(stringResource(R.string.history_retry), modifier = Modifier.padding(start = Spacing.sm))
+            Text(
+                stringResource(if (hasText) R.string.history_retranscribe else R.string.history_retry),
+                modifier = Modifier.padding(start = Spacing.sm),
+            )
         }
         Text(
             text = stringResource(R.string.history_retry_hint),
