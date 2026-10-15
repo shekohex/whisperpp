@@ -1,5 +1,10 @@
 package com.github.shekohex.whisperpp.core.network
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -59,6 +64,91 @@ suspend fun OkHttpClient.executeForBody(
         return response
     }
     throw response.toNetworkError(request.url.host, secret)
+}
+
+/**
+ * Server-sent events of [request] as a cancellable flow of `data:` payloads (multi-line data
+ * joined with `\n`; comments and other fields ignored). Completes at EOF, fails with [NetworkError]
+ * on transport failures and non-2xx statuses. Cancelling collection cancels the call, which aborts
+ * the headers wait and a blocked body read alike.
+ */
+fun OkHttpClient.executeForEvents(
+    request: Request,
+    timeoutMs: Long,
+    secret: String? = null,
+    callTimeoutMs: Long = timeoutMs,
+): Flow<String> = callbackFlow {
+    val host = request.url.host
+    if (!isTransportAllowed(request.url.scheme, host)) {
+        close(NetworkError.InsecureTransport(host))
+        return@callbackFlow
+    }
+    val client = if (timeoutMs > 0) {
+        newBuilder()
+            .readTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+            .writeTimeout(timeoutMs, TimeUnit.MILLISECONDS)
+            .build()
+    } else {
+        this@executeForEvents
+    }
+    val call = client.newCall(request)
+    if (callTimeoutMs > 0) {
+        call.timeout().timeout(callTimeoutMs, TimeUnit.MILLISECONDS)
+    }
+    val reader = launch(Dispatchers.IO) {
+        try {
+            val response = call.await()
+            if (response.code !in 200..299) {
+                val raw = response.use {
+                    RawResponse(
+                        code = it.code,
+                        contentType = it.header("Content-Type"),
+                        retryAfter = it.header("Retry-After"),
+                        body = it.body.string(),
+                    )
+                }
+                close(raw.toNetworkError(host, secret))
+                return@launch
+            }
+            response.use { readable ->
+                val source = readable.body.source()
+                val data = StringBuilder()
+                var pending = false
+                var firstLine = true
+                while (true) {
+                    val line = source.readUtf8Line() ?: break
+                    val content = if (firstLine) {
+                        firstLine = false
+                        line.removePrefix("\uFEFF")
+                    } else {
+                        line
+                    }
+                    when {
+                        content.isEmpty() -> {
+                            if (pending) {
+                                send(data.toString())
+                                data.setLength(0)
+                                pending = false
+                            }
+                        }
+                        content.startsWith("data:") -> {
+                            if (pending) data.append('\n')
+                            data.append(content.removePrefix("data:").removePrefix(" "))
+                            pending = true
+                        }
+                    }
+                }
+                if (pending) send(data.toString())
+                close()
+            }
+        } catch (e: IOException) {
+            close(e.toNetworkError())
+        }
+    }
+    awaitClose {
+        call.cancel()
+        reader.cancel()
+    }
 }
 
 internal fun IOException.toNetworkError(): NetworkError = when (this) {

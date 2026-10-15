@@ -131,6 +131,58 @@ class OpenAiCompatibleChatTest {
         }
     }
 
+    @Test
+    fun enhanceStreaming_postsStreamRequest_andRequiresStopPlusDone() = runBlocking {
+        server.enqueue(
+            sse(
+                """{"choices":[{"delta":{"role":"assistant"}}]}""",
+                """{"choices":[{"delta":{"content":"Hello"}}]}""",
+                """{"choices":[{"delta":{"reasoning_content":"hmm","content":" world"}}]}""",
+                """{"choices":[{"delta":{},"finish_reason":"stop"}]}""",
+                "[DONE]",
+            )
+        )
+
+        val snapshots = mutableListOf<String>()
+        val result = chat().enhanceStreaming(
+            EnhancementRequest(systemPrompt = "Clean up.", userText = "hello")
+        ) { snapshots += it }
+
+        assertEquals("Hello world", result.getOrThrow())
+        assertEquals(listOf("Hello", "Hello world"), snapshots)
+        val recorded = server.takeRequest()
+        assertEquals("/v1/chat/completions", recorded.path)
+        val json = JSONObject(recorded.body.readUtf8())
+        assertTrue(json.getBoolean("stream"))
+        assertEquals(1, json.getInt("n"))
+    }
+
+    @Test
+    fun enhanceStreaming_truncatedErrorAndEofStreams_fail() = runBlocking {
+        val provider = chat()
+        // finish_reason length, even with [DONE].
+        server.enqueue(
+            sse(
+                """{"choices":[{"delta":{"content":"par"}}]}""",
+                """{"choices":[{"delta":{},"finish_reason":"length"}]}""",
+                "[DONE]",
+            )
+        )
+        // Mid-stream error payload.
+        server.enqueue(sse("""{"error":{"message":"overloaded"}}"""))
+        // EOF without [DONE].
+        server.enqueue(sse("""{"choices":[{"delta":{"content":"partial"}}]}"""))
+
+        repeat(3) {
+            val error = provider.enhanceStreaming(EnhancementRequest("p", "t")) { }.exceptionOrNull()
+            assertTrue("was $error", error is NetworkError.InvalidResponse)
+        }
+    }
+
+    private fun sse(vararg events: String): MockResponse = MockResponse()
+        .setHeader("Content-Type", "text/event-stream")
+        .setBody(events.joinToString("") { "data: $it\n\n" })
+
     private fun chat(modelId: String = "gpt-4o-mini") = OpenAiCompatibleChat(
         client = recording.client,
         provider = ServiceProvider(

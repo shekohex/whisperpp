@@ -21,8 +21,10 @@ internal class DictationRun(val id: Long, val focus: FocusKey) {
     var lastPartial: String? = null
     var lastPartialAt: Long? = null
     var composing = false
+    var enhancementComposing = false
+    var enhancementEditorChanged = false
 
-    /** Enhancement will run, so live partials stay out of the field: it only ever receives the final text. */
+    /** Enhancement will run, so raw transcription partials stay out of the field. */
     var suppressPartials = false
     var contextPrompt: String? = null
 

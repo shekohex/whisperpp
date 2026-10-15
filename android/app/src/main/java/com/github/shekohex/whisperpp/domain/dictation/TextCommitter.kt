@@ -40,9 +40,10 @@ class TextCommitter(
 
     // Where our composing region started, when the editor reported it (enables undo / enhancement).
     private var composingStart: Int? = null
+    private var composingText: String? = null
 
     /** Shows [text] as the composing partial of [focus], replacing our previous partial there. */
-    fun setComposing(focus: FocusKey, text: String): Boolean {
+    fun setComposing(focus: FocusKey, text: String, trackEdits: Boolean = false): Boolean {
         val ic = inputConnection() ?: return false
         val starting = composingOwner != focus
         if (starting) {
@@ -51,6 +52,7 @@ class TextCommitter(
             ic.finishComposingText()
         }
         val start = if (starting) ic.selectionSnapshot()?.let { minOf(it.start, it.end) } else composingStart
+        if (trackEdits && ((starting && start == null) || (!starting && !preserveComposing(focus)))) return false
         ic.beginBatchEdit()
         val composed = try {
             ic.setComposingText(text, 1)
@@ -63,7 +65,29 @@ class TextCommitter(
             composingOwner = focus
             composingStart = start
         }
+        if (composed) composingText = text
         return composed
+    }
+
+    fun preserveComposing(focus: FocusKey): Boolean {
+        if (composingOwner != focus) return false
+        val start = composingStart ?: return false
+        val expected = composingText ?: return false
+        val ic = inputConnection() ?: return false
+        return try {
+            val snapshot = ic.getExtractedText(ExtractedTextRequest(), 0) ?: return false
+            val text = snapshot.text ?: return false
+            val end = start + expected.length
+            val localStart = start - snapshot.startOffset
+            val localEnd = end - snapshot.startOffset
+            if (snapshot.selectionStart != end || snapshot.selectionEnd != end ||
+                localStart < 0 || localEnd > text.length ||
+                text.subSequence(localStart, localEnd).toString() != expected
+            ) return false
+            expected.isEmpty() || ic.setComposingRegion(start, end)
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /**
@@ -90,6 +114,7 @@ class TextCommitter(
     fun dropComposing() {
         composingOwner = null
         composingStart = null
+        composingText = null
     }
 
     fun textBeforeCursor(maxChars: Int): String? = inputConnection()?.getTextBeforeCursor(maxChars, 0)?.toString()

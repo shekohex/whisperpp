@@ -90,7 +90,9 @@ class DictationSession(private val deps: Deps) {
         deps, _state, _liveTranscript, { currentFocus }, { run === it }, { windowVisible.value },
     )
     private val takeHistory = TakeHistory(deps, ::emit)
-    private val enhancement = EnhancementStep(deps, _state, { currentFocus }, { run === it }, ::emit, takeHistory)
+    private val enhancement = EnhancementStep(
+        deps, _state, { currentFocus }, { run === it }, { windowVisible.value }, ::emit, takeHistory,
+    )
     private val completion = CompletionReporter(takeHistory, ::emit)
 
     /** Id of the most recently started run; a [SessionEvent.Completed] with an older id is stale. */
@@ -420,7 +422,6 @@ class DictationSession(private val deps: Deps) {
             return deliverToClipboard(r, raw)
         }
 
-        // Enhancement happens first: the field only ever receives the final text, never the raw one.
         val outcome = enhancement.beforeInsert(r, raw) ?: return
         val text = outcome.text
         _state.value = SessionState.Committing(r.focus, text)
@@ -439,7 +440,12 @@ class DictationSession(private val deps: Deps) {
             takeHistory.fail(r, HistoryFailureReason.INSERT_BLOCKED, raw, text.takeIf { it != raw })
             return finish(r, SessionState.Idle)
         }
-        r.replaceRange?.let(deps.committer::select)
+        if (enhancementCompositionChanged(r)) {
+            holdTranscript(r, HistoryFailureReason.INSERT_FAILED, raw, text)
+            emit(SessionEvent.CommitFailed(text, SessionEvent.CommitFailed.Reason.INSERT_FAILED))
+            return finish(r, SessionState.Idle)
+        }
+        if (!r.composing) r.replaceRange?.let(deps.committer::select)
         val result = deps.committer.commit(r.focus, text)
         r.composing = false
         when (result) {
@@ -484,8 +490,15 @@ class DictationSession(private val deps: Deps) {
             takeHistory.fail(r, HistoryFailureReason.INSERT_BLOCKED, raw)
             return false
         }
-        r.replaceRange?.let(deps.committer::select)
-        return when (deps.committer.commit(r.focus, raw)) {
+        if (enhancementCompositionChanged(r)) {
+            holdTranscript(r, HistoryFailureReason.INSERT_FAILED, raw, raw)
+            emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.INSERT_FAILED))
+            return false
+        }
+        if (!r.composing) r.replaceRange?.let(deps.committer::select)
+        val result = deps.committer.commit(r.focus, raw)
+        r.composing = false
+        return when (result) {
             TextCommitter.CommitResult.NoField -> {
                 emit(SessionEvent.CommitFailed(raw, SessionEvent.CommitFailed.Reason.NO_FIELD))
                 takeHistory.fail(r, HistoryFailureReason.INSERT_FAILED, raw)
@@ -576,10 +589,19 @@ class DictationSession(private val deps: Deps) {
         deps.focus.release()
         r.streaming?.let(streamingPipeline::cancel)
         // Every terminal path, Idle included; only the field that owns the partial is edited.
-        if (r.composing) deps.committer.clearComposing(currentFocus)
+        if (r.composing && !enhancementCompositionChanged(r)) deps.committer.clearComposing(currentFocus)
         takeHistory.settle(r)
         _state.value = next
         if (next == SessionState.Cancelled) _state.value = SessionState.Idle
+    }
+
+    private fun enhancementCompositionChanged(r: DictationRun): Boolean {
+        if (!r.enhancementComposing) return r.enhancementEditorChanged
+        if (!r.enhancementEditorChanged && currentFocus == r.focus && deps.committer.preserveComposing(r.focus)) return false
+        r.enhancementEditorChanged = true
+        r.composing = false
+        deps.committer.dropComposing()
+        return true
     }
 
     /** Keeps a transcript the field did not take for Insert here / Copy, and records why in History. */

@@ -2,6 +2,7 @@ package com.github.shekohex.whisperpp.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PromptComposerTest {
@@ -77,5 +78,30 @@ class PromptComposerTest {
         assertNull(PromptComposer.cleanEnhancementOutput("   "))
         assertNull(PromptComposer.cleanEnhancementOutput("<think>only reasoning</think>"))
         assertNull(PromptComposer.cleanEnhancementOutput("<think>reasoning that never closed"))
+    }
+
+    @Test
+    fun streamingOutput_neverExposesSplitReasoningOrTranscriptTags() {
+        val output = "<think>PRIVATE PLAN</think><TRANSCRIPT>Hello</TRANSCRIPT>"
+        val allowed = setOf(null, "H", "He", "Hel", "Hell", "Hello")
+        for (length in 0..output.length) {
+            val cleaned = PromptComposer.cleanStreamingEnhancementOutput(output.take(length))
+            assertTrue("Prefix $length produced $cleaned", cleaned in allowed)
+        }
+    }
+
+    @Test
+    fun streamingOutput_hidesUnclosedReasoningAfterVisibleAnswer() {
+        assertEquals("Hello", PromptComposer.cleanStreamingEnhancementOutput("Hello <think>private"))
+        assertEquals("Hello", PromptComposer.cleanStreamingEnhancementOutput("Hello <reflection>private"))
+        assertEquals("Hello", PromptComposer.cleanStreamingEnhancementOutput("Hello <think\n private"))
+        assertEquals("Hello world", PromptComposer.cleanStreamingEnhancementOutput("Hello <think>private</think>world"))
+    }
+
+    @Test
+    fun streamingOutput_preservesOrdinaryCodeAndArabic() {
+        assertEquals("a < b", PromptComposer.cleanStreamingEnhancementOutput("a < b"))
+        assertEquals("<div>Hello</div>", PromptComposer.cleanStreamingEnhancementOutput("<div>Hello</div>"))
+        assertEquals("مرحباً", PromptComposer.cleanStreamingEnhancementOutput("<think>خطة</think>مرحباً"))
     }
 }

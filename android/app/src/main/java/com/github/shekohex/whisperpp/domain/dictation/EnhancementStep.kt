@@ -1,6 +1,7 @@
 package com.github.shekohex.whisperpp.domain.dictation
 
 import com.github.shekohex.whisperpp.dictation.FocusKey
+import com.github.shekohex.whisperpp.domain.modes.OutputMode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -10,6 +11,7 @@ internal class EnhancementStep(
     private val state: MutableStateFlow<SessionState>,
     private val currentFocus: () -> FocusKey?,
     private val isCurrent: (DictationRun) -> Boolean,
+    private val windowVisible: () -> Boolean,
     private val emit: (SessionEvent) -> Unit,
     private val takeHistory: TakeHistory,
 ) {
@@ -28,10 +30,7 @@ internal class EnhancementStep(
     /** What goes into the field: the enhanced text, or [raw] when enhancement is off or failed. */
     class Outcome(val text: String, val enhanced: Boolean)
 
-    /**
-     * Enhancement before anything is written (the field only ever gets the final text). Null when the
-     * run ended meanwhile. Failure keeps [raw] and says why.
-     */
+    /** Null when the run ended meanwhile. Failure keeps [raw] and says why. */
     suspend fun beforeInsert(r: DictationRun, raw: String): Outcome? {
         val result = request(r, raw)
         if (!isCurrent(r)) return null
@@ -81,7 +80,22 @@ internal class EnhancementStep(
         takeHistory.enhancing(r)
         val startedAt = deps.clock()
         val result = try {
-            enhancer.enhance(request)
+            enhancer.enhanceStreaming(request) { text ->
+                if (!isCurrent(r) || state.value !is SessionState.Enhancing || currentFocus() != r.focus ||
+                    !windowVisible() || !deps.sendAllowed() || r.options.outputMode == OutputMode.CLIPBOARD ||
+                    r.enhancementEditorChanged
+                ) return@enhanceStreaming
+                if (text.isEmpty() && !r.composing) return@enhanceStreaming
+                if (!r.composing) r.replaceRange?.let(deps.committer::select)
+                if (deps.committer.setComposing(r.focus, text, trackEdits = true)) {
+                    r.composing = true
+                    r.enhancementComposing = true
+                } else if (r.composing) {
+                    r.enhancementEditorChanged = true
+                    r.composing = false
+                    deps.committer.dropComposing()
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

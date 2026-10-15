@@ -28,4 +28,7 @@ interface DictationEnhancer {
     suspend fun isEnabled(request: Request): Boolean
 
     suspend fun enhance(request: Request): Result
+
+    /** Full provisional text, not append-only deltas. */
+    suspend fun enhanceStreaming(request: Request, onPartial: suspend (String) -> Unit): Result = enhance(request)
 }

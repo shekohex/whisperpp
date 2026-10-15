@@ -51,7 +51,13 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
         return enabled && !isBlankOrPunctuationOnly(request.rawText)
     }
 
-    override suspend fun enhance(request: DictationEnhancer.Request): DictationEnhancer.Result {
+    override suspend fun enhance(request: DictationEnhancer.Request): DictationEnhancer.Result =
+        enhanceStreaming(request) {}
+
+    override suspend fun enhanceStreaming(
+        request: DictationEnhancer.Request,
+        onPartial: suspend (String) -> Unit,
+    ): DictationEnhancer.Result {
         val snapshot = deps.config.load(request.focus.packageName, request.options.modeId)
         val textProviderId = snapshot.effective.textProviderId
         val textModelId = snapshot.effective.textModelId
@@ -97,7 +103,8 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
         deps.onRequestSent()
         // The model (or provider) timeout is the total budget for all attempts and backoff waits.
         val outcome = deps.runner.run(rawText = request.rawText, budgetMs = provider.effectiveTimeoutMs(model)) { attemptTimeoutMs ->
-            enhancer.enhance(
+            onPartial("")
+            enhancer.enhanceStreaming(
                 EnhancementRequest(
                     systemPrompt = systemPrompt,
                     userText = request.rawText,
@@ -106,10 +113,10 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
                     thinking = thinking,
                     timeoutMs = attemptTimeoutMs,
                 )
-            ).getOrThrow()
+            ) { text -> onPartial(PromptComposer.cleanStreamingEnhancementOutput(text).orEmpty()) }.getOrThrow()
         }
         return when (outcome) {
-            is EnhancementOutcome.Succeeded -> PromptComposer.cleanEnhancementOutput(outcome.enhancedText)
+            is EnhancementOutcome.Succeeded -> PromptComposer.cleanStreamingEnhancementOutput(outcome.enhancedText)
                 ?.let { DictationEnhancer.Result.Enhanced(it, label, provider.id, textModelId) }
                 ?: kept(context.getString(R.string.enhancement_empty_output, label))
             is EnhancementOutcome.Skipped -> DictationEnhancer.Result.Kept()

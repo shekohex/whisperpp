@@ -1,5 +1,6 @@
 package com.github.shekohex.whisperpp.domain.dictation
 
+import android.view.inputmethod.InputConnection
 import com.github.shekohex.whisperpp.dictation.FakeInputConnection
 import com.github.shekohex.whisperpp.dictation.FocusKey
 import org.junit.Assert.assertEquals
@@ -66,6 +67,21 @@ class TextCommitterTest {
 
         assertEquals("prefix suffix", ic.getText())
         assertNull(ic.composingRegion())
+    }
+
+    @Test
+    fun trackedComposition_retryResetDoesNotRequireZeroWidthComposingRegion() {
+        val editor = object : InputConnection by ic {
+            override fun setComposingRegion(start: Int, end: Int): Boolean =
+                start != end && ic.setComposingRegion(start, end)
+        }
+        val tracked = TextCommitter { editor }
+
+        assertTrue(tracked.setComposing(focus, "first", trackEdits = true))
+        assertTrue(tracked.setComposing(focus, "", trackEdits = true))
+        assertTrue(tracked.setComposing(focus, "retry", trackEdits = true))
+
+        assertEquals("prefix retrysuffix", ic.getText())
     }
 
     @Test

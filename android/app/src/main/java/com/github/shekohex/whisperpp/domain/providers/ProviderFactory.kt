@@ -14,6 +14,7 @@ import com.github.shekohex.whisperpp.providers.mistral.MistralTranscription
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleChat
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleDiscovery
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleTranscription
+import com.github.shekohex.whisperpp.providers.openai.OpenAiResponses
 import com.github.shekohex.whisperpp.providers.realtime.AssemblyAiDialect
 import com.github.shekohex.whisperpp.providers.realtime.CartesiaDialect
 import com.github.shekohex.whisperpp.providers.realtime.SonioxDialect
@@ -73,7 +74,11 @@ class ProviderFactory(
         if (!model.capabilities.text) return unsupported(Problem.MODEL_LACKS_TEXT)
         return when (provider.type) {
             ProviderType.OPENAI, ProviderType.CUSTOM ->
-                Result.success(OpenAiCompatibleChat(client, provider, model, credentials))
+                if (usesResponsesApi(provider)) {
+                    Result.success(OpenAiResponses(client, provider, model, credentials))
+                } else {
+                    Result.success(OpenAiCompatibleChat(client, provider, model, credentials))
+                }
             ProviderType.GEMINI -> Result.success(GeminiChat(client, provider, model, credentials))
             // Speech providers have no chat endpoint here.
             ProviderType.WHISPER_ASR, ProviderType.DEEPGRAM, ProviderType.ELEVENLABS, ProviderType.MISTRAL,
@@ -112,6 +117,17 @@ class ProviderFactory(
         credentials: Credentials,
         dialect: (StreamingConfig) -> StreamingDialect,
     ): Result<TranscriptionProvider> = Result.success(StreamingOnlyTranscription(client, provider, model, credentials, dialect))
+
+    /**
+     * Real OpenAI (`api.openai.com`) or an explicitly pasted `…/responses` endpoint speaks the
+     * Responses API; other OpenAI-compatible servers stay on `chat/completions` since not all of
+     * them implement `/responses`.
+     */
+    private fun usesResponsesApi(provider: ServiceProvider): Boolean {
+        val url = provider.endpoint.trim().toHttpUrlOrNull() ?: return false
+        if (url.host == "api.openai.com") return true
+        return url.pathSegments.lastOrNull { it.isNotBlank() } == "responses"
+    }
 
     private fun hasOpenAiStyleBase(provider: ServiceProvider): Boolean =
         provider.endpoint.trim().toHttpUrlOrNull()?.pathSegments?.contains("v1") == true

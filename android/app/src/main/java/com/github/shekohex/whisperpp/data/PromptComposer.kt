@@ -65,10 +65,30 @@ object PromptComposer {
         return text.trim().takeIf { it.isNotEmpty() }
     }
 
+    fun cleanStreamingEnhancementOutput(output: String): String? {
+        var text = REASONING_BLOCK.replace(output, "")
+        text = STREAM_UNCLOSED_REASONING.replace(text, "")
+        val tagStart = text.lastIndexOf('<')
+        if (tagStart >= 0 && text.indexOf('>', tagStart) < 0) {
+            val suffix = text.substring(tagStart + 1).removePrefix("/").lowercase()
+            val unfinishedTag = STREAM_TAGS.any { tag ->
+                tag.startsWith(suffix) ||
+                    (suffix.startsWith(tag) && suffix.getOrNull(tag.length)?.isWhitespace() == true)
+            }
+            if (unfinishedTag) text = text.substring(0, tagStart)
+        }
+        return TRANSCRIPT_TAG.replace(text, "").trim().takeIf { it.isNotEmpty() }
+    }
+
     private val REASONING_BLOCK = Regex(
         "<(think|thinking|reasoning|reflection)\\b[^>]*>[\\s\\S]*?</\\1\\s*>",
         RegexOption.IGNORE_CASE,
     )
     private val UNCLOSED_REASONING = Regex("^\\s*<(think|thinking|reasoning)\\b[^>]*>[\\s\\S]*$", RegexOption.IGNORE_CASE)
     private val TRANSCRIPT_TAG = Regex("</?TRANSCRIPT>", RegexOption.IGNORE_CASE)
+    private val STREAM_UNCLOSED_REASONING = Regex(
+        "<(think|thinking|reasoning|reflection)\\b[^>]*>[\\s\\S]*$",
+        RegexOption.IGNORE_CASE,
+    )
+    private val STREAM_TAGS = listOf("think", "thinking", "reasoning", "reflection", "transcript")
 }

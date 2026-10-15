@@ -92,6 +92,81 @@ class GeminiChatTest {
         assertEquals(base, GeminiChat.generateContentUrl(base, "ignored"))
     }
 
+    @Test
+    fun enhanceStreaming_postsSseStream_ignoresThoughts_stopsOnStop() = runBlocking {
+        server.enqueue(
+            sse(
+                """{"candidates":[{"content":{"parts":[{"text":"Hmm","thought":true},{"text":"Hello "}]}}]}""",
+                """{"candidates":[{"content":{"parts":[{"text":"world."}]},"finishReason":"STOP"}]}""",
+            )
+        )
+
+        val snapshots = mutableListOf<String>()
+        val result = gemini().enhanceStreaming(
+            EnhancementRequest("Fix", "hello world", temperature = 0.5f)
+        ) { snapshots += it }
+
+        assertEquals("Hello world.", result.getOrThrow())
+        assertEquals(listOf("Hello ", "Hello world."), snapshots)
+        val recorded = server.takeRequest()
+        assertEquals("/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse", recorded.path)
+        assertEquals("AIza-test", recorded.getHeader("x-goog-api-key"))
+        val json = JSONObject(recorded.body.readUtf8())
+        assertEquals(0.5, json.getJSONObject("generationConfig").getDouble("temperature"), 0.0001)
+    }
+
+    @Test
+    fun enhanceStreaming_safetyBlockErrorAndEofChunks_fail() = runBlocking {
+        val provider = gemini()
+        server.enqueue(sse("""{"candidates":[{"content":{"parts":[{"text":"x"}]},"finishReason":"SAFETY"}]}"""))
+        server.enqueue(sse("""{"promptFeedback":{"blockReason":"SAFETY"}}"""))
+        server.enqueue(sse("""{"error":{"code":503,"message":"unavailable"}}"""))
+        server.enqueue(sse("""{"candidates":[{"content":{"parts":[{"text":"partial"}]}}]}"""))
+
+        repeat(4) {
+            val error = provider.enhanceStreaming(EnhancementRequest("p", "t")) { }.exceptionOrNull()
+            assertTrue("was $error", error is NetworkError.InvalidResponse)
+        }
+    }
+
+    @Test
+    fun streamUrl_replacesGenerateContent_andKeepsPastedStreamUrl() {
+        val pasted = okhttp3.HttpUrl.Builder().scheme("https").host("example.com")
+            .addPathSegments("v1beta/models/custom:generateContent").build()
+        assertEquals(
+            "/v1beta/models/custom:streamGenerateContent",
+            GeminiChat.streamGenerateContentUrl(pasted, "ignored").encodedPath,
+        )
+        assertEquals("sse", GeminiChat.streamGenerateContentUrl(pasted, "ignored").queryParameter("alt"))
+        assertEquals(
+            "/v1beta/models/custom:streamGenerateContent",
+            GeminiChat.streamGenerateContentUrl(pasted.newBuilder().addPathSegment("").build(), "ignored").encodedPath,
+        )
+
+        val alreadyStreaming = pasted.newBuilder()
+            .removePathSegment(pasted.pathSegments.lastIndex)
+            .addPathSegment("custom:streamGenerateContent").build()
+        assertEquals(
+            alreadyStreaming,
+            GeminiChat.streamGenerateContentUrl(alreadyStreaming, "ignored").newBuilder().query(null).build(),
+        )
+        assertEquals(
+            alreadyStreaming.encodedPath,
+            GeminiChat.streamGenerateContentUrl(alreadyStreaming.newBuilder().addPathSegment("").build(), "ignored").encodedPath,
+        )
+
+        val base = okhttp3.HttpUrl.Builder().scheme("https").host("example.com")
+            .addPathSegment("v1beta").build()
+        assertEquals(
+            "/v1beta/models/gemini-2.0-flash:streamGenerateContent",
+            GeminiChat.streamGenerateContentUrl(base, "gemini-2.0-flash").encodedPath,
+        )
+    }
+
+    private fun sse(vararg events: String): MockResponse = MockResponse()
+        .setHeader("Content-Type", "text/event-stream")
+        .setBody(events.joinToString("") { "data: $it\n\n" })
+
     private fun gemini() = GeminiChat(
         client = recording.client,
         provider = ServiceProvider(

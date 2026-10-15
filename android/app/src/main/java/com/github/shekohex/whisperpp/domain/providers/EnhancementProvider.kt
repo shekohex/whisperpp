@@ -9,6 +9,12 @@ interface EnhancementProvider {
 
     suspend fun enhance(req: EnhancementRequest): Result<String>
 
+    /** Full snapshots let retries replace provisional editor text without duplicating it. */
+    suspend fun enhanceStreaming(
+        req: EnhancementRequest,
+        onPartial: suspend (String) -> Unit,
+    ): Result<String> = enhance(req)
+
     /** Minimal round trip ("Reply with OK") proving reachability, auth and the model id. */
     suspend fun verify(): Result<Unit>
 }

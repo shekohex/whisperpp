@@ -9,6 +9,7 @@ import com.github.shekohex.whisperpp.providers.gemini.GeminiChat
 import com.github.shekohex.whisperpp.providers.gemini.GeminiTranscription
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleChat
 import com.github.shekohex.whisperpp.providers.openai.OpenAiCompatibleTranscription
+import com.github.shekohex.whisperpp.providers.openai.OpenAiResponses
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -49,15 +50,27 @@ class ProviderFactoryTest {
         assertTrue(!Credentials("secret").toString().contains("secret"))
     }
 
+    @Test
+    fun openAiRealHost_orExplicitResponsesPath_routeToResponsesApi() {
+        val both = ModelConfig("m", "m", ModelCapabilities(stt = true, text = true))
+
+        assertTrue(factory.enhancement(provider(ProviderType.OPENAI, "https://api.openai.com/v1"), both).getOrThrow() is OpenAiResponses)
+        assertTrue(factory.enhancement(provider(ProviderType.OPENAI, "https://api.openai.com/v1/chat/completions"), both).getOrThrow() is OpenAiResponses)
+        assertTrue(factory.enhancement(provider(ProviderType.CUSTOM, "https://proxy.example.com/v1/responses"), both).getOrThrow() is OpenAiResponses)
+
+        assertTrue(factory.enhancement(provider(ProviderType.CUSTOM, "https://openrouter.ai/api/v1"), both).getOrThrow() is OpenAiCompatibleChat)
+        assertTrue(factory.enhancement(provider(ProviderType.OPENAI, "https://example.com/v1"), both).getOrThrow() is OpenAiCompatibleChat)
+    }
+
     private fun assertProblem(expected: ProviderConfigException.Problem, result: Result<*>) {
         assertEquals(expected, (result.exceptionOrNull() as ProviderConfigException).problem)
     }
 
-    private fun provider(type: ProviderType) = ServiceProvider(
+    private fun provider(type: ProviderType, endpoint: String = "https://example.com/v1") = ServiceProvider(
         id = "p",
         name = "P",
         type = type,
-        endpoint = "https://example.com/v1",
+        endpoint = endpoint,
         models = emptyList(),
     )
 }
