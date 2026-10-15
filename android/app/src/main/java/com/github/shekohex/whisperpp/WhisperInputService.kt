@@ -193,6 +193,11 @@ class WhisperInputService : InputMethodService() {
         super.onFinishInput()
     }
 
+    override fun onUnbindInput() {
+        controller.onFieldLeft()
+        super.onUnbindInput()
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_BACK && controller.onBackDown()) return true
         return super.onKeyDown(keyCode, event)
@@ -219,6 +224,7 @@ class WhisperInputService : InputMethodService() {
     }
 
     override fun onDestroy() {
+        controller.onFieldLeft()
         super.onDestroy()
         logLifecycle("onDestroy")
         components.disclosureGate.cancel()

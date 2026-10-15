@@ -108,6 +108,7 @@ class ImeController(
     }
 
     fun onStartInputView(info: EditorInfo?) {
+        c.autoLearnObserver.onFocusChanged(c.currentFocusKey())
         c.undo.showQuickActionIfAvailable()
         onExternalSendBlockMayHaveChanged(info)
         c.micPermissionGate.onInputViewStarted()
@@ -168,7 +169,7 @@ class ImeController(
     /** Releases what the service's `onDestroy` does not own itself. */
     fun onDestroy() {
         c.session.release()
-        c.autoLearnObserver.cancel()
+        c.autoLearnObserver.detach()
         c.commands.release()
         c.audioRecorder.release()
         c.audioFocus.release()

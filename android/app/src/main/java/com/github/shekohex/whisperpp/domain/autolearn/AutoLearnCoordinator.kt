@@ -7,11 +7,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -47,13 +46,13 @@ class AutoLearnCoordinator(
     private val log: (String) -> Unit = {},
 ) {
     private val runLock = Mutex()
-    private val eventFlow = MutableSharedFlow<AutoLearnEvent>(
-        extraBufferCapacity = 16,
+    private val eventChannel = Channel<AutoLearnEvent>(
+        capacity = 16,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
     )
 
     /** Learned (show "Learned N corrections" + Undo), ProposalsReady (badge), Failed (surface error). */
-    val events: SharedFlow<AutoLearnEvent> = eventFlow.asSharedFlow()
+    val events: Flow<AutoLearnEvent> = eventChannel.receiveAsFlow()
 
     /** Candidates waiting for AI review ("Corrections to review: N"). */
     val pendingCount: Flow<Int> = queue.pendingCount
@@ -98,7 +97,7 @@ class AutoLearnCoordinator(
     /** Applies stored proposals chosen in the review sheet. */
     suspend fun applyProposals(proposalIds: Collection<String>): AutoLearnMutationSummary {
         val summary = proposalStore.applyStored(proposalIds)
-        if (summary.hasChanges) eventFlow.tryEmit(AutoLearnEvent.Learned(summary))
+        if (summary.hasChanges) eventChannel.trySend(AutoLearnEvent.Learned(summary))
         return summary
     }
 
@@ -143,12 +142,12 @@ class AutoLearnCoordinator(
 
         if (reviewed > 0) markReviewed(clock())
         val summary = learned.takeIf { it.isNotEmpty() }?.let { AutoLearnMutationSummary(clock(), it) }
-        summary?.let { eventFlow.tryEmit(AutoLearnEvent.Learned(it)) }
-        if (proposalsAdded > 0) eventFlow.tryEmit(AutoLearnEvent.ProposalsReady(proposalStore.all().size))
+        summary?.let { eventChannel.trySend(AutoLearnEvent.Learned(it)) }
+        if (proposalsAdded > 0) eventChannel.trySend(AutoLearnEvent.ProposalsReady(proposalStore.all().size))
         log("Auto-Learn review run reviewed=$reviewed learned=${learned.size} proposals=$proposalsAdded")
 
         failure?.let { error ->
-            eventFlow.tryEmit(AutoLearnEvent.Failed(error))
+            eventChannel.trySend(AutoLearnEvent.Failed(error))
             return AutoLearnReviewOutcome.Failed(error)
         }
         if (reviewed == 0) return AutoLearnReviewOutcome.NothingPending

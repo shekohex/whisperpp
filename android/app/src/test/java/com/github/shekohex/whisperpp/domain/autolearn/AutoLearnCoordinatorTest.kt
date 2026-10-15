@@ -127,6 +127,36 @@ class AutoLearnCoordinatorTest {
     }
 
     @Test
+    fun backgroundReviewFailure_isDeliveredWhenUiStartsCollecting() = runBlocking {
+        val coordinator = coordinator(FakeEnhancementProvider(listOf(Result.success("invalid"))))
+        coordinator.submitRevision(revision)
+        coordinator.reviewPendingIfDue(AutoLearnReviewTrigger.AUTOMATIC)
+        val events = mutableListOf<AutoLearnEvent>()
+
+        val collector = launch(Dispatchers.Unconfined) { coordinator.events.collect { events += it } }
+        collector.cancel()
+
+        assertTrue(events.single() is AutoLearnEvent.Failed)
+    }
+
+    @Test
+    fun backgroundLearning_isDeliveredOnceWhenUiStartsCollecting() = runBlocking {
+        val coordinator = coordinator(FakeEnhancementProvider(listOf(Result.success(accept))))
+        coordinator.submitRevision(revision)
+        coordinator.reviewPendingIfDue(AutoLearnReviewTrigger.AUTOMATIC)
+        val events = mutableListOf<AutoLearnEvent>()
+        val firstCollector = launch(Dispatchers.Unconfined) { coordinator.events.collect { events += it } }
+        firstCollector.cancel()
+        assertTrue(events.single() is AutoLearnEvent.Learned)
+        events.clear()
+
+        val secondCollector = launch(Dispatchers.Unconfined) { coordinator.events.collect { events += it } }
+        secondCollector.cancel()
+
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
     fun nothingPending() = runBlocking {
         assertEquals(AutoLearnReviewOutcome.NothingPending, coordinator().reviewPendingIfDue(AutoLearnReviewTrigger.MANUAL))
     }

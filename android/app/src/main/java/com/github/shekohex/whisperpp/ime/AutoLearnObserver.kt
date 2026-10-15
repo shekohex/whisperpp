@@ -18,26 +18,51 @@ import kotlinx.coroutines.launch
  */
 class AutoLearnObserver(
     private val scope: CoroutineScope,
-    private val inputConnection: () -> InputConnection?,
-    private val currentFocus: () -> FocusKey?,
-    private val gates: (event: SessionEvent.Completed) -> AutoLearnCaptureStateMachine.Gates,
+    private var inputConnection: () -> InputConnection? = { null },
+    private var currentFocus: () -> FocusKey? = { null },
+    private var gates: (event: SessionEvent.Completed) -> AutoLearnCaptureStateMachine.Gates = { DISABLED_GATES },
     private val onRevision: (AutoLearnRevision) -> Unit,
     clock: () -> Long = System::currentTimeMillis,
 ) {
     private val machine = AutoLearnCaptureStateMachine(clock)
+    private var capturedEvent: SessionEvent.Completed? = null
     private var deadlineJob: Job? = null
     private var refreshJob: Job? = null
 
     val isCapturing: Boolean
         get() = machine.isActive
 
+    fun attach(
+        inputConnection: () -> InputConnection?,
+        currentFocus: () -> FocusKey?,
+        gates: (SessionEvent.Completed) -> AutoLearnCaptureStateMachine.Gates,
+    ) {
+        this.inputConnection = inputConnection
+        this.currentFocus = currentFocus
+        this.gates = gates
+    }
+
+    fun detach() {
+        onFieldLeft()
+        refreshJob?.cancel()
+        refreshJob = null
+        inputConnection = { null }
+        currentFocus = { null }
+        gates = { DISABLED_GATES }
+    }
+
     /** A dictation landed: the previous capture ends with its last known text, a new one starts. */
     fun onCompleted(event: SessionEvent.Completed) {
         if (!event.inserted) return
         if (machine.isActive) end(snapshot = null)
         if (currentFocus() != event.focus) return
-        val started = machine.begin(event.focus, event.finalText, readLive(), gates(event))
+        val currentGates = gates(event)
+        if (!currentGates.enabled || currentGates.secureField || currentGates.blockedApp || currentGates.autoSend) return
+        val snapshot = readLive()
+        val started = machine.begin(event.focus, event.finalText, snapshot, currentGates)
         if (started == AutoLearnCaptureStateMachine.BeginResult.Started) {
+            capturedEvent = event
+            machine.cache(event.focus, snapshot)
             deadlineJob = scope.launch {
                 delay(DEADLINE_MS)
                 end(snapshot = readIfFocused())
@@ -64,11 +89,19 @@ class AutoLearnObserver(
 
     /** `onStartInput`: back in the same field after a keyboard switch, or a different field. */
     fun onFocusChanged(focus: FocusKey?) {
-        if (!machine.isActive || machine.isTracking(focus)) return
+        if (!machine.isActive) return
         if (machine.parked && machine.isSameField(focus) && focus != null) {
             machine.resume(focus)
+            val snapshot = readIfFocused()
+            machine.cache(focus, snapshot)
+            when (machine.evaluate(snapshot, focus.packageName)) {
+                is AutoLearnCaptureStateMachine.Evaluation.Changed -> end(snapshot)
+                AutoLearnCaptureStateMachine.Evaluation.Unrelated -> cancel()
+                AutoLearnCaptureStateMachine.Evaluation.Unchanged -> Unit
+            }
             return
         }
+        if (machine.isTracking(focus)) return
         // The connection already belongs to the new field: only the cached text is usable.
         end(snapshot = null)
     }
@@ -96,23 +129,41 @@ class AutoLearnObserver(
         refreshJob?.cancel()
         deadlineJob = null
         refreshJob = null
+        capturedEvent = null
         machine.cancel()
     }
 
     private fun end(snapshot: FieldTextReader.Snapshot?) {
         val packageName = machine.focus?.packageName
-        val revision = machine.finish(snapshot, packageName)
+        val revision = if (captureAllowed()) machine.finish(snapshot, packageName) else null
         cancel()
         revision?.let(onRevision)
     }
 
     private fun readLive(): FieldTextReader.Snapshot? = FieldTextReader.read(inputConnection())
 
-    private fun readIfFocused(): FieldTextReader.Snapshot? =
-        if (machine.isTracking(currentFocus())) readLive() else null
+    private fun captureAllowed(): Boolean {
+        val event = capturedEvent ?: return false
+        val current = gates(event)
+        return current.enabled && !current.secureField && !current.blockedApp && !current.autoSend
+    }
+
+    private fun readIfFocused(): FieldTextReader.Snapshot? {
+        if (!captureAllowed()) {
+            cancel()
+            return null
+        }
+        return if (machine.isTracking(currentFocus())) readLive() else null
+    }
 
     companion object {
         const val DEADLINE_MS = 90_000L
         const val REFRESH_DEBOUNCE_MS = 400L
+        private val DISABLED_GATES = AutoLearnCaptureStateMachine.Gates(
+            enabled = false,
+            secureField = false,
+            blockedApp = false,
+            autoSend = false,
+        )
     }
 }

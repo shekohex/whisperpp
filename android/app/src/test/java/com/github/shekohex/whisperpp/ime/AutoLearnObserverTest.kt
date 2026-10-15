@@ -126,6 +126,114 @@ class AutoLearnObserverTest {
     }
 
     @Test
+    fun returningAfterKeyboardSwitch_submitsCorrectionWithoutAnotherFieldUpdate() = runTest {
+        val observer = observer(backgroundScope)
+        dictate(observer, "teh cat")
+        observer.onFieldLeft()
+        ic.setText("the cat")
+        focus = field.copy(focusInstanceId = 2L)
+
+        observer.onFocusChanged(focus)
+
+        assertEquals("the cat", revisions.single().corrected)
+        assertFalse(observer.isCapturing)
+    }
+
+    @Test
+    fun serviceRecreated_resumesCaptureEvenWhenFocusInstanceIdRestarts() = runTest {
+        val observer = observer(backgroundScope)
+        dictate(observer, "teh cat")
+        observer.detach()
+        assertTrue(observer.isCapturing)
+        ic.setText("the cat")
+        observer.attach(inputConnection = { ic }, currentFocus = { field }, gates = { gates })
+
+        observer.onFocusChanged(field)
+
+        assertEquals("the cat", revisions.single().corrected)
+        assertFalse(observer.isCapturing)
+    }
+
+    @Test
+    fun serviceDestroyed_readsLastCorrectionBeforeDetaching() = runTest {
+        val observer = observer(backgroundScope)
+        dictate(observer, "teh cat")
+        ic.setText("the cat")
+
+        observer.detach()
+
+        assertEquals("the cat", revisions.single().corrected)
+        assertFalse(observer.isCapturing)
+    }
+
+    @Test
+    fun privacyGatesChangedWhileAway_discardCaptureWithoutLearning() = runTest {
+        val deniedGates = listOf(
+            gates.copy(enabled = false),
+            gates.copy(secureField = true),
+            gates.copy(blockedApp = true),
+        )
+        for (denied in deniedGates) {
+            gates = AutoLearnCaptureStateMachine.Gates(enabled = true, secureField = false, blockedApp = false, autoSend = false)
+            val observer = observer(backgroundScope)
+            dictate(observer, "teh cat")
+            observer.onFieldLeft()
+            ic.setText("the cat")
+            gates = denied
+
+            observer.onFocusChanged(field)
+
+            assertTrue(revisions.isEmpty())
+            assertFalse(observer.isCapturing)
+        }
+    }
+
+    @Test
+    fun disabledDuringActiveCapture_discardsCorrectionAtDeadline() = runTest {
+        val observer = observer(backgroundScope)
+        dictate(observer, "teh cat")
+        ic.setText("the cat")
+        observer.onFieldUpdated()
+        gates = gates.copy(enabled = false)
+
+        advanceTimeBy(AutoLearnObserver.DEADLINE_MS + 1)
+
+        assertTrue(revisions.isEmpty())
+        assertFalse(observer.isCapturing)
+    }
+
+    @Test
+    fun blockedBeforeNextDictation_doesNotSubmitCachedCorrection() = runTest {
+        val observer = observer(backgroundScope)
+        dictate(observer, "teh cat")
+        ic.setText("the cat")
+        observer.onFieldUpdated()
+        advanceTimeBy(AutoLearnObserver.REFRESH_DEBOUNCE_MS + 1)
+        gates = gates.copy(blockedApp = true)
+
+        observer.onCompleted(completed("next dictation"))
+
+        assertTrue(revisions.isEmpty())
+        assertFalse(observer.isCapturing)
+    }
+
+    @Test
+    fun detachedCapture_expiresAtOriginalDeadline() = runTest {
+        val observer = observer(backgroundScope)
+        dictate(observer, "teh cat")
+        advanceTimeBy(AutoLearnObserver.DEADLINE_MS - 1)
+        observer.detach()
+
+        advanceTimeBy(2)
+        ic.setText("the cat")
+        observer.attach(inputConnection = { ic }, currentFocus = { field }, gates = { gates })
+        observer.onFocusChanged(field)
+
+        assertTrue(revisions.isEmpty())
+        assertFalse(observer.isCapturing)
+    }
+
+    @Test
     fun focusOnOtherField_endsCaptureWithCachedText() = runTest {
         val observer = observer(backgroundScope)
         dictate(observer, "teh cat")

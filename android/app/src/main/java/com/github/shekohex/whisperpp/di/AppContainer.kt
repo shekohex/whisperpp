@@ -34,6 +34,7 @@ import com.github.shekohex.whisperpp.domain.dictation.HistoryRecorder
 import com.github.shekohex.whisperpp.domain.autolearn.AutoLearnAiReviewer
 import com.github.shekohex.whisperpp.domain.autolearn.AutoLearnCoordinator
 import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
+import com.github.shekohex.whisperpp.ime.AutoLearnObserver
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
 import com.google.gson.Gson
@@ -43,9 +44,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
@@ -188,6 +192,13 @@ class AppContainer(context: Context) {
     }
 
     // Auto-Learn (§4.11), off by default; the IME capture and review UI call [autoLearnCoordinator].
+    val autoLearnEnabled: StateFlow<Boolean> by lazy {
+        settingsRepository.autoLearnSettings.map { it.enabled }
+            .stateIn(appScope, SharingStarted.Eagerly, false)
+    }
+    val autoLearnSendRules: StateFlow<Map<String, Boolean>?> by lazy {
+        sendPolicyRepository.getAllRulesFlow().stateIn(appScope, SharingStarted.Eagerly, null)
+    }
     val autoLearnDataStore: DataStore<Preferences> = appContext.autoLearnDataStore
     val autoLearnQueue: AutoLearnPendingQueue by lazy { AutoLearnPendingQueue(autoLearnDataStore) }
     val autoLearnProposalStore: AutoLearnProposalStore by lazy {
@@ -224,6 +235,12 @@ class AppContainer(context: Context) {
             proposalStore = autoLearnProposalStore,
             scope = appScope,
             log = { Log.i(AUTO_LEARN_TAG, it) },
+        )
+    }
+    val autoLearnObserver: AutoLearnObserver by lazy {
+        AutoLearnObserver(
+            scope = CoroutineScope(appScope.coroutineContext + Dispatchers.Main.immediate),
+            onRevision = autoLearnCoordinator::onRevisionCaptured,
         )
     }
 }

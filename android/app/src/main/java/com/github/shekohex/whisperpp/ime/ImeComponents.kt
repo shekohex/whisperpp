@@ -25,7 +25,6 @@ import com.github.shekohex.whisperpp.ui.keyboard.KeyboardModeController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 private const val MIGRATIONS_WAIT_MS = 2_000L
@@ -247,21 +246,21 @@ class ImeComponents(private val host: ImeHost, private val scope: CoroutineScope
 
     /** Auto-Learn capture (§4.11 step 1); gates are read when a dictation lands, field text is never logged. */
     private fun createAutoLearnObserver(): AutoLearnObserver {
-        val enabled = repository.autoLearnSettings.map { it.enabled }
-            .stateIn(scope, SharingStarted.Eagerly, false)
-        return AutoLearnObserver(
-            scope = scope,
-            inputConnection = { host.inputConnection },
-            currentFocus = ::currentFocusKey,
-            gates = { event ->
-                AutoLearnCaptureStateMachine.Gates(
-                    enabled = enabled.value,
-                    secureField = SecureFieldDetector.detect(host.editorInfo).isSecure,
-                    blockedApp = sendBlock.rules.value?.get(event.focus.packageName) == true,
-                    autoSend = event.autoSend == true,
-                )
-            },
-            onRevision = container.autoLearnCoordinator::onRevisionCaptured,
-        )
+        val enabled = container.autoLearnEnabled
+        val sendRules = container.autoLearnSendRules
+        return container.autoLearnObserver.apply {
+            attach(
+                inputConnection = { host.inputConnection },
+                currentFocus = ::currentFocusKey,
+                gates = { event ->
+                    AutoLearnCaptureStateMachine.Gates(
+                        enabled = enabled.value,
+                        secureField = SecureFieldDetector.detect(host.editorInfo).isSecure,
+                        blockedApp = sendRules.value?.let { it[event.focus.packageName] == true } ?: true,
+                        autoSend = event.autoSend == true,
+                    )
+                },
+            )
+        }
     }
 }
