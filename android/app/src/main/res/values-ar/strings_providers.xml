@@ -110,6 +110,9 @@
     <string name="provider_model_realtime_hint">يعرض النص أثناء كلامك. يتطلب خادمًا أو بوابة (مثل LiteLLM) توفّر نقطة النهاية /v1/realtime المتوافقة مع OpenAI. عند الفشل يعود الإملاء إلى التفريغ العادي.</string>
     <string name="provider_model_realtime_hint_openai">نماذج OpenAI whisper-1 و*-transcribe تعمل مباشرةً بالفعل. فعّل هذا الخيار للنماذج الأخرى التي يقدّمها خادم OpenAI لديك عبر /v1/realtime.</string>
     <string name="provider_model_thinking">نموذج تفكير</string>
+    <string name="provider_model_timeout">تجاوز مهلة الانتظار (مللي ثانية)</string>
+    <string name="provider_model_timeout_hint">اتركه فارغًا لاستخدام مهلة المزوّد</string>
+    <string name="provider_model_timeout_invalid">أدخل عددًا موجبًا من المللي ثانية</string>
     <string name="provider_model_delete_blocked_title">لا يمكن حذف هذا النموذج</string>
     <string name="provider_model_delete_blocked_message">‏%1$s مستخدَم في: %2$s. اختر نموذجًا آخر أو امسح الاختيار أولًا.</string>
 

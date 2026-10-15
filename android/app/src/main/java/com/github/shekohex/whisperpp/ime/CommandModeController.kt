@@ -396,7 +396,7 @@ class CommandModeController(private val deps: Deps) {
             languageCode = runtimeConfig.languageCode,
             prompt = provider.prompt.ifEmpty { runtimeConfig.prefs[PROMPT] ?: "" },
             temperature = provider.temperature,
-            timeoutMs = provider.timeout.toLong(),
+            timeoutMs = provider.effectiveTimeoutMs(provider.models.find { it.id == runtimeConfig.sttModelId }),
             mediaType = SttTranscriber.MEDIA_TYPE_WAV,
             scriptConversion = deps.transcriber.scriptConversion(runtimeConfig.prefs[POSTPROCESSING]),
         )
@@ -465,7 +465,7 @@ class CommandModeController(private val deps: Deps) {
                 contextPrompt = contextPrompt,
                 temperature = temperature,
                 thinking = ThinkingConfig.from(textProvider, textModel),
-                timeoutMs = textProvider.timeout.toLong(),
+                timeoutMs = textProvider.effectiveTimeoutMs(textModel),
             )
         ).getOrElse { error ->
             state.setStage(CommandStage.ERROR, error.toProviderUserMessage(deps.context))

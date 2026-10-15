@@ -168,6 +168,32 @@ class AutoLearnAiReviewerTest {
     }
 
     @Test
+    fun review_timeoutFallsBackTo60s_unlessModelOverrides() = runBlocking {
+        val provider = FakeEnhancementProvider(listOf(Result.success(validJson)))
+        val default = AutoLearnAiReviewer(prompt = { "P" }, resolveModel = { Result.success(AutoLearnReviewModel(provider)) })
+        default.review(batch).getOrThrow()
+        assertEquals(AutoLearnAiReviewer.REVIEW_TIMEOUT_MS, provider.requests.single().timeoutMs)
+
+        val overridden = FakeEnhancementProvider(listOf(Result.success(validJson)))
+        val custom = AutoLearnAiReviewer(
+            prompt = { "P" },
+            resolveModel = { Result.success(AutoLearnReviewModel(overridden, timeoutMs = 5_000L)) },
+        )
+        custom.review(batch).getOrThrow()
+        assertEquals(5_000L, overridden.requests.single().timeoutMs)
+
+        for (invalid in listOf(0L, -5L)) {
+            val provider = FakeEnhancementProvider(listOf(Result.success(validJson)))
+            val reviewer = AutoLearnAiReviewer(
+                prompt = { "P" },
+                resolveModel = { Result.success(AutoLearnReviewModel(provider, timeoutMs = invalid)) },
+            )
+            reviewer.review(batch).getOrThrow()
+            assertEquals(AutoLearnAiReviewer.REVIEW_TIMEOUT_MS, provider.requests.single().timeoutMs)
+        }
+    }
+
+    @Test
     fun review_propagatesProviderAndModelFailures() = runBlocking {
         val offline = AutoLearnAiReviewer(
             prompt = { "P" },

@@ -114,6 +114,9 @@
     <string name="provider_model_realtime_hint">Shows text while you speak. Needs a server or gateway (for example LiteLLM) that exposes the OpenAI-compatible /v1/realtime endpoint. If it fails, dictation falls back to normal transcription.</string>
     <string name="provider_model_realtime_hint_openai">OpenAI whisper-1 and *-transcribe models already stream. Turn this on for other models that your OpenAI endpoint serves over /v1/realtime.</string>
     <string name="provider_model_thinking">Thinking model</string>
+    <string name="provider_model_timeout">Timeout override (ms)</string>
+    <string name="provider_model_timeout_hint">Empty uses the provider timeout</string>
+    <string name="provider_model_timeout_invalid">Enter a positive number of milliseconds</string>
     <string name="provider_model_delete_blocked_title">Can\'t delete this model</string>
     <string name="provider_model_delete_blocked_message">%1$s is used by: %2$s. Choose another model or clear the selection first.</string>
 

@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -65,6 +66,27 @@ class SettingsRepositoryProviderPersistenceTest {
         assertEquals(2, persisted.models.size)
         assertTrue(persisted.models.any { it.id == "gpt-4o" })
         assertTrue(persisted.models.any { it.id == "gpt-4.1-mini" })
+    }
+
+    @Test
+    fun upsertProvider_persistsModelTimeoutOverride_andSanitizesNonPositiveValues() = runBlocking {
+        val repository = createRepository()
+        val provider = ServiceProvider(
+            id = "provider-1",
+            name = "OpenAI",
+            type = ProviderType.OPENAI,
+            endpoint = "https://api.openai.com/v1",
+            models = listOf(
+                ModelConfig(id = "gpt-4o", name = "GPT-4o", capabilities = ModelCapabilities.TEXT, timeoutMs = 25_000),
+                ModelConfig(id = "whisper-1", name = "Whisper 1", capabilities = ModelCapabilities.stt(ProviderType.OPENAI), timeoutMs = 0),
+            ),
+        )
+
+        repository.upsertProvider(provider)
+
+        val models = repository.providers.first().single().models
+        assertEquals(25_000, models[0].timeoutMs)
+        assertNull(models[1].timeoutMs)
     }
 
     private fun createRepository(): SettingsRepository {

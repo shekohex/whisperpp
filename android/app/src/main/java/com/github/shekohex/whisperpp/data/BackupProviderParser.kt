@@ -133,6 +133,7 @@ internal object BackupProviderParser {
                 id = modelId,
                 name = modelName,
                 capabilities = parseModelCapabilities(modelObject, providerType, endpoint),
+                timeoutMs = modelObject.numberValue("timeoutMs")?.toInt()?.takeIf { it > 0 },
             )
         }
         return models

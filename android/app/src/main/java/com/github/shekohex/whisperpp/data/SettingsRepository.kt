@@ -126,6 +126,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                             id = (model.id as? String) ?: "",
                             name = (model.name as? String) ?: "",
                             capabilities = sanitizeCapabilities(model, safeType, safeEndpoint),
+                            timeoutMs = (model.timeoutMs as? Number)?.toInt()?.takeIf { it > 0 },
                         )
                     }
                     val safeAuthMode = (provider.authMode as? ProviderAuthMode) ?: when (safeType) {

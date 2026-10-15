@@ -58,7 +58,7 @@ class ProviderTestRunner(
                 provider = provider,
                 modelId = model.id,
                 languageCode = provider.languageCode,
-                timeoutMs = STT_TEST_TIMEOUT_MS,
+                timeoutMs = model.timeoutMs?.takeIf { it > 0 }?.toLong() ?: STT_TEST_TIMEOUT_MS,
                 mediaType = mimeType.ifBlank { "audio/wav" },
             )
             val result = providerFactory
@@ -116,7 +116,7 @@ class ProviderTestRunner(
                 provider = provider,
                 modelId = model.id,
                 languageCode = provider.languageCode,
-                timeoutMs = STT_TEST_TIMEOUT_MS,
+                timeoutMs = model.timeoutMs?.takeIf { it > 0 }?.toLong() ?: STT_TEST_TIMEOUT_MS,
             )
             val session = transcriber.openStream(request) ?: continue
             val outcome = RealtimeHandshakeProbe.probe(session)

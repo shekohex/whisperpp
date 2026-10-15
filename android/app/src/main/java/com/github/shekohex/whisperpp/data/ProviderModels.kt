@@ -155,6 +155,7 @@ data class ModelConfig(
     val id: String,
     val name: String,
     val capabilities: ModelCapabilities = ModelCapabilities.TEXT,
+    val timeoutMs: Int? = null,
 ) {
     // Legacy mirrors of [capabilities], persisted so older app versions can still read providers
     // and backups. Never read them in new code.
@@ -186,7 +187,10 @@ data class ServiceProvider(
     val thinkingType: ThinkingType = ThinkingType.LEVEL,
     val thinkingBudget: Int = 4096,
     val thinkingLevel: String = "medium"
-)
+) {
+    fun effectiveTimeoutMs(model: ModelConfig?): Long =
+        (model?.timeoutMs?.takeIf { it > 0 } ?: timeout).toLong()
+}
 
 
 data class LanguageProfile(

@@ -22,7 +22,7 @@ object AutoLearnModelResolver {
         val (provider, model) = select(settings, providers)
             ?: return Result.failure(ProviderConfigException(ProviderConfigException.Problem.MISSING_MODEL))
         return factory.enhancement(provider, model).map { enhancement ->
-            AutoLearnReviewModel(enhancement, ThinkingConfig.from(provider, model))
+            AutoLearnReviewModel(enhancement, ThinkingConfig.from(provider, model), model.timeoutMs?.takeIf { it > 0 }?.toLong())
         }
     }
 

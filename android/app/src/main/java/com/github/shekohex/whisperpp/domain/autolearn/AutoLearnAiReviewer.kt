@@ -14,6 +14,7 @@ import org.json.JSONObject
 data class AutoLearnReviewModel(
     val provider: EnhancementProvider,
     val thinking: ThinkingConfig = ThinkingConfig.Disabled,
+    val timeoutMs: Long? = null,
 )
 
 /**
@@ -34,7 +35,7 @@ class AutoLearnAiReviewer(
             systemPrompt = prompt(),
             userText = buildPayload(candidates),
             thinking = model.thinking,
-            timeoutMs = REVIEW_TIMEOUT_MS,
+            timeoutMs = model.timeoutMs?.takeIf { it > 0 } ?: REVIEW_TIMEOUT_MS,
         )
         log("Auto-Learn review started provider=${model.provider.id} candidates=${candidates.size}")
         val response = try {

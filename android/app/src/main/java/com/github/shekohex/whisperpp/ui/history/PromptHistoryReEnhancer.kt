@@ -59,7 +59,7 @@ class PromptHistoryReEnhancer(
         )
         val thinking = ThinkingConfig.from(provider, model)
 
-        val outcome = runner.run(rawText = entry.rawText, budgetMs = provider.timeout.toLong()) { attemptTimeoutMs ->
+        val outcome = runner.run(rawText = entry.rawText, budgetMs = provider.effectiveTimeoutMs(model)) { attemptTimeoutMs ->
             enhancer.enhance(
                 EnhancementRequest(
                     systemPrompt = systemPrompt,

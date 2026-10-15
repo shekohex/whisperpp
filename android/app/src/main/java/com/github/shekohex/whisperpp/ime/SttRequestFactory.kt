@@ -28,7 +28,8 @@ class SttRequestFactory(
         languageCode: String,
     ): TranscriptionRequest {
         val basePrompt = provider.prompt.ifEmpty { prefs[PROMPT] ?: "" }
-        val acceptsVocabulary = provider.models.find { it.id == modelId }?.capabilities?.vocabulary == true
+        val model = provider.models.find { it.id == modelId }
+        val acceptsVocabulary = model?.capabilities?.vocabulary == true
         val terms = if (acceptsVocabulary) vocabulary() else emptyList()
         return TranscriptionRequest(
             provider = provider,
@@ -36,7 +37,7 @@ class SttRequestFactory(
             languageCode = languageCode,
             prompt = if (acceptsVocabulary) Vocabulary.appendToPrompt(basePrompt, terms) else basePrompt,
             temperature = provider.temperature,
-            timeoutMs = provider.timeout.toLong(),
+            timeoutMs = provider.effectiveTimeoutMs(model),
             mediaType = audioMediaType,
             scriptConversion = scriptConversion(prefs[POSTPROCESSING]),
             addTrailingSpace = prefs[ADD_TRAILING_SPACE] ?: false,

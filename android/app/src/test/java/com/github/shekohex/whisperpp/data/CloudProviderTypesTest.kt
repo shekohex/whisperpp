@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -40,6 +41,37 @@ class CloudProviderTypesTest {
         assertTrue(legacy.realtime)
         assertTrue(legacy.vocabulary)
         assertEquals(ProviderAuthMode.API_KEY, providers[1].authMode)
+        assertTrue(skipped.isEmpty())
+    }
+
+    @Test
+    fun backupParsing_readsModelTimeoutOverride_positiveOnly() {
+        val backup = """
+            {
+              "providersModels": {
+                "providers": [
+                  {"id": "oa", "name": "OpenAI", "type": "OPENAI", "endpoint": "https://api.openai.com/v1",
+                   "models": [
+                     {"id": "m-slow", "name": "Slow", "timeoutMs": 60000},
+                     {"id": "m-zero", "name": "Zero", "timeoutMs": 0},
+                     {"id": "m-inherit", "name": "Inherit"}
+                   ]}
+                ]
+              }
+            }
+        """.trimIndent()
+        val skipped = mutableListOf<SkippedImportItem>()
+
+        val providers = BackupProviderParser.parseProvidersModelsCategory(
+            JsonParser.parseString(backup).asJsonObject,
+            mutableSetOf(),
+            skipped,
+        ).providers
+
+        val models = providers.single().models.associateBy { it.id }
+        assertEquals(60_000, models.getValue("m-slow").timeoutMs)
+        assertNull(models.getValue("m-zero").timeoutMs)
+        assertNull(models.getValue("m-inherit").timeoutMs)
         assertTrue(skipped.isEmpty())
     }
 

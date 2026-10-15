@@ -95,8 +95,8 @@ class DictationEnhancementStep(private val deps: Deps) : DictationEnhancer {
         val thinking = ThinkingConfig.from(provider, model)
 
         deps.onRequestSent()
-        // The provider timeout is the total budget for all attempts and backoff waits.
-        val outcome = deps.runner.run(rawText = request.rawText, budgetMs = provider.timeout.toLong()) { attemptTimeoutMs ->
+        // The model (or provider) timeout is the total budget for all attempts and backoff waits.
+        val outcome = deps.runner.run(rawText = request.rawText, budgetMs = provider.effectiveTimeoutMs(model)) { attemptTimeoutMs ->
             enhancer.enhance(
                 EnhancementRequest(
                     systemPrompt = systemPrompt,
