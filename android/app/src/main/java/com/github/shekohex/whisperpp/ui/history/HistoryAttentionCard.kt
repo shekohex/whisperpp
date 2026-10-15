@@ -38,7 +38,7 @@ internal fun HistoryAttentionCard(
     onCancelRetry: () -> Unit,
     onMarkResolved: () -> Unit,
 ) {
-    if (entry.statusLabel() == null && !state.canRetry && !state.isRetrying) return
+    if (entry.statusLabel() == null && !(state.isRetrying && !entry.hasText)) return
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -61,9 +61,18 @@ internal fun HistoryAttentionCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            when {
-                state.isRetrying -> RetryProgress(isEnhancing = state.isEnhancing, onCancel = onCancelRetry)
-                state.canRetry -> RetryButton(hasText = entry.hasText, onRetry = onRetry)
+            if (!entry.hasText) {
+                when {
+                    state.isRetrying -> HistoryRetryProgress(isEnhancing = state.isEnhancing, onCancel = onCancelRetry)
+                    state.canRetry -> {
+                        HistoryRetryButton(hasText = false, onRetry = onRetry)
+                        Text(
+                            text = stringResource(R.string.history_retry_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
             if (entry.needsAttention && entry.hasText && !state.isWorking) {
                 OutlinedButton(onClick = onMarkResolved) {
@@ -75,25 +84,18 @@ internal fun HistoryAttentionCard(
 }
 
 @Composable
-private fun RetryButton(hasText: Boolean, onRetry: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        Button(onClick = onRetry) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text(
-                stringResource(if (hasText) R.string.history_retranscribe else R.string.history_retry),
-                modifier = Modifier.padding(start = Spacing.sm),
-            )
-        }
+internal fun HistoryRetryButton(hasText: Boolean, onRetry: () -> Unit) {
+    Button(onClick = onRetry) {
+        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
         Text(
-            text = stringResource(R.string.history_retry_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            stringResource(if (hasText) R.string.history_retranscribe else R.string.history_retry),
+            modifier = Modifier.padding(start = Spacing.sm),
         )
     }
 }
 
 @Composable
-private fun RetryProgress(isEnhancing: Boolean, onCancel: () -> Unit) {
+internal fun HistoryRetryProgress(isEnhancing: Boolean, onCancel: () -> Unit) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         verticalAlignment = Alignment.CenterVertically,

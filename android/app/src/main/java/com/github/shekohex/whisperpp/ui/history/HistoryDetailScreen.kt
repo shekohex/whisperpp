@@ -2,6 +2,7 @@ package com.github.shekohex.whisperpp.ui.history
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -230,11 +231,12 @@ private fun HistoryDetailContent(
         if (entry.hasText) TranscriptSection(entry, onCopied)
         state.player?.let { HistoryAudioCard(it) }
         if (entry.hasText) {
-            ReEnhanceControls(
-                isEnhancing = state.isEnhancing && !state.isRetrying,
-                enabled = !state.isWorking,
+            TranscriptActions(
+                state = state,
                 onStart = onReEnhance,
                 onCancel = onCancelReEnhance,
+                onRetry = onRetry,
+                onCancelRetry = onCancelRetry,
             )
         }
         HistoryDetailMetadata(entry = entry, app = state.app)
@@ -285,8 +287,16 @@ private fun TranscriptSection(entry: TranscriptHistoryEntry, onCopied: (String) 
 }
 
 @Composable
-private fun ReEnhanceControls(isEnhancing: Boolean, enabled: Boolean, onStart: () -> Unit, onCancel: () -> Unit) {
-    if (isEnhancing) {
+internal fun TranscriptActions(
+    state: HistoryDetailViewModel.UiState,
+    onStart: () -> Unit,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+    onCancelRetry: () -> Unit,
+) {
+    if (state.isRetrying) {
+        HistoryRetryProgress(isEnhancing = state.isEnhancing, onCancel = onCancelRetry)
+    } else if (state.isEnhancing) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(Spacing.md),
             verticalAlignment = Alignment.CenterVertically,
@@ -296,9 +306,15 @@ private fun ReEnhanceControls(isEnhancing: Boolean, enabled: Boolean, onStart: (
             OutlinedButton(onClick = onCancel) { Text(stringResource(R.string.component_cancel)) }
         }
     } else {
-        Button(onClick = onStart, enabled = enabled) {
-            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text(stringResource(R.string.history_reenhance), modifier = Modifier.padding(start = Spacing.sm))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            Button(onClick = onStart, enabled = !state.isWorking) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text(stringResource(R.string.history_reenhance), modifier = Modifier.padding(start = Spacing.sm))
+            }
+            if (state.canRetry) HistoryRetryButton(hasText = true, onRetry = onRetry)
         }
     }
 }
