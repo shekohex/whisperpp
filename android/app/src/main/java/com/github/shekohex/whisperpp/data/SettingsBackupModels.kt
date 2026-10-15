@@ -128,6 +128,7 @@ data class KeyboardBehaviorBackup(
     val filterFillersEnabled: Boolean = false,
     val formatParagraphsEnabled: Boolean = false,
     val autoSendAfterInsert: Boolean = false,
+    val showLiveTranscript: Boolean = true,
 )
 
 data class PrivacySafetyBackup(

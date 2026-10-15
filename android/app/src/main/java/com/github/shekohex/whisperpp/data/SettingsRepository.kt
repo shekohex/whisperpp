@@ -78,6 +78,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         .map { prefs -> prefs[PreferenceKeys.KEYBOARD_SHOW_MODE] ?: true }
         .distinctUntilChanged()
 
+    val showLiveTranscript: Flow<Boolean> = dataStore.data
+        .map { prefs -> prefs[PreferenceKeys.KEYBOARD_SHOW_LIVE_TRANSCRIPT] ?: true }
+        .distinctUntilChanged()
+
     val keepScreenAwake: Flow<Boolean> = dataStore.data
         .map { prefs -> prefs[PreferenceKeys.KEEP_SCREEN_AWAKE] ?: true }
         .distinctUntilChanged()

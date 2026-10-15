@@ -53,6 +53,7 @@ class KeyboardStateProjector(
         }
         scope.launch { session.events.collect(onEvent) }
         scope.launch { session.pendingCommit.collect { ui.pendingCommitText.value = it } }
+        scope.launch { session.liveTranscript.collect { ui.liveTranscript.value = it } }
     }
 
     private companion object {

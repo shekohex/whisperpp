@@ -14,6 +14,8 @@ class KeyboardUiState {
     val tapToRecord = mutableStateOf(true)
     val commandModeEnabled = mutableStateOf(false)
     val showModeOnKeyboard = mutableStateOf(true)
+    val showLiveTranscript = mutableStateOf(true)
+    val liveTranscript = mutableStateOf<String?>(null)
     val sessionStarting = mutableStateOf(false)
     val pendingCommitText = mutableStateOf<String?>(null)
     val micPermissionMissing = mutableStateOf(false)

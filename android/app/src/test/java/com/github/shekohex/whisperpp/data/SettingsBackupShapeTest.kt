@@ -30,7 +30,7 @@ class SettingsBackupShapeTest {
         assertEquals(
             setOf("stt", "text", "realtime", "thinking", "vocabulary")
                 .map { "providersModels.providers[].models[].capabilities.$it" }
-                .toSet() + WP_2_4_KEY_PATHS,
+                .toSet() + WP_2_4_KEY_PATHS + LIVE_TRANSCRIPT_KEY_PATHS,
             added,
         )
     }
@@ -119,6 +119,10 @@ class SettingsBackupShapeTest {
             "keyboardBehavior.filterFillersEnabled",
             "keyboardBehavior.formatParagraphsEnabled",
             "keyboardBehavior.autoSendAfterInsert",
+        )
+
+        val LIVE_TRANSCRIPT_KEY_PATHS = setOf(
+            "keyboardBehavior.showLiveTranscript",
         )
 
         /** Key paths of the payload exported before WP-2.1 (same seed). */

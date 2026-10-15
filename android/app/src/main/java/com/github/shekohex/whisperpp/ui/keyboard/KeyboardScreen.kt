@@ -2,8 +2,11 @@ package com.github.shekohex.whisperpp.ui.keyboard
 
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Column
@@ -18,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -26,6 +30,8 @@ import com.github.shekohex.whisperpp.command.CommandStage
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESET_ID_TONE_REWRITE
 import com.github.shekohex.whisperpp.data.presetById
 import com.github.shekohex.whisperpp.keyboard.KeyboardState
+import com.github.shekohex.whisperpp.keyboard.isPaused
+import com.github.shekohex.whisperpp.keyboard.isRecording
 import com.github.shekohex.whisperpp.privacy.SecureFieldDetector
 import com.github.shekohex.whisperpp.ui.navigation.SettingsDeepLinks
 
@@ -45,6 +51,8 @@ fun KeyboardScreen(
     /** Settings: the command-mode button and the mode icon are optional so the bar stays minimal. */
     commandModeEnabled: Boolean = false,
     showModeOnKeyboard: Boolean = true,
+    liveTranscript: String? = null,
+    showLiveTranscript: Boolean = true,
     /** The session is opening the recorder: the button swallows presses (no second start / haptic). */
     isStarting: Boolean = false,
     undoAvailable: Boolean = false,
@@ -302,6 +310,17 @@ fun KeyboardScreen(
                 onDismiss = { showContextSheet = false },
             )
             null -> Unit
+        }
+
+        AnimatedVisibility(
+            visible = showLiveTranscript && !liveTranscript.isNullOrBlank() &&
+                (state.isRecording || state.isPaused) &&
+                activeSheet == null && !showCommandOverlay && !externalSendingBlocked && pendingCommitText == null,
+            enter = fadeIn(tween(180)) + expandVertically(tween(180), expandFrom = Alignment.Bottom) +
+                slideInVertically(tween(180)) { it / 2 },
+            exit = fadeOut(tween(120)) + shrinkVertically(tween(180), shrinkTowards = Alignment.Bottom),
+        ) {
+            LiveTranscriptCard(text = liveTranscript.orEmpty())
         }
 
         KeyboardBar(

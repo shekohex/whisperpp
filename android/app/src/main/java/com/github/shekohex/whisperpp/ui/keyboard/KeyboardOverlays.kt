@@ -1,5 +1,7 @@
 package com.github.shekohex.whisperpp.ui.keyboard
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,12 +9,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Close
@@ -32,6 +37,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +52,10 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Dp
@@ -49,6 +63,55 @@ import androidx.compose.ui.unit.dp
 import com.github.shekohex.whisperpp.R
 import com.github.shekohex.whisperpp.command.CommandStage
 import com.github.shekohex.whisperpp.data.TRANSFORM_PRESETS
+
+@Composable
+internal fun LiveTranscriptCard(text: String) {
+    val scroll = rememberScrollState()
+    val wordAlpha = remember { Animatable(1f) }
+    var previousText by remember { mutableStateOf("") }
+    val changeStart = remember(text) { liveTranscriptChangeStart(previousText, text) }
+    val title = stringResource(R.string.keyboard_live_transcript_title)
+    val color = MaterialTheme.colorScheme.onSurface
+
+    LaunchedEffect(text) {
+        previousText = text
+        wordAlpha.snapTo(0.45f)
+        wordAlpha.animateTo(1f, tween(180))
+    }
+    LaunchedEffect(text, scroll.maxValue) {
+        scroll.scrollTo(scroll.maxValue)
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 4.dp,
+    ) {
+        Box(modifier = Modifier.height(64.dp).verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 8.dp)) {
+            Text(
+                text = buildAnnotatedString {
+                    append(text.substring(0, changeStart))
+                    withStyle(SpanStyle(color = color.copy(alpha = wordAlpha.value))) {
+                        append(text.substring(changeStart))
+                    }
+                },
+                color = color,
+                style = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content),
+                modifier = Modifier.fillMaxWidth().semantics { stateDescription = title },
+            )
+        }
+    }
+}
+
+internal fun liveTranscriptChangeStart(previous: String, current: String): Int {
+    var index = 0
+    val limit = minOf(previous.length, current.length)
+    while (index < limit && previous[index] == current[index]) index++
+    if (index < current.length && current[index].isWhitespace()) return index
+    while (index > 0 && !current[index - 1].isWhitespace()) index--
+    return index
+}
 
 /** "Discard this recording?" in the keyboard window (H-14; was an AlertDialog with an IME token). */
 @Composable

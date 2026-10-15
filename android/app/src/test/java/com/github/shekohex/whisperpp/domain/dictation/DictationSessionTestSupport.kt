@@ -149,6 +149,7 @@ internal object DictationSessionTestSupport {
         var addTrailingSpace = false
         var postProcess: (String) -> String = { it }
         var history: HistoryRecorder? = null
+        var options = DictationOptions()
         val committer = TextCommitter { ic }
         var nextAudioFile: (() -> File)? = null
         val requests = mutableListOf<TranscriptionRequest>()
@@ -178,7 +179,7 @@ internal object DictationSessionTestSupport {
                         plannerGate?.await()
                         val file = nextAudioFile?.invoke() ?: audioFile
                         StartDecision.Proceed(
-                            StartPlan(file, request().copy(useContext = useContext, addTrailingSpace = addTrailingSpace), streaming),
+                            StartPlan(file, request().copy(useContext = useContext, addTrailingSpace = addTrailingSpace), streaming, options),
                         )
                     },
                     sendAllowed = { sendAllowed },

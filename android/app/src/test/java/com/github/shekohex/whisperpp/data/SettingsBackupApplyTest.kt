@@ -20,6 +20,37 @@ class SettingsBackupApplyTest {
     private val gson = Gson()
 
     @Test
+    fun applyImportAnalysis_restoresLiveTranscriptSetting_andDefaultsOlderBackupsToEnabled() = runBlocking {
+        for (imported in listOf(false, true, null)) {
+            val dataStore = MutablePreferencesDataStore(
+                mutablePreferencesOf(PreferenceKeys.KEYBOARD_SHOW_LIVE_TRANSCRIPT to !(imported ?: true)),
+            )
+            val credentialStore = FakeProviderCredentialStore()
+            val repository = SettingsBackupRepository(
+                dataStore = dataStore,
+                credentialSource = credentialStore,
+                credentialSink = credentialStore,
+                gson = gson,
+            )
+            val payload = gson.toJsonTree(
+                SettingsBackupPayload(keyboardBehavior = KeyboardBehaviorBackup(showLiveTranscript = imported ?: true)),
+            ).asJsonObject
+            if (imported == null) payload.getAsJsonObject("keyboardBehavior").remove("showLiveTranscript")
+            val envelope = SettingsBackupCrypto.encryptUtf8(
+                plaintext = payload.toString(),
+                password = PASSWORD,
+                appVersionName = "1.0.0",
+                exportedAtUtc = "2026-03-09T18:00:00Z",
+            )
+            val analysis = repository.analyzeEncryptedBackup(envelope, PASSWORD, RestoreMode.MERGE)
+
+            repository.applyImportAnalysis(analysis, setOf(SETTINGS_BACKUP_CATEGORY_KEYBOARD_BEHAVIOR))
+
+            assertEquals(imported ?: true, dataStore.data.first()[PreferenceKeys.KEYBOARD_SHOW_LIVE_TRANSCRIPT])
+        }
+    }
+
+    @Test
     fun applyImportAnalysis_mergesSelectedCategoriesAndOverwriteReplacesCategory() = runBlocking {
         val mergeDataStore = MutablePreferencesDataStore(
             seedPreferences(

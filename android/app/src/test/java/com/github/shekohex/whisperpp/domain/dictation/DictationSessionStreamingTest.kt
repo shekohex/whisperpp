@@ -2,18 +2,162 @@ package com.github.shekohex.whisperpp.domain.dictation
 
 import com.github.shekohex.whisperpp.domain.dictation.DictationSessionTestSupport.FakeStreaming
 import com.github.shekohex.whisperpp.domain.dictation.DictationSessionTestSupport.sessionTest
+import com.github.shekohex.whisperpp.domain.modes.OutputMode
 import com.github.shekohex.whisperpp.domain.providers.StreamEvent
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DictationSessionStreamingTest {
+
+    @Test
+    fun liveTranscript_replacesOlderWordsWithoutWaitingForEditorThrottle() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = "we met on Tuesday")
+        h.streaming = streaming
+        h.recordFor(1_000, locked = true)
+        streaming.events.emit(StreamEvent.Partial("we met on Monday"))
+        runCurrent()
+        assertEquals("we met on Monday", h.session.liveTranscript.value)
+
+        streaming.events.emit(StreamEvent.Partial("we met on Tuesday"))
+        runCurrent()
+
+        assertEquals("we met on Tuesday", h.session.liveTranscript.value)
+        assertEquals("prefix we met on Monday", h.ic.getText())
+    }
+
+    @Test
+    fun liveTranscript_worksWhileEnhancementSuppressesEditorPartials() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = "hello")
+        h.streaming = streaming
+        h.enhancer = object : DictationEnhancer {
+            override suspend fun isEnabled(request: DictationEnhancer.Request) = true
+            override suspend fun enhance(request: DictationEnhancer.Request) = DictationEnhancer.Result.Kept()
+        }
+        h.recordFor(1_000, locked = true)
+
+        streaming.events.emit(StreamEvent.Partial("hello"))
+        runCurrent()
+
+        assertEquals("hello", h.session.liveTranscript.value)
+        assertEquals("prefix ", h.ic.getText())
+    }
+
+    @Test
+    fun liveTranscript_worksInClipboardModeWithoutTouchingField() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = "hello")
+        h.streaming = streaming
+        h.options = DictationOptions(outputMode = OutputMode.CLIPBOARD)
+        h.recordFor(1_000, locked = true)
+
+        streaming.events.emit(StreamEvent.Partial("hello"))
+        runCurrent()
+
+        assertEquals("hello", h.session.liveTranscript.value)
+        assertEquals("prefix ", h.ic.getText())
+    }
+
+    @Test
+    fun liveTranscript_finalCorrectionUpdatesPreview_thenCompletionClearsIt() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = "turn right")
+        h.streaming = streaming
+        h.recordFor(1_000, locked = true)
+        streaming.events.emit(StreamEvent.Partial("turn left"))
+        runCurrent()
+
+        streaming.events.emit(StreamEvent.Final("turn right"))
+        runCurrent()
+        assertEquals("turn right", h.session.liveTranscript.value)
+
+        h.session.onStop()
+        advanceUntilIdle()
+
+        assertNull(h.session.liveTranscript.value)
+        assertEquals("prefix turn right", h.ic.getText())
+    }
+
+    @Test
+    fun liveTranscript_cancelClearsIt_andNextTakeStartsEmpty() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = null)
+        h.streaming = streaming
+        h.recordFor(1_000, locked = true)
+        streaming.events.emit(StreamEvent.Partial("discard me"))
+        runCurrent()
+
+        h.session.onCancel()
+        runCurrent()
+        assertNull(h.session.liveTranscript.value)
+        h.recordFor(1_000, locked = true)
+
+        assertNull(h.session.liveTranscript.value)
+    }
+
+    @Test
+    fun liveTranscript_focusChangeAndHiddenKeyboardPreventLateCaptions() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = null)
+        h.streaming = streaming
+        h.recordFor(1_000, locked = true)
+        streaming.events.emit(StreamEvent.Partial("private caption"))
+        runCurrent()
+
+        h.session.onFocusChanged(h.otherFocus)
+        assertNull(h.session.liveTranscript.value)
+        streaming.events.emit(StreamEvent.Partial("late caption"))
+        runCurrent()
+        assertNull(h.session.liveTranscript.value)
+
+        h.session.onFocusChanged(h.focus)
+        h.session.onWindowHidden()
+        streaming.events.emit(StreamEvent.Partial("hidden caption"))
+        runCurrent()
+        assertNull(h.session.liveTranscript.value)
+    }
+
+    @Test
+    fun liveTranscript_newPrivacyBlockClearsIt_andRejectsLateCaptions() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = null)
+        h.streaming = streaming
+        h.recordFor(1_000, locked = true)
+        streaming.events.emit(StreamEvent.Partial("private caption"))
+        runCurrent()
+
+        h.sendAllowed = false
+        h.session.onExternalSendBlocked()
+        streaming.events.emit(StreamEvent.Partial("late caption"))
+        runCurrent()
+
+        assertNull(h.session.liveTranscript.value)
+    }
+
+    @Test
+    fun liveTranscript_batchFallbackClearsIt_andRejectsLateStreamingResults() = sessionTest { h ->
+        val streaming = FakeStreaming(committed = null)
+        val batch = CompletableDeferred<String>()
+        h.streaming = streaming
+        h.transcript = { Result.success(batch.await()) }
+        h.recordFor(1_000, locked = true)
+        streaming.events.emit(StreamEvent.Partial("unreliable"))
+        runCurrent()
+
+        h.session.onStop()
+        runCurrent()
+        assertNull(h.session.liveTranscript.value)
+        streaming.events.emit(StreamEvent.Partial("stale"))
+        runCurrent()
+        assertNull(h.session.liveTranscript.value)
+        batch.complete("batch result")
+        advanceUntilIdle()
+
+        assertEquals("prefix batch result", h.ic.getText())
+    }
 
     @Test
     fun droppedPcm_ignoresRealtimeResult() = sessionTest { h ->

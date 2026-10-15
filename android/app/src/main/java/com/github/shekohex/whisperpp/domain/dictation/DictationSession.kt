@@ -58,6 +58,9 @@ class DictationSession(private val deps: Deps) {
     private val _state = MutableStateFlow<SessionState>(SessionState.Idle)
     val state: StateFlow<SessionState> = _state.asStateFlow()
 
+    private val _liveTranscript = MutableStateFlow<String?>(null)
+    val liveTranscript: StateFlow<String?> = _liveTranscript.asStateFlow()
+
     private val _events = MutableSharedFlow<SessionEvent>(
         extraBufferCapacity = 32,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -83,7 +86,9 @@ class DictationSession(private val deps: Deps) {
     private var currentFocus: FocusKey? = null
     private var run: DictationRun? = null
 
-    private val streamingPipeline = RealtimeStreaming(deps, _state, { currentFocus }, { run === it })
+    private val streamingPipeline = RealtimeStreaming(
+        deps, _state, _liveTranscript, { currentFocus }, { run === it }, { windowVisible.value },
+    )
     private val takeHistory = TakeHistory(deps, ::emit)
     private val enhancement = EnhancementStep(deps, _state, { currentFocus }, { run === it }, ::emit, takeHistory)
     private val completion = CompletionReporter(takeHistory, ::emit)
@@ -119,6 +124,7 @@ class DictationSession(private val deps: Deps) {
             return
         }
         val r = DictationRun(++latestRunId, focus)
+        _liveTranscript.value = null
         run = r
         _state.value = SessionState.Starting(focus, locked)
         r.job = deps.scope.launch { start(r) }
@@ -194,6 +200,7 @@ class DictationSession(private val deps: Deps) {
         currentFocus = focus
         val r = run ?: return
         if (focus == r.focus) return
+        _liveTranscript.value = null
         when (val s = _state.value) {
             is SessionState.Starting -> cancelRun(recordDiscard = false)
             is SessionState.Recording -> if (!s.paused) pause(s)
@@ -205,6 +212,7 @@ class DictationSession(private val deps: Deps) {
     /** Recording pauses and lets media resume; network work continues and commits on return (A-05). */
     fun onWindowHidden() {
         windowVisible.value = false
+        _liveTranscript.value = null
         when (val s = _state.value) {
             is SessionState.Starting -> cancelRun(recordDiscard = false)
             is SessionState.Recording -> {
@@ -226,6 +234,7 @@ class DictationSession(private val deps: Deps) {
     fun onExternalSendBlocked() {
         val r = run ?: return
         if (currentFocus != r.focus) return
+        _liveTranscript.value = null
         when (val s = _state.value) {
             is SessionState.Starting -> cancelRun(recordDiscard = false)
             is SessionState.Recording -> {
@@ -392,6 +401,7 @@ class DictationSession(private val deps: Deps) {
     }
 
     private suspend fun commit(r: DictationRun, transcript: String) {
+        _liveTranscript.value = null
         val processed = deps.postProcess(transcript, r.options)
         if (processed.isBlank()) {
             // Filtering removed everything: nothing to insert, enhance or send.
@@ -551,6 +561,7 @@ class DictationSession(private val deps: Deps) {
     private fun finish(r: DictationRun, next: SessionState) {
         if (run !== r) return
         run = null
+        _liveTranscript.value = null
         val wasStarting = _state.value is SessionState.Starting
         r.job?.cancel()
         r.auxJobs.forEach { it.cancel() }

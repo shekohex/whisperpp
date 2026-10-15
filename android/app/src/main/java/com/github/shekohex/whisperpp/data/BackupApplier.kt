@@ -177,6 +177,7 @@ internal class BackupApplier(
         prefs[PreferenceKeys.FILTER_FILLERS_ENABLED] = category.filterFillersEnabled
         prefs[PreferenceKeys.FORMAT_PARAGRAPHS_ENABLED] = category.formatParagraphsEnabled
         prefs[PreferenceKeys.AUTO_SEND_AFTER_INSERT] = category.autoSendAfterInsert
+        prefs[PreferenceKeys.KEYBOARD_SHOW_LIVE_TRANSCRIPT] = category.showLiveTranscript
     }
 
     private fun applyPrivacySafety(prefs: MutablePreferences, category: PrivacySafetyBackup) {

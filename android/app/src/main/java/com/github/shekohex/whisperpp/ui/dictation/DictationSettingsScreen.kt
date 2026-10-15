@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.MusicOff
 import androidx.compose.material.icons.filled.QuestionMark
 import androidx.compose.material.icons.filled.ScreenLockPortrait
 import androidx.compose.material.icons.filled.SpaceBar
+import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Vibration
@@ -49,6 +50,7 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.FILTER_FILLERS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.FORMAT_PARAGRAPHS_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.HAPTIC_FEEDBACK_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.KEEP_SCREEN_AWAKE
+import com.github.shekohex.whisperpp.data.PreferenceKeys.KEYBOARD_SHOW_LIVE_TRANSCRIPT
 import com.github.shekohex.whisperpp.data.PreferenceKeys.KEYBOARD_SHOW_MODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.LANGUAGE_CODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING
@@ -74,9 +76,16 @@ fun DictationSettingsScreen(
     val prefs by viewModel.prefs.collectAsStateWithLifecycle()
 
     @Composable
-    fun Toggle(icon: ImageVector, title: String, key: Preferences.Key<Boolean>, default: Boolean) = SettingsSwitchRow(
+    fun Toggle(
+        icon: ImageVector,
+        title: String,
+        key: Preferences.Key<Boolean>,
+        default: Boolean,
+        supporting: String? = null,
+    ) = SettingsSwitchRow(
         leadingIcon = icon,
         title = title,
+        supporting = supporting,
         checked = prefs?.get(key) ?: default,
         onCheckedChange = { viewModel.set(key, it) },
     )
@@ -112,6 +121,13 @@ fun DictationSettingsScreen(
             Toggle(Icons.Default.AutoFixHigh, stringResource(R.string.settings_command_mode_button), COMMAND_MODE_ENABLED, false)
             Toggle(Icons.Default.ScreenLockPortrait, stringResource(R.string.settings_keep_screen_awake), KEEP_SCREEN_AWAKE, true)
             Toggle(Icons.Default.Category, stringResource(R.string.settings_show_mode_on_keyboard), KEYBOARD_SHOW_MODE, true)
+            Toggle(
+                Icons.Default.Subtitles,
+                stringResource(R.string.settings_show_live_transcript),
+                KEYBOARD_SHOW_LIVE_TRANSCRIPT,
+                true,
+                supporting = stringResource(R.string.settings_show_live_transcript_desc),
+            )
         }
         SectionCard(title = stringResource(R.string.dictation_group_extras)) {
             Toggle(Icons.Default.SpaceBar, stringResource(R.string.dictation_trailing_space), ADD_TRAILING_SPACE, false)

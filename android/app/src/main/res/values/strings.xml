@@ -168,6 +168,9 @@
     <string name="settings_command_mode_button">Show command mode button</string>
     <string name="settings_keep_screen_awake">Keep screen awake while recording</string>
     <string name="settings_show_mode_on_keyboard">Show mode icon on the keyboard</string>
+    <string name="settings_show_live_transcript">Live transcription</string>
+    <string name="settings_show_live_transcript_desc">Show realtime captions above the recorder. Earlier words update as the model corrects them.</string>
+    <string name="keyboard_live_transcript_title">Live transcription</string>
     <string name="settings_realtime_stt_enabled">Use realtime transcription when available</string>
 
     <!-- Dictation session (WP-1.2) -->

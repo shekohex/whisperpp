@@ -172,6 +172,9 @@
     <string name="settings_command_mode_button">إظهار زر وضع الأوامر</string>
     <string name="settings_keep_screen_awake">إبقاء الشاشة مضاءة أثناء التسجيل</string>
     <string name="settings_show_mode_on_keyboard">إظهار أيقونة الوضع على لوحة المفاتيح</string>
+    <string name="settings_show_live_transcript">النسخ الفوري</string>
+    <string name="settings_show_live_transcript_desc">إظهار التسميات التوضيحية الفورية أعلى المسجل. تُحدَّث الكلمات السابقة أثناء تصحيح النموذج لها.</string>
+    <string name="keyboard_live_transcript_title">النسخ الفوري</string>
     <string name="settings_realtime_stt_enabled">استخدام النسخ الفوري عند توفره</string>
 
     <!-- Dictation session (WP-1.2) -->

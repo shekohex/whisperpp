@@ -68,6 +68,7 @@ internal class BackupPayloadBuilder(
                 filterFillersEnabled = prefs[PreferenceKeys.FILTER_FILLERS_ENABLED] ?: false,
                 formatParagraphsEnabled = prefs[PreferenceKeys.FORMAT_PARAGRAPHS_ENABLED] ?: false,
                 autoSendAfterInsert = prefs[PreferenceKeys.AUTO_SEND_AFTER_INSERT] ?: false,
+                showLiveTranscript = prefs[PreferenceKeys.KEYBOARD_SHOW_LIVE_TRANSCRIPT] ?: true,
             ),
             privacySafety = PrivacySafetyBackup(
                 enhancementEnabled = prefs[PreferenceKeys.ENHANCEMENT_ENABLED] ?: false,

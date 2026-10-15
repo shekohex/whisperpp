@@ -126,6 +126,7 @@ internal class BackupImportAnalyzer(
                 "filterFillersEnabled",
                 "formatParagraphsEnabled",
                 "autoSendAfterInsert",
+                "showLiveTranscript",
             )
 
             SETTINGS_BACKUP_CATEGORY_PRIVACY_SAFETY -> buildList {

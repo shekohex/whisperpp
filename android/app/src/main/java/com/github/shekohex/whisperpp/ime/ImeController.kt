@@ -63,6 +63,7 @@ class ImeController(
         scope.launch { c.repository.tapToRecord.collect { c.ui.tapToRecord.value = it } }
         scope.launch { c.repository.commandModeEnabled.collect { c.ui.commandModeEnabled.value = it } }
         scope.launch { c.repository.showModeOnKeyboard.collect { c.ui.showModeOnKeyboard.value = it } }
+        scope.launch { c.repository.showLiveTranscript.collect { c.ui.showLiveTranscript.value = it } }
         scope.launch {
             combine(snapshotFlow { c.ui.keyboardState.value }, c.repository.keepScreenAwake, ::shouldKeepScreenOn)
                 .distinctUntilChanged()

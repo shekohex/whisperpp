@@ -58,6 +58,7 @@ object PreferenceKeys {
     val COMMAND_MODE_ENABLED = booleanPreferencesKey("command-mode-enabled")
     /** Show the active mode's icon next to the language on the keyboard bar. Default true. */
     val KEYBOARD_SHOW_MODE = booleanPreferencesKey("keyboard-show-mode")
+    val KEYBOARD_SHOW_LIVE_TRANSCRIPT = booleanPreferencesKey("keyboard-show-live-transcript")
     /** Keep the screen on while a recording is running, for hands-free dictation. Default true. */
     val KEEP_SCREEN_AWAKE = booleanPreferencesKey("keep-screen-awake")
     val SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN = booleanPreferencesKey("secure-field-explanation-dont-show-again")
@@ -154,6 +155,7 @@ object PreferenceKeys {
         TAP_TO_RECORD,
         COMMAND_MODE_ENABLED,
         KEYBOARD_SHOW_MODE,
+        KEYBOARD_SHOW_LIVE_TRANSCRIPT,
         KEEP_SCREEN_AWAKE,
         SECURE_FIELD_EXPLANATION_DONT_SHOW_AGAIN,
         VERBOSE_NETWORK_LOGS_ENABLED,

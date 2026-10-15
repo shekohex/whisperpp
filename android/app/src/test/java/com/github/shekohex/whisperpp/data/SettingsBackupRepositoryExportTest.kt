@@ -46,6 +46,7 @@ class SettingsBackupRepositoryExportTest {
         assertEquals(1, payload.appMappings.mappings.size)
         assertEquals("cleanup", payload.transformPresets.enhancementPresetId)
         assertTrue(payload.keyboardBehavior.autoRecordingStart)
+        assertTrue(payload.keyboardBehavior.showLiveTranscript)
         assertTrue(payload.privacySafety.perAppSendPolicies["com.example.blocked"] == true)
         assertEquals("nightly", payload.advancedPreferences.updateChannel)
     }
@@ -102,6 +103,27 @@ class SettingsBackupRepositoryExportTest {
         assertTrue(payload.privacySafety.useContext)
         assertTrue(payload.privacySafety.disclosureShownCommandText)
         assertEquals("nightly", payload.advancedPreferences.updateChannel)
+    }
+
+    @Test
+    fun exportEncryptedBackup_roundTripsShowLiveTranscriptDisabled() = runBlocking {
+        val repository = SettingsBackupRepository(
+            dataStore = FakePreferencesDataStore(
+                mutablePreferencesOf(PreferenceKeys.KEYBOARD_SHOW_LIVE_TRANSCRIPT to false)
+            ),
+            credentialSource = FakeProviderCredentialSource(emptyMap()),
+            gson = gson,
+            timestampProvider = { "2026-03-09T17:05:00Z" },
+        )
+
+        val payload = decodePayload(
+            repository.exportEncryptedBackup(
+                password = "backup-password",
+                appVersionName = "0.1.3",
+            )
+        )
+
+        assertFalse(payload.keyboardBehavior.showLiveTranscript)
     }
 
     private fun decodePayload(envelope: SettingsBackupEnvelope): SettingsBackupPayload {

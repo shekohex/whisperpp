@@ -274,6 +274,7 @@ internal class BackupCodec(private val gson: Gson) {
             filterFillersEnabled = category.booleanValue("filterFillersEnabled") ?: false,
             formatParagraphsEnabled = category.booleanValue("formatParagraphsEnabled") ?: false,
             autoSendAfterInsert = category.booleanValue("autoSendAfterInsert") ?: false,
+            showLiveTranscript = category.booleanValue("showLiveTranscript") ?: true,
         )
     }
 
