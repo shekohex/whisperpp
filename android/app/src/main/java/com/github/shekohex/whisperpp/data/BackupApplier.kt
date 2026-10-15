@@ -173,6 +173,7 @@ internal class BackupApplier(
         prefs[PreferenceKeys.CANCEL_CONFIRMATION] = category.cancelConfirmation
         prefs[PreferenceKeys.ADD_TRAILING_SPACE] = category.addTrailingSpace
         prefs[PreferenceKeys.HAPTIC_FEEDBACK_ENABLED] = category.hapticFeedbackEnabled
+        prefs[PreferenceKeys.STREAMING_ENHANCEMENT_HAPTICS] = category.streamingEnhancementHaptics
         prefs[PreferenceKeys.SOUND_EFFECTS_ENABLED] = category.soundEffectsEnabled
         prefs[PreferenceKeys.FILTER_FILLERS_ENABLED] = category.filterFillersEnabled
         prefs[PreferenceKeys.FORMAT_PARAGRAPHS_ENABLED] = category.formatParagraphsEnabled

@@ -124,6 +124,7 @@ data class KeyboardBehaviorBackup(
     val cancelConfirmation: Boolean = false,
     val addTrailingSpace: Boolean = false,
     val hapticFeedbackEnabled: Boolean = false,
+    val streamingEnhancementHaptics: Boolean = false,
     val soundEffectsEnabled: Boolean = false,
     val filterFillersEnabled: Boolean = false,
     val formatParagraphsEnabled: Boolean = false,

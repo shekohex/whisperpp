@@ -8,6 +8,7 @@ import com.github.shekohex.whisperpp.domain.providers.StreamEvent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -51,6 +52,29 @@ class DictationSessionEnhancementStreamingTest {
         test.runCurrent()
         assertTrue(session.state.value is SessionState.Enhancing)
         return enhancer
+    }
+
+    @Test
+    fun enhancementTicksAreRateLimited_andIgnoreDuplicateSnapshotsAndEmptyResets() = sessionTest { h ->
+        val enhancer = h.startEnhancing()
+        enhancer.emit("first")
+        assertEquals(1, h.enhancementTicks)
+        advanceTimeBy(120)
+        enhancer.emit("first")
+        enhancer.emit("")
+        enhancer.emit(" ")
+        assertEquals(1, h.enhancementTicks)
+        enhancer.emit("new")
+        assertEquals(2, h.enhancementTicks)
+        advanceTimeBy(119)
+        enhancer.emit("new text")
+        assertEquals(2, h.enhancementTicks)
+        advanceTimeBy(1)
+        enhancer.emit("new text again")
+        assertEquals(3, h.enhancementTicks)
+        enhancer.complete("new text again")
+        advanceUntilIdle()
+        assertEquals(3, h.enhancementTicks)
     }
 
     @Test
@@ -130,7 +154,9 @@ class DictationSessionEnhancementStreamingTest {
         enhancer.emit("first")
 
         h.session.onFocusChanged(h.otherFocus)
+        advanceTimeBy(120)
         enhancer.emit("must not reach another field")
+        assertEquals(1, h.enhancementTicks)
         assertEquals("prefix first", h.ic.getText())
         enhancer.complete("completed rewrite")
         advanceUntilIdle()
@@ -145,7 +171,9 @@ class DictationSessionEnhancementStreamingTest {
         enhancer.emit("first")
 
         h.session.onWindowHidden()
+        advanceTimeBy(120)
         enhancer.emit("hidden")
+        assertEquals(1, h.enhancementTicks)
         enhancer.complete("completed rewrite")
         runCurrent()
         assertEquals("prefix first", h.ic.getText())
@@ -164,7 +192,9 @@ class DictationSessionEnhancementStreamingTest {
         h.sendAllowed = false
         h.session.onExternalSendBlocked()
         runCurrent()
+        advanceTimeBy(120)
         enhancer.emit("late rewrite")
+        assertEquals(1, h.enhancementTicks)
 
         assertTrue(enhancer.cancelled)
         assertEquals("prefix ", h.ic.getText())
@@ -177,6 +207,7 @@ class DictationSessionEnhancementStreamingTest {
         val enhancer = h.startEnhancing()
 
         enhancer.emit("streamed")
+        assertEquals(0, h.enhancementTicks)
         assertEquals("prefix ", h.ic.getText())
         enhancer.complete("completed rewrite")
         advanceUntilIdle()
@@ -224,7 +255,9 @@ class DictationSessionEnhancementStreamingTest {
         enhancer.emit("first")
         h.ic.setText("user wrote this")
 
+        advanceTimeBy(120)
         enhancer.emit("must not overwrite")
+        assertEquals(1, h.enhancementTicks)
         enhancer.complete("completed rewrite")
         advanceUntilIdle()
 
@@ -281,6 +314,7 @@ class DictationSessionEnhancementStreamingTest {
         val enhancer = h.startEnhancing()
 
         enhancer.emit("provisional")
+        assertEquals(0, h.enhancementTicks)
         assertEquals("prefix ", h.ic.getText())
         enhancer.complete("completed rewrite")
         advanceUntilIdle()

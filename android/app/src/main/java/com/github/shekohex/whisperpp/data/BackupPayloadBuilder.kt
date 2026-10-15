@@ -64,6 +64,7 @@ internal class BackupPayloadBuilder(
                 cancelConfirmation = prefs[PreferenceKeys.CANCEL_CONFIRMATION] ?: true,
                 addTrailingSpace = prefs[PreferenceKeys.ADD_TRAILING_SPACE] ?: false,
                 hapticFeedbackEnabled = prefs[PreferenceKeys.HAPTIC_FEEDBACK_ENABLED] ?: true,
+                streamingEnhancementHaptics = prefs[PreferenceKeys.STREAMING_ENHANCEMENT_HAPTICS] ?: false,
                 soundEffectsEnabled = prefs[PreferenceKeys.SOUND_EFFECTS_ENABLED] ?: true,
                 filterFillersEnabled = prefs[PreferenceKeys.FILTER_FILLERS_ENABLED] ?: false,
                 formatParagraphsEnabled = prefs[PreferenceKeys.FORMAT_PARAGRAPHS_ENABLED] ?: false,

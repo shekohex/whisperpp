@@ -150,6 +150,7 @@ internal object DictationSessionTestSupport {
         var postProcess: (String) -> String = { it }
         var history: HistoryRecorder? = null
         var options = DictationOptions()
+        var enhancementTicks = 0
         val committer = TextCommitter { ic }
         var nextAudioFile: (() -> File)? = null
         val requests = mutableListOf<TranscriptionRequest>()
@@ -189,6 +190,7 @@ internal object DictationSessionTestSupport {
                     streamingDispatcher = dispatcher,
                     postProcess = { text, _ -> postProcess(text) },
                     history = history,
+                    onEnhancementComposingTick = { enhancementTicks++ },
                 ),
             ).also { session ->
                 session.onFocusChanged(focus)

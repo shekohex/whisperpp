@@ -191,6 +191,8 @@
     <string name="update_download_notification_title">تحديث Whisper++</string>
     <string name="update_download_notification_description">جارٍ تنزيل الإصدار %1$s</string>
     <string name="update_install_failed">تعذّر بدء أداة التثبيت. نزّل التحديث مرة أخرى وأعد المحاولة.</string>
+    <string name="settings_streaming_enhancement_haptics">اهتزاز التحسين المتدفق</string>
+    <string name="settings_streaming_enhancement_haptics_desc">اهتزازات خفيفة مع ظهور النص المحسّن في الحقل النشط. يتطلب تفعيل الاستجابة اللمسية.</string>
     <string name="settings_dialog_confirm">تأكيد</string>
     <string name="settings_provider_label">المزوّد</string>
     <string name="settings_model_label">النموذج</string>

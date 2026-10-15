@@ -200,6 +200,8 @@
     <string name="update_download_notification_title">Whisper++ update</string>
     <string name="update_download_notification_description">Downloading version %1$s</string>
     <string name="update_install_failed">Could not start the installer. Download the update again and retry.</string>
+    <string name="settings_streaming_enhancement_haptics">Streaming enhancement haptics</string>
+    <string name="settings_streaming_enhancement_haptics_desc">Light ticks as enhanced text appears in the active field. Requires haptic feedback.</string>
 
     <!-- Shared settings components (WP-3.7) -->
     <string name="settings_dialog_confirm">Confirm</string>

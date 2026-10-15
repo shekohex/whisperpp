@@ -53,6 +53,7 @@ class DictationSession(private val deps: Deps) {
         val clipboardText: () -> String? = { null },
         /** Durable record of every take (§4.8); null disables it. */
         val history: HistoryRecorder? = null,
+        val onEnhancementComposingTick: () -> Unit = {},
     )
 
     private val _state = MutableStateFlow<SessionState>(SessionState.Idle)

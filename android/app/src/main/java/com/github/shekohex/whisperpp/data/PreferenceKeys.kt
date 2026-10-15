@@ -51,6 +51,7 @@ object PreferenceKeys {
     val ENHANCEMENT_PROMPT = stringPreferencesKey("smart-fix-prompt")
 
     val HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic-feedback-enabled")
+    val STREAMING_ENHANCEMENT_HAPTICS = booleanPreferencesKey("streaming-enhancement-haptics")
     val SOUND_EFFECTS_ENABLED = booleanPreferencesKey("sound-effects-enabled")
     val PAUSE_MEDIA_WHILE_RECORDING = booleanPreferencesKey("pause-media-while-recording")
     val TAP_TO_RECORD = booleanPreferencesKey("tap-to-record")
@@ -150,6 +151,7 @@ object PreferenceKeys {
         ENHANCEMENT_TEMPERATURE,
         ENHANCEMENT_PROMPT,
         HAPTIC_FEEDBACK_ENABLED,
+        STREAMING_ENHANCEMENT_HAPTICS,
         SOUND_EFFECTS_ENABLED,
         PAUSE_MEDIA_WHILE_RECORDING,
         TAP_TO_RECORD,

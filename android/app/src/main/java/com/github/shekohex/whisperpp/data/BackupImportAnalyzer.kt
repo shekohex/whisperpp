@@ -122,6 +122,7 @@ internal class BackupImportAnalyzer(
                 "cancelConfirmation",
                 "addTrailingSpace",
                 "hapticFeedbackEnabled",
+                "streamingEnhancementHaptics",
                 "soundEffectsEnabled",
                 "filterFillersEnabled",
                 "formatParagraphsEnabled",

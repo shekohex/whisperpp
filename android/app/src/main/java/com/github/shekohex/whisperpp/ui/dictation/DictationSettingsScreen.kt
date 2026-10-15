@@ -56,6 +56,7 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.LANGUAGE_CODE
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PAUSE_MEDIA_WHILE_RECORDING
 import com.github.shekohex.whisperpp.data.PreferenceKeys.REALTIME_STT_ENABLED
 import com.github.shekohex.whisperpp.data.PreferenceKeys.SOUND_EFFECTS_ENABLED
+import com.github.shekohex.whisperpp.data.PreferenceKeys.STREAMING_ENHANCEMENT_HAPTICS
 import com.github.shekohex.whisperpp.data.PreferenceKeys.TAP_TO_RECORD
 import com.github.shekohex.whisperpp.ui.components.PageScaffold
 import com.github.shekohex.whisperpp.ui.components.SectionCard
@@ -169,6 +170,13 @@ fun AudioSettingsScreen(
     ) {
         SectionCard(title = stringResource(R.string.dictation_audio_group_feedback)) {
             Toggle(Icons.Default.Vibration, stringResource(R.string.dictation_audio_haptics), HAPTIC_FEEDBACK_ENABLED, true)
+            SettingsSwitchRow(
+                leadingIcon = Icons.Default.Vibration,
+                title = stringResource(R.string.settings_streaming_enhancement_haptics),
+                supporting = stringResource(R.string.settings_streaming_enhancement_haptics_desc),
+                checked = prefs?.get(STREAMING_ENHANCEMENT_HAPTICS) ?: false,
+                onCheckedChange = { viewModel.set(STREAMING_ENHANCEMENT_HAPTICS, it) },
+            )
             Toggle(Icons.AutoMirrored.Filled.VolumeUp, stringResource(R.string.dictation_audio_sounds), SOUND_EFFECTS_ENABLED, true)
             Toggle(Icons.Default.MusicOff, stringResource(R.string.settings_pause_media_while_recording), PAUSE_MEDIA_WHILE_RECORDING, true)
         }

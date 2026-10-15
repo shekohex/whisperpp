@@ -79,6 +79,8 @@ internal class EnhancementStep(
         state.value = SessionState.Enhancing(r.focus, raw)
         takeHistory.enhancing(r)
         val startedAt = deps.clock()
+        var lastTickAt: Long? = null
+        var lastComposedText = ""
         val result = try {
             enhancer.enhanceStreaming(request) { text ->
                 if (!isCurrent(r) || state.value !is SessionState.Enhancing || currentFocus() != r.focus ||
@@ -90,6 +92,14 @@ internal class EnhancementStep(
                 if (deps.committer.setComposing(r.focus, text, trackEdits = true)) {
                     r.composing = true
                     r.enhancementComposing = true
+                    val changed = text != lastComposedText
+                    lastComposedText = text
+                    val now = deps.clock()
+                    val previousTickAt = lastTickAt
+                    if (changed && text.isNotBlank() && (previousTickAt == null || now - previousTickAt >= 120L)) {
+                        lastTickAt = now
+                        deps.onEnhancementComposingTick()
+                    }
                 } else if (r.composing) {
                     r.enhancementEditorChanged = true
                     r.composing = false

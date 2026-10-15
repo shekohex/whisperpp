@@ -110,6 +110,7 @@ class ImeComponents(private val host: ImeHost, private val scope: CoroutineScope
             postProcess = postProcessor::process,
             clipboardText = clipboard::readTrimmedText,
             history = container.historyRecorder,
+            onEnhancementComposingTick = feedback::performStreamingTick,
         )
     )
     val router: DictationIntentRouter = DictationIntentRouter(

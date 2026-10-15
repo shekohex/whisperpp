@@ -20,6 +20,23 @@ class SettingsBackupApplyTest {
     private val gson = Gson()
 
     @Test
+    fun streamingHapticsRestoreExplicitSetting_andOldBackupsDefaultToOff() = runBlocking {
+        for (imported in listOf(false, true, null)) {
+            val dataStore = MutablePreferencesDataStore(mutablePreferencesOf(PreferenceKeys.STREAMING_ENHANCEMENT_HAPTICS to true))
+            val credentials = FakeProviderCredentialStore()
+            val repository = SettingsBackupRepository(dataStore, credentials, credentials, gson)
+            val payload = gson.toJsonTree(SettingsBackupPayload(
+                keyboardBehavior = KeyboardBehaviorBackup(streamingEnhancementHaptics = imported ?: false),
+            )).asJsonObject
+            if (imported == null) payload.getAsJsonObject("keyboardBehavior").remove("streamingEnhancementHaptics")
+            val envelope = SettingsBackupCrypto.encryptUtf8(payload.toString(), PASSWORD, "1.0", "2026-10-15T00:00:00Z")
+            val analysis = repository.analyzeEncryptedBackup(envelope, PASSWORD, RestoreMode.MERGE)
+            repository.applyImportAnalysis(analysis, setOf(SETTINGS_BACKUP_CATEGORY_KEYBOARD_BEHAVIOR))
+            assertEquals(imported ?: false, dataStore.data.first()[PreferenceKeys.STREAMING_ENHANCEMENT_HAPTICS])
+        }
+    }
+
+    @Test
     fun applyImportAnalysis_restoresLiveTranscriptSetting_andDefaultsOlderBackupsToEnabled() = runBlocking {
         for (imported in listOf(false, true, null)) {
             val dataStore = MutablePreferencesDataStore(

@@ -270,6 +270,7 @@ internal class BackupCodec(private val gson: Gson) {
             cancelConfirmation = category.booleanValue("cancelConfirmation") ?: false,
             addTrailingSpace = category.booleanValue("addTrailingSpace") ?: false,
             hapticFeedbackEnabled = category.booleanValue("hapticFeedbackEnabled") ?: false,
+            streamingEnhancementHaptics = category.booleanValue("streamingEnhancementHaptics") ?: false,
             soundEffectsEnabled = category.booleanValue("soundEffectsEnabled") ?: false,
             filterFillersEnabled = category.booleanValue("filterFillersEnabled") ?: false,
             formatParagraphsEnabled = category.booleanValue("formatParagraphsEnabled") ?: false,

@@ -133,6 +133,16 @@ class SettingsBackupRepositoryExportTest {
         )
     }
 
+    @Test
+    fun exportIncludesStreamingHapticsOptIn() = runBlocking {
+        val repository = SettingsBackupRepository(
+            dataStore = FakePreferencesDataStore(mutablePreferencesOf(PreferenceKeys.STREAMING_ENHANCEMENT_HAPTICS to true)),
+            credentialSource = FakeProviderCredentialSource(emptyMap()),
+            gson = gson,
+        )
+        assertTrue(decodePayload(repository.exportEncryptedBackup("backup-password", "1.0")).keyboardBehavior.streamingEnhancementHaptics)
+    }
+
     private fun seedPreferences(): Preferences {
         return mutablePreferencesOf(
             PreferenceKeys.PROVIDERS_JSON to gson.toJson(
