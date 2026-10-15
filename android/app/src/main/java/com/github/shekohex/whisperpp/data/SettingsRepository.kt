@@ -1,6 +1,7 @@
 package com.github.shekohex.whisperpp.data
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import com.github.shekohex.whisperpp.data.PreferenceKeys.ACTIVE_TEXT_MODEL_ID
@@ -14,6 +15,10 @@ import com.github.shekohex.whisperpp.data.PreferenceKeys.PROMPTS_PROFILES_SCHEMA
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PROMPT_PROFILES_JSON
 import com.github.shekohex.whisperpp.data.PreferenceKeys.PROVIDERS_JSON
 import com.github.shekohex.whisperpp.data.autolearn.AutoLearnSettings
+import com.github.shekohex.whisperpp.data.modes.ModeRules
+import com.github.shekohex.whisperpp.data.modes.ModeSeeds
+import com.github.shekohex.whisperpp.data.modes.storedModes
+import com.github.shekohex.whisperpp.data.modes.writeModes
 import com.github.shekohex.whisperpp.domain.autolearn.AutoLearnReviewSchedule
 import com.github.shekohex.whisperpp.domain.providers.DiscoveredCache
 import com.github.shekohex.whisperpp.domain.providers.DiscoveredModel
@@ -385,10 +390,32 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
      */
     suspend fun seedPromptLibraryIfNeeded() {
         dataStore.edit { prefs ->
-            if (prefs[PreferenceKeys.PROMPT_LIBRARY_SEEDED] == true) return@edit
-            val current = parsePromptProfilesJson(prefs[PROMPT_PROFILES_JSON], gson)
-            prefs[PROMPT_PROFILES_JSON] = gson.toJson(sanitizePromptProfiles(PromptLibrary.seed(current)))
-            prefs[PreferenceKeys.PROMPT_LIBRARY_SEEDED] = true
+            if (prefs[PreferenceKeys.PROMPT_LIBRARY_SEEDED] != true) {
+                val current = parsePromptProfilesJson(prefs[PROMPT_PROFILES_JSON], gson)
+                prefs[PROMPT_PROFILES_JSON] = gson.toJson(sanitizePromptProfiles(PromptLibrary.seed(current)))
+                prefs[PreferenceKeys.PROMPT_LIBRARY_SEEDED] = true
+            }
+            if (prefs[PreferenceKeys.VIBE_CODING_SEEDED] != true) {
+                seedVibeCoding(prefs)
+                prefs[PreferenceKeys.VIBE_CODING_SEEDED] = true
+            }
+        }
+    }
+
+    /**
+     * Adds the Vibe Coding preset and mode once, atomically with its flag. Only the new preset is
+     * seeded: old built-ins the user deleted stay deleted and existing ids are never overwritten.
+     * The mode is only appended to already stored modes; otherwise [ModeSeeds.ALL] (or the legacy
+     * migration) brings it in, so the seeding never decides what the default mode is.
+     */
+    private fun seedVibeCoding(prefs: MutablePreferences) {
+        val profiles = parsePromptProfilesJson(prefs[PROMPT_PROFILES_JSON], gson)
+        if (profiles.none { it.id == PromptLibrary.VIBE_CODING_ID }) {
+            prefs[PROMPT_PROFILES_JSON] = gson.toJson(sanitizePromptProfiles(profiles + PromptLibrary.VIBE_CODING_PROFILE))
+        }
+        val modes = storedModes(prefs, gson) ?: return
+        if (modes.none { it.id == ModeSeeds.VIBE_CODING_ID }) {
+            writeModes(prefs, ModeRules.normalize(modes + ModeSeeds.VIBE_CODING), gson)
         }
     }
 

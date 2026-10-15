@@ -31,7 +31,7 @@ class ModesBackupTest {
     )
     private val imported = listOf(
         Mode(id = "chat", name = "Imported chat", sttSelection = Mode.Selection("p", "m"), appPackages = listOf("org.telegram")),
-        Mode(id = "work", name = "Work", isDefault = true, appPackages = listOf("com.whatsapp"), promptId = "work-prompt"),
+        Mode(id = "work", name = "Work", isDefault = true, appPackages = listOf("com.whatsapp"), promptId = "work-prompt", enhancementPrompt = "Work rules"),
     )
 
     private fun store() = InMemoryPreferencesStore(
@@ -74,6 +74,7 @@ class ModesBackupTest {
         assertEquals(listOf("com.whatsapp"), modes.getValue("work").appPackages)
         assertEquals(listOf("work"), modes.values.filter { it.isDefault }.map { it.id })
         assertEquals("work-prompt", modes.getValue("work").promptId)
+        assertEquals("Work rules", modes.getValue("work").enhancementPrompt)
         assertEquals(true, store.current[PreferenceKeys.MODES_MIGRATED])
         assertEquals("local-only", store.current[PreferenceKeys.SELECTED_MODE_ID])
     }

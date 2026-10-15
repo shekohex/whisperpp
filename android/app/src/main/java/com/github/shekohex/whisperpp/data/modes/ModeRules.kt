@@ -46,6 +46,7 @@ internal object ModeRules {
             enhancementEnabled = mode.enhancementEnabled,
             enhancementSelection = sanitizeSelection(mode.enhancementSelection),
             promptId = mode.promptId?.trim()?.takeIf { it.isNotEmpty() },
+            enhancementPrompt = mode.enhancementPrompt?.trim()?.takeIf { it.isNotEmpty() },
             formatting = Mode.Formatting(formatting.fillerRemoval, formatting.paragraphs),
             contextSources = Mode.ContextSources(context.selectedText, context.clipboard),
             outputMode = (mode.outputMode as OutputMode?) ?: OutputMode.INSERT,

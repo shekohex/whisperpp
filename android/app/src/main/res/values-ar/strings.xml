@@ -515,6 +515,8 @@
     <string name="modes_edit_prompt">الموجّه</string>
     <string name="modes_edit_prompt_none">الموجّه الأساسي فقط</string>
     <string name="modes_edit_prompt_missing">الموجّه غير موجود</string>
+    <string name="modes_edit_custom_prompt">تعليمات إضافية</string>
+    <string name="modes_edit_custom_prompt_helper">تُضاف بعد الموجّه، وهذا الوضع فقط</string>
     <string name="modes_edit_formatting">التنسيق والإرسال</string>
     <string name="modes_edit_filler_removal">إزالة كلمات الحشو</string>
     <string name="modes_edit_paragraphs">تنسيق الفقرات</string>

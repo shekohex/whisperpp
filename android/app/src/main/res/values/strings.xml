@@ -468,6 +468,8 @@
     <string name="modes_edit_prompt">Prompt</string>
     <string name="modes_edit_prompt_none">Base prompt only</string>
     <string name="modes_edit_prompt_missing">Missing prompt</string>
+    <string name="modes_edit_custom_prompt">Extra instructions</string>
+    <string name="modes_edit_custom_prompt_helper">Appended after the prompt profile, for this mode only</string>
     <string name="modes_edit_formatting">Formatting &amp; sending</string>
     <string name="modes_edit_filler_removal">Remove filler words</string>
     <string name="modes_edit_paragraphs">Format paragraphs</string>

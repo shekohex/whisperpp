@@ -23,7 +23,14 @@ class ModesRepositoryTest {
         val modes = repository.modes.first()
 
         assertEquals(
-            listOf(ModeSeeds.DICTATION_ID, ModeSeeds.CHAT_ID, ModeSeeds.EMAIL_ID, ModeSeeds.REWRITE_ID, ModeSeeds.ASSISTANT_ID),
+            listOf(
+                ModeSeeds.DICTATION_ID,
+                ModeSeeds.CHAT_ID,
+                ModeSeeds.EMAIL_ID,
+                ModeSeeds.REWRITE_ID,
+                ModeSeeds.ASSISTANT_ID,
+                ModeSeeds.VIBE_CODING_ID,
+            ),
             modes.map { it.id },
         )
         assertEquals(listOf(ModeSeeds.DICTATION_ID), modes.filter { it.isDefault }.map { it.id })
@@ -44,7 +51,21 @@ class ModesRepositoryTest {
         assertEquals(1, code.size)
         assertEquals("Code v2", code.single().name)
         assertEquals("en", code.single().language)
-        assertEquals(6, repository.modes.first().size)
+        assertEquals(7, repository.modes.first().size)
+    }
+
+    @Test
+    fun upsert_preservesEnhancementPrompt_andBlanksBecomeNull() = runBlocking {
+        repository.upsert(
+            Mode(id = "p", name = "P", enhancementEnabled = true, promptId = "prompt", enhancementPrompt = "  Extra instructions  ")
+        )
+
+        val stored = repository.modes.first().single { it.id == "p" }
+        assertEquals("Extra instructions", stored.enhancementPrompt)
+
+        repository.upsert(stored.copy(enhancementPrompt = "   "))
+
+        assertNull(repository.modes.first().single { it.id == "p" }.enhancementPrompt)
     }
 
     @Test

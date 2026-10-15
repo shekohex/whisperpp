@@ -1,6 +1,7 @@
 package com.github.shekohex.whisperpp.domain.modes
 
 import com.github.shekohex.whisperpp.data.AppPromptMapping
+import com.github.shekohex.whisperpp.data.AppendMode
 import com.github.shekohex.whisperpp.data.LanguageProfile
 import com.github.shekohex.whisperpp.data.ModelCapabilities
 import com.github.shekohex.whisperpp.data.ModelConfig
@@ -228,6 +229,58 @@ class ModeResolverTest {
         val resolution = ModeResolver.resolve(input(modes = listOf(ModeSeeds.DICTATION, mode), selected = "p"))
         assertEquals(ModeAvailability.Unavailable(ModeAvailability.Reason.MISSING_PROMPT, null, "deleted"), resolution.availability)
         assertEquals("Base", resolution.runtime.prompt)
+    }
+
+    @Test
+    fun enhancementPrompt_isAppendedAfterTheProfile() {
+        val mode = Mode(id = "e", name = "E", promptId = "chat", enhancementPrompt = "Extra")
+        val resolution = ModeResolver.resolve(input(modes = listOf(ModeSeeds.DICTATION, mode), selected = "e"))
+
+        assertEquals("Base\n\nBe casual\n\nExtra", resolution.runtime.prompt)
+        assertEquals(ModeAvailability.Available, resolution.availability)
+    }
+
+    @Test
+    fun blankEnhancementPrompt_fallsBackToTheLegacyAppAppend() {
+        val mode = Mode(id = "e", name = "E", enhancementPrompt = "   ")
+        val mapping = AppPromptMapping(
+            packageName = "com.legacy",
+            appendMode = AppendMode.APPEND,
+            appPromptAppend = "Legacy text",
+        )
+        val resolution = ModeResolver.resolve(
+            input(
+                modes = listOf(ModeSeeds.DICTATION, mode),
+                selected = "e",
+                pkg = "com.legacy",
+                legacyActive = true,
+                appMappings = listOf(mapping),
+            )
+        )
+
+        assertEquals("Base\n\nLegacy text", resolution.runtime.prompt)
+    }
+
+    @Test
+    fun enhancementPrompt_overridesTheLegacyAppAppend_evenWhenLegacySaysNoAppend() {
+        val mode = Mode(id = "e", name = "E", enhancementPrompt = "Extra")
+        val mapping = AppPromptMapping(
+            packageName = "com.legacy",
+            appendMode = AppendMode.NO_APPEND,
+            appPromptAppend = "Legacy text",
+        )
+        val resolution = ModeResolver.resolve(
+            input(
+                modes = listOf(ModeSeeds.DICTATION, mode),
+                selected = "e",
+                pkg = "com.legacy",
+                legacyActive = true,
+                appMappings = listOf(mapping),
+            )
+        )
+
+        assertEquals("Base\n\nExtra", resolution.runtime.prompt)
+        assertEquals(AppendMode.APPEND, resolution.runtime.appendMode)
     }
 
     @Test

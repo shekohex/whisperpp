@@ -101,6 +101,8 @@ object PreferenceKeys {
     val DICTIONARY_VOCABULARY_JSON = stringPreferencesKey("dictionary_vocabulary_json")
     /** Built-in prompt profiles were seeded once; later deletes by the user stick. */
     val PROMPT_LIBRARY_SEEDED = booleanPreferencesKey("prompt_library_seeded_v1")
+    /** The Vibe Coding preset and mode were added once; later deletes by the user stick. */
+    val VIBE_CODING_SEEDED = booleanPreferencesKey("vibe_coding_seeded_v1")
     /** Modes (§4.10): JSON list of `Mode`; absent until seeded or migrated. */
     val MODES_V1 = stringPreferencesKey("modes_v1_json")
     /** The one-way AppMappings/LanguageProfiles/Presets → Modes migration ran (or nothing was there). */
@@ -184,6 +186,7 @@ object PreferenceKeys {
         DICTIONARY_REPLACEMENTS_JSON,
         DICTIONARY_VOCABULARY_JSON,
         PROMPT_LIBRARY_SEEDED,
+        VIBE_CODING_SEEDED,
         MODES_V1,
         MODES_MIGRATED,
         SELECTED_MODE_ID,

@@ -19,6 +19,8 @@ data class Mode(
     val enhancementSelection: Selection? = null,
     /** Prompt profile appended to the base prompt; null = base prompt only. */
     val promptId: String? = null,
+    /** Extra prompt text appended after the profile; null/blank = none. */
+    val enhancementPrompt: String? = null,
     val formatting: Formatting = Formatting(),
     val contextSources: ContextSources = ContextSources(),
     val outputMode: OutputMode = OutputMode.INSERT,

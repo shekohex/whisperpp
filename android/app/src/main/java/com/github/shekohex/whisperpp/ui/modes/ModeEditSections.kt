@@ -151,6 +151,14 @@ internal fun ModeEnhancementSection(
                     clearLabel = stringResource(R.string.modes_edit_prompt_none),
                     onClear = { onUpdate { it.copy(promptId = null) } },
                 )
+                OutlinedTextField(
+                    value = draft.enhancementPrompt.orEmpty(),
+                    onValueChange = { text -> onUpdate { it.copy(enhancementPrompt = text) } },
+                    label = { Text(stringResource(R.string.modes_edit_custom_prompt)) },
+                    supportingText = { Text(stringResource(R.string.modes_edit_custom_prompt_helper)) },
+                    textStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content),
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }

@@ -144,11 +144,12 @@ object ModeResolver {
     /** The mode as the app layer of [RuntimeSelectionResolver]; before migration the legacy mapping fills its gaps. */
     private fun layer(mode: Mode, legacy: AppPromptMapping?, packageName: String): AppPromptMapping {
         val promptId = mode.promptId
+        val modePromptAppend = mode.enhancementPrompt?.trim()?.takeIf { it.isNotEmpty() }
         return AppPromptMapping(
             packageName = packageName,
             profileId = promptId ?: legacy?.profileId,
-            appendMode = if (promptId != null) AppendMode.APPEND else legacy?.appendMode ?: AppendMode.APPEND,
-            appPromptAppend = if (promptId != null) null else legacy?.appPromptAppend,
+            appendMode = if (promptId != null || modePromptAppend != null) AppendMode.APPEND else legacy?.appendMode ?: AppendMode.APPEND,
+            appPromptAppend = modePromptAppend ?: if (promptId != null) null else legacy?.appPromptAppend,
             sttOverride = mode.sttSelection?.toOverride() ?: legacy?.sttOverride,
             textOverride = mode.enhancementSelection?.toOverride() ?: legacy?.textOverride,
             autoSend = mode.autoSend ?: legacy?.autoSend,

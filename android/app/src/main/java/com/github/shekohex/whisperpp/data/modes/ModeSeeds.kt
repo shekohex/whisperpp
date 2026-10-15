@@ -10,9 +10,18 @@ object ModeSeeds {
     const val EMAIL_ID = "builtin-mode-email"
     const val REWRITE_ID = "builtin-mode-rewrite"
     const val ASSISTANT_ID = "builtin-mode-assistant"
+    const val VIBE_CODING_ID = "builtin-mode-vibe-coding"
 
     /** Inherits every global setting: with only this mode the app behaves as before modes existed. */
     val DICTATION = Mode(id = DICTATION_ID, name = "Dictation", icon = Mode.Icon.MIC, isDefault = true)
+
+    val VIBE_CODING = Mode(
+        id = VIBE_CODING_ID,
+        name = "Vibe Coding",
+        icon = Mode.Icon.CODE,
+        enhancementEnabled = true,
+        promptId = PromptLibrary.VIBE_CODING_ID,
+    )
 
     val ALL: List<Mode> = listOf(
         DICTATION,
@@ -45,5 +54,6 @@ object ModeSeeds {
             promptId = PromptLibrary.ASSISTANT_ID,
             contextSources = Mode.ContextSources(selectedText = true),
         ),
+        VIBE_CODING,
     )
 }
