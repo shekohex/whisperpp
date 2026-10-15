@@ -200,8 +200,25 @@
     <string name="update_download_notification_title">Whisper++ update</string>
     <string name="update_download_notification_description">Downloading version %1$s</string>
     <string name="update_install_failed">Could not start the installer. Download the update again and retry.</string>
+    <string name="update_preparing">Preparing update…</string>
     <string name="settings_streaming_enhancement_haptics">Streaming enhancement haptics</string>
     <string name="settings_streaming_enhancement_haptics_desc">Light ticks as enhanced text appears in the active field. Requires haptic feedback.</string>
+    <string name="update_installing">Installing update… Android may close the app.</string>
+    <string name="update_confirm_install">Confirm installation</string>
+    <string name="update_confirm_install_desc">Tap to finish updating Whisper++ in the Android installer.</string>
+    <string name="update_install_channel_name">Update installation</string>
+    <string name="update_install_error_stale">This download does not match the selected release. Check for updates again.</string>
+    <string name="update_install_error_version">The APK version does not match the update information. Check for updates and download it again.</string>
+    <string name="update_install_error_package">This APK is not an update for Whisper++.</string>
+    <string name="update_install_error_signature">This APK has a different signing certificate. Debug and release builds cannot update each other.</string>
+    <string name="update_install_error_not_newer">This version is already installed, or is older than the installed version.</string>
+    <string name="update_install_error_invalid">Android rejected this APK as invalid or incompatible. Download the update again.</string>
+    <string name="update_install_error_blocked">Android blocked installation. Check install permissions or device restrictions.</string>
+    <string name="update_install_error_aborted">Installation was cancelled or interrupted. You can retry with the downloaded APK.</string>
+    <string name="update_install_error_conflict">The update conflicts with the installed app. Its signing certificate or package may differ.</string>
+    <string name="update_install_error_storage">There is not enough storage to install the update.</string>
+    <string name="update_install_error_preparation">Could not prepare the update. Check free storage and download it again.</string>
+    <string name="update_install_error_settings">Could not open install permission settings.</string>
 
     <!-- Shared settings components (WP-3.7) -->
     <string name="settings_dialog_confirm">Confirm</string>

@@ -4,26 +4,39 @@ import android.app.DownloadManager
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
 import androidx.core.database.getLongOrNull
 import com.github.shekohex.whisperpp.R
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 
-class UpdateDownloader(private val context: Context, private val repository: UpdateRepository) {
+interface UpdateDownloadSource {
+    fun download(url: String, expectedSignature: String, version: String, versionCode: Int): Flow<DownloadState>
+    fun monitorDownload(downloadId: Long, expectedSignature: String, destinationFile: File): Flow<DownloadState>
+    suspend fun cancelDownload(downloadId: Long)
+    suspend fun cleanup()
+}
+
+class UpdateDownloader(private val context: Context, private val repository: UpdateRepository) : UpdateDownloadSource {
     private companion object {
         val UNSAFE_FILENAME_CHARS = Regex("[^A-Za-z0-9._-]")
     }
 
     private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+    private val downloadMutex = Mutex()
 
-    fun download(url: String, expectedSignature: String, version: String): Flow<DownloadState> = flow {
+    override fun download(url: String, expectedSignature: String, version: String, versionCode: Int): Flow<DownloadState> = flow {
         emit(DownloadState.Idle)
 
         if (!url.startsWith("https://")) {
@@ -31,7 +44,7 @@ class UpdateDownloader(private val context: Context, private val repository: Upd
             return@flow
         }
 
-        val fileName = "whisperpp-${version.replace(UNSAFE_FILENAME_CHARS, "_")}.apk"
+        val fileName = "whisperpp-$versionCode-${version.replace(UNSAFE_FILENAME_CHARS, "_")}.apk"
         val destinationDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
         if (destinationDir == null) {
             emit(DownloadState.Failed("Download failed: storage is not available", reason = DownloadFailure.STORAGE_UNAVAILABLE))
@@ -42,18 +55,29 @@ class UpdateDownloader(private val context: Context, private val repository: Upd
         if (destinationFile.exists()) destinationFile.delete()
 
         val downloadId = try {
-            val request = DownloadManager.Request(Uri.parse(url)).apply {
-                setTitle(context.getString(R.string.update_download_notification_title))
-                setDescription(context.getString(R.string.update_download_notification_description, version))
-                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
-                setAllowedOverMetered(true)
-                setAllowedOverRoaming(false)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    setRequiresCharging(false)
+            downloadMutex.withLock {
+                currentCoroutineContext().ensureActive()
+                // Enqueue and persistence must survive cancellation together, or the download becomes untracked.
+                withContext(NonCancellable) {
+                    val request = DownloadManager.Request(Uri.parse(url)).apply {
+                        setTitle(context.getString(R.string.update_download_notification_title))
+                        setDescription(context.getString(R.string.update_download_notification_description, version))
+                        setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
+                        setAllowedOverMetered(true)
+                        setAllowedOverRoaming(false)
+                        setRequiresCharging(false)
+                    }
+                    val id = downloadManager.enqueue(request)
+                    try {
+                        repository.saveDownloadState(id, expectedSignature, version, destinationFile.absolutePath, versionCode)
+                    } catch (e: Exception) {
+                        downloadManager.remove(id)
+                        throw e
+                    }
+                    id
                 }
             }
-            downloadManager.enqueue(request)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -61,24 +85,22 @@ class UpdateDownloader(private val context: Context, private val repository: Upd
             return@flow
         }
 
-        repository.saveDownloadState(downloadId, expectedSignature, version, destinationFile.absolutePath)
-
         monitorDownload(downloadId, expectedSignature, destinationFile).collect { emit(it) }
     }
 
-    fun monitorDownload(downloadId: Long, expectedSignature: String, destinationFile: File): Flow<DownloadState> = flow {
+    override fun monitorDownload(downloadId: Long, expectedSignature: String, destinationFile: File): Flow<DownloadState> = flow {
         while (currentCoroutineContext().isActive) {
             val snapshot = querySnapshot(downloadId)
             if (snapshot == null) {
                 emit(DownloadState.Failed("Download not found", reason = DownloadFailure.NOT_FOUND))
-                repository.clearDownloadState()
+                repository.clearDownloadState(downloadId)
                 return@flow
             }
 
             when (snapshot.status) {
                 DownloadManager.STATUS_SUCCESSFUL -> {
                     emit(DownloadState.Verifying(destinationFile.absolutePath))
-                    emit(verifyAndComplete(destinationFile, expectedSignature))
+                    emit(verifyAndComplete(destinationFile, expectedSignature, downloadId))
                     return@flow
                 }
                 DownloadManager.STATUS_FAILED -> {
@@ -88,7 +110,7 @@ class UpdateDownloader(private val context: Context, private val repository: Upd
                             reason = failureKind(snapshot.reason),
                         ),
                     )
-                    repository.clearDownloadState()
+                    repository.clearDownloadState(downloadId)
                     return@flow
                 }
                 DownloadManager.STATUS_PAUSED -> emit(DownloadState.Downloading(-1f, 0, -1))
@@ -135,25 +157,25 @@ class UpdateDownloader(private val context: Context, private val repository: Upd
         return if (index >= 0) getLongOrNull(index) ?: default else default
     }
 
-    suspend fun verifyAndComplete(file: File, expectedSignature: String): DownloadState {
+    suspend fun verifyAndComplete(file: File, expectedSignature: String, downloadId: Long? = null): DownloadState {
         if (!file.exists()) {
-            repository.clearDownloadState()
+            repository.clearDownloadState(downloadId)
             return DownloadState.Failed("Downloaded file is missing", reason = DownloadFailure.FILE_MISSING)
         }
         return when (val result = ApkVerifier.verify(file, expectedSignature)) {
             ApkVerifier.Result.Match -> DownloadState.Ready(file.absolutePath)
             is ApkVerifier.Result.Mismatch -> {
                 file.delete()
-                repository.clearDownloadState()
+                repository.clearDownloadState(downloadId)
                 DownloadState.Failed("Checksum mismatch: the downloaded file was discarded", reason = DownloadFailure.CHECKSUM_MISMATCH)
             }
             ApkVerifier.Result.InvalidExpected -> {
                 file.delete()
-                repository.clearDownloadState()
+                repository.clearDownloadState(downloadId)
                 DownloadState.Failed("Update metadata has an invalid checksum", reason = DownloadFailure.INVALID_CHECKSUM)
             }
             is ApkVerifier.Result.Unreadable -> {
-                repository.clearDownloadState()
+                repository.clearDownloadState(downloadId)
                 DownloadState.Failed(
                     "Verification failed: ${result.cause.message ?: "cannot read file"}",
                     result.cause,
@@ -188,15 +210,21 @@ class UpdateDownloader(private val context: Context, private val repository: Upd
         else -> DownloadFailure.UNKNOWN
     }
 
-    suspend fun cancelDownload(downloadId: Long) {
-        downloadManager.remove(downloadId)
-        repository.clearDownloadState()
+    override suspend fun cancelDownload(downloadId: Long) {
+        downloadMutex.withLock {
+            downloadManager.remove(downloadId)
+            repository.clearDownloadState(downloadId)
+        }
     }
 
-    suspend fun cleanup() {
-        repository.clearDownloadState()
-        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            ?.listFiles { file -> file.name.startsWith("whisperpp-") && file.name.endsWith(".apk") }
-            ?.forEach { it.delete() }
+    override suspend fun cleanup() {
+        downloadMutex.withLock {
+            val saved = repository.updateState.first()
+            if (saved.downloadId != -1L) downloadManager.remove(saved.downloadId)
+            repository.clearDownloadState()
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                ?.listFiles { file -> file.name.startsWith("whisperpp-") && file.name.endsWith(".apk") }
+                ?.forEach { it.delete() }
+        }
     }
 }

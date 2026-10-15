@@ -244,14 +244,22 @@ object PreferenceKeys {
         val DOWNLOAD_ID = longPreferencesKey("download_id")
         val EXPECTED_SIGNATURE = stringPreferencesKey("expected_signature")
         val TARGET_VERSION = stringPreferencesKey("target_version")
+        val TARGET_VERSION_CODE = intPreferencesKey("target_version_code")
         val DESTINATION_PATH = stringPreferencesKey("destination_path")
+        val INSTALL_SESSION_ID = intPreferencesKey("install_session_id")
+        val INSTALL_VERSION_CODE = intPreferencesKey("install_version_code")
+        val INSTALL_PENDING_USER_ACTION = booleanPreferencesKey("install_pending_user_action")
         val LAST_CHECK_ERROR = stringPreferencesKey("last_check_error")
 
         val ALL: List<PreferenceKey<*>> = listOf(
             DOWNLOAD_ID,
             EXPECTED_SIGNATURE,
             TARGET_VERSION,
+            TARGET_VERSION_CODE,
             DESTINATION_PATH,
+            INSTALL_SESSION_ID,
+            INSTALL_VERSION_CODE,
+            INSTALL_PENDING_USER_ACTION,
             LAST_CHECK_ERROR,
         )
     }

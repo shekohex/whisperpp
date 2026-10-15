@@ -9,6 +9,28 @@ import org.junit.rules.TemporaryFolder
 import java.security.MessageDigest
 
 class ApkVerifierTest {
+    private val installed = ApkVerifier.Identity("com.example", 65, "nightly-65", setOf("release"))
+    private val candidate = installed.copy(versionCode = 66, versionName = "nightly-66")
+    private val release = LatestRelease("nightly-66", 66, null, platforms = emptyMap())
+
+    @Test
+    fun onlyExactNewerReleaseWithCompatibleSignatureIsInstallable() {
+        assertEquals(null, ApkVerifier.validateIdentity(candidate, installed, release))
+        assertEquals(InstallFailure.WRONG_VERSION, ApkVerifier.validateIdentity(installed, installed, release))
+        assertEquals(InstallFailure.WRONG_VERSION, ApkVerifier.validateIdentity(candidate.copy(versionName = "old"), installed, release))
+        assertEquals(InstallFailure.WRONG_PACKAGE, ApkVerifier.validateIdentity(candidate.copy(packageName = "other"), installed, release))
+        assertEquals(InstallFailure.NOT_NEWER, ApkVerifier.validateIdentity(candidate, candidate, release))
+        assertEquals(InstallFailure.SIGNATURE_MISMATCH, ApkVerifier.validateIdentity(candidate.copy(signers = setOf("debug"), signingHistory = setOf("debug")), installed, release))
+        assertEquals(InstallFailure.INVALID_APK, ApkVerifier.validateIdentity(candidate.copy(signers = emptySet()), installed, release))
+    }
+
+    @Test
+    fun signingRotationAcceptsInstalledSignerInVerifiedApkHistory_butNotAnUnrelatedSigner() {
+        val rotated = candidate.copy(signers = setOf("new-release"), signingHistory = setOf("release", "new-release"))
+        assertEquals(null, ApkVerifier.validateIdentity(rotated, installed, release))
+        assertEquals(InstallFailure.SIGNATURE_MISMATCH, ApkVerifier.validateIdentity(rotated.copy(signingHistory = setOf("new-release")), installed, release))
+    }
+
     @get:Rule
     val tmp = TemporaryFolder()
 

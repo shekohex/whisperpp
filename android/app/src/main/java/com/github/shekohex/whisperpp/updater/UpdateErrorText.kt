@@ -33,3 +33,22 @@ fun downloadFailureText(reason: DownloadFailure): String = stringResource(
         DownloadFailure.UNKNOWN -> R.string.update_download_error_unknown
     },
 )
+
+@Composable
+fun installFailureText(reason: InstallFailure): String = stringResource(when (reason) {
+    InstallFailure.STALE_DOWNLOAD -> R.string.update_install_error_stale
+    InstallFailure.FILE_MISSING -> R.string.update_download_error_missing
+    InstallFailure.CHECKSUM_MISMATCH -> R.string.update_download_error_checksum
+    InstallFailure.WRONG_VERSION -> R.string.update_install_error_version
+    InstallFailure.WRONG_PACKAGE -> R.string.update_install_error_package
+    InstallFailure.SIGNATURE_MISMATCH -> R.string.update_install_error_signature
+    InstallFailure.NOT_NEWER -> R.string.update_install_error_not_newer
+    InstallFailure.INVALID_APK -> R.string.update_install_error_invalid
+    InstallFailure.BLOCKED -> R.string.update_install_error_blocked
+    InstallFailure.ABORTED -> R.string.update_install_error_aborted
+    InstallFailure.CONFLICT -> R.string.update_install_error_conflict
+    InstallFailure.INSUFFICIENT_STORAGE -> R.string.update_install_error_storage
+    InstallFailure.PREPARATION_FAILED -> R.string.update_install_error_preparation
+    InstallFailure.PERMISSION_SETTINGS_UNAVAILABLE -> R.string.update_install_error_settings
+    InstallFailure.INSTALLER_UNAVAILABLE, InstallFailure.UNKNOWN -> R.string.update_install_failed
+})

@@ -34,7 +34,7 @@ class DownloadCompletedReceiver : BroadcastReceiver() {
 
                 val file = File(path)
                 if (file.exists()) {
-                    UpdateDownloader(context.applicationContext, repository).verifyAndComplete(file, signature)
+                    UpdateDownloader(context.applicationContext, repository).verifyAndComplete(file, signature, downloadId)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to process completed download", e)

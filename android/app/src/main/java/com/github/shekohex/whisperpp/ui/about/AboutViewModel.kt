@@ -2,6 +2,7 @@ package com.github.shekohex.whisperpp.ui.about
 
 import android.content.Context
 import androidx.lifecycle.viewModelScope
+import com.github.shekohex.whisperpp.BuildConfig
 import com.github.shekohex.whisperpp.data.PreferenceKeys.UPDATE_CHANNEL
 import com.github.shekohex.whisperpp.data.PreferenceKeys.VERBOSE_NETWORK_LOGS_ENABLED
 import com.github.shekohex.whisperpp.di.AppContainer
@@ -21,7 +22,7 @@ class AboutViewModel(
     val versionName: String,
 ) : PreferencesViewModel(container.settingsDataStore) {
 
-    private val updateManager = UpdateManager(appContext, container.updaterHttpClient)
+    private val updateManager = UpdateManager(appContext, container.updaterHttpClient, container.updateInstaller)
 
     val checkResult: StateFlow<UpdateCheckResult?> = updateManager.checkResult
     val downloadState: StateFlow<DownloadState> = updateManager.downloadState
@@ -30,7 +31,7 @@ class AboutViewModel(
 
     /** Stored channel name; `null` until preferences load. */
     val channel: StateFlow<String?> = container.settingsDataStore.data
-        .map { it[UPDATE_CHANNEL] ?: CHANNEL_STABLE }
+        .map { it[UPDATE_CHANNEL] ?: BuildConfig.UPDATE_CHANNEL }
         .stateInScreen(null)
 
     val verboseLogs: StateFlow<Boolean?> = container.settingsDataStore.data
@@ -43,12 +44,15 @@ class AboutViewModel(
         updateManager.observeExistingDownload(viewModelScope)
     }
 
-    fun setChannel(nightly: Boolean) = set(UPDATE_CHANNEL, if (nightly) CHANNEL_NIGHTLY else CHANNEL_STABLE)
+    fun setChannel(nightly: Boolean) {
+        updateManager.resetForChannel(viewModelScope)
+        set(UPDATE_CHANNEL, if (nightly) CHANNEL_NIGHTLY else CHANNEL_STABLE)
+    }
 
     fun setVerboseLogs(enabled: Boolean) = set(VERBOSE_NETWORK_LOGS_ENABLED, enabled)
 
     fun checkForUpdate() {
-        updateManager.checkForUpdate(viewModelScope, UpdateChannel.fromString(channel.value ?: CHANNEL_STABLE))
+        updateManager.checkForUpdate(viewModelScope, UpdateChannel.fromString(channel.value ?: BuildConfig.UPDATE_CHANNEL))
     }
 
     /** Runs one check when opened from the update notification (`showUpdate`). */
@@ -67,6 +71,15 @@ class AboutViewModel(
     fun openInstallPermissionSettings() = updateManager.openInstallPermissionSettings()
 
     fun canInstallPackages(): Boolean = updateManager.canInstallPackages()
+
+    fun launchPendingUserAction() { updateManager.launchPendingUserAction(force = true) }
+
+    fun resumeInstallation() {
+        if (installResult.value == InstallResult.PermissionRequired && canInstallPackages()) {
+            (downloadState.value as? DownloadState.Ready)?.let { install(it.filePath) }
+        }
+        updateManager.launchPendingUserAction()
+    }
 
     companion object {
         const val CHANNEL_STABLE = "stable"

@@ -37,6 +37,8 @@ import com.github.shekohex.whisperpp.domain.providers.ProviderFactory
 import com.github.shekohex.whisperpp.ime.AutoLearnObserver
 import com.github.shekohex.whisperpp.privacy.SecretsStore
 import com.github.shekohex.whisperpp.privacy.SendPolicyRepository
+import com.github.shekohex.whisperpp.updater.UpdateInstaller
+import com.github.shekohex.whisperpp.updater.UpdateRepository
 import com.google.gson.Gson
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CancellationException
@@ -118,6 +120,7 @@ class AppContainer(context: Context) {
 
     /** Process-lifetime scope for app-level background work (never cancelled). */
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val updateInstaller: UpdateInstaller by lazy { UpdateInstaller(appContext, UpdateRepository(appContext), appScope) }
 
     private val migrationsStarted = AtomicBoolean(false)
     private val migrationsDoneState = MutableStateFlow(false)
@@ -157,6 +160,7 @@ class AppContainer(context: Context) {
     /** App start: analytics schema step, then history recovery and retention pruning, off the main thread. */
     fun startDataMaintenance() {
         appScope.launch {
+            guardedMaintenance { updateInstaller.reconcile() }
             guardedMaintenance { analyticsRepository.migrateIfNeeded() }
             guardedMaintenance { historyMaintenance.runAtStartup() }
         }

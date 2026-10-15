@@ -56,7 +56,10 @@ import com.github.shekohex.whisperpp.updater.InstallResult
 import com.github.shekohex.whisperpp.updater.UpdateAvailableCard
 import com.github.shekohex.whisperpp.updater.UpdateCheckResult
 import com.github.shekohex.whisperpp.updater.UpdateCheckWorker
+import com.github.shekohex.whisperpp.updater.UpdateInstallProgress
 import com.github.shekohex.whisperpp.updater.updateErrorText
+import com.github.shekohex.whisperpp.updater.installFailureText
+import com.github.shekohex.whisperpp.updater.isInstalling
 
 /** Version, update channel / check / download, advanced options and licenses. */
 @Composable
@@ -148,11 +151,15 @@ private fun UpdateSection(viewModel: AboutViewModel, showUpdate: Boolean) {
     }
     LaunchedEffect(installResult) {
         if (installResult is InstallResult.PermissionRequired) showPermissionDialog = true
+        if (installResult is InstallResult.UserActionRequired && lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            viewModel.launchPendingUserAction()
+        }
     }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && showPermissionDialog && viewModel.canInstallPackages()) {
-                showPermissionDialog = false
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (showPermissionDialog && viewModel.canInstallPackages()) showPermissionDialog = false
+                viewModel.resumeInstallation()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -187,7 +194,7 @@ private fun UpdateSection(viewModel: AboutViewModel, showUpdate: Boolean) {
             options = listOf(false, true),
             optionLabel = { nightly -> if (nightly) nightlyLabel else stableLabel },
             onSelect = viewModel::setChannel,
-            enabled = channel != null,
+            enabled = channel != null && !installResult.isInstalling,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         )
 
@@ -204,7 +211,7 @@ private fun UpdateSection(viewModel: AboutViewModel, showUpdate: Boolean) {
                     }
                     viewModel.checkForUpdate()
                 },
-                enabled = !isChecking && channel != null,
+                enabled = !isChecking && channel != null && !installResult.isInstalling,
             ) {
                 if (isChecking) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -225,6 +232,8 @@ private fun UpdateSection(viewModel: AboutViewModel, showUpdate: Boolean) {
                 onDownload = viewModel::download,
                 onInstall = viewModel::install,
                 onCancel = viewModel::cancelDownload,
+                installResult = installResult,
+                onConfirmInstall = viewModel::launchPendingUserAction,
                 modifier = Modifier.padding(16.dp),
             )
             is UpdateCheckResult.UpToDate -> Text(
@@ -241,9 +250,13 @@ private fun UpdateSection(viewModel: AboutViewModel, showUpdate: Boolean) {
             )
             null -> Unit
         }
-        if (installResult is InstallResult.Error) {
+        val failure = installResult as? InstallResult.Error
+        if (checkResult !is UpdateCheckResult.Available && installResult.isInstalling) {
+            UpdateInstallProgress(installResult, viewModel::launchPendingUserAction)
+        }
+        if (failure != null) {
             Text(
-                text = stringResource(R.string.update_install_failed),
+                text = installFailureText(failure.reason),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(16.dp),

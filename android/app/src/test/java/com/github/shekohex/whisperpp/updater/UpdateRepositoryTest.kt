@@ -53,4 +53,26 @@ class UpdateRepositoryTest {
         repository.saveCheckError(null)
         assertNull(repository.lastCheckError.first())
     }
+
+    @Test
+    fun downloadVersionCodeAndInstallSessionRoundTripAndClearIndependently() = runBlocking {
+        repository.saveDownloadState(42, "sha256:abc", "nightly-66", "/cache/update.apk", 66)
+        repository.saveInstallSession(7, 66, pendingUserAction = true)
+        assertEquals(66, repository.updateState.first().targetVersionCode)
+        assertEquals(PersistedInstallState(7, 66, true), repository.installState.first())
+        repository.clearDownloadState()
+        assertNull(repository.updateState.first().targetVersionCode)
+        assertEquals(PersistedInstallState(7, 66, true), repository.installState.first())
+        repository.clearInstallSession()
+        assertNull(repository.installState.first())
+    }
+
+    @Test
+    fun staleDownloadCompletionCannotClearNewerDownload() = runBlocking {
+        repository.saveDownloadState(43, "sha256:new", "nightly-67", "/cache/new.apk", 67)
+        repository.clearDownloadState(42)
+        assertEquals(43L, repository.updateState.first().downloadId)
+        repository.clearDownloadState(43)
+        assertEquals(-1L, repository.updateState.first().downloadId)
+    }
 }

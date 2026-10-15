@@ -40,7 +40,9 @@ fun UpdateAvailableCard(
     onDownload: () -> Unit,
     onInstall: (String) -> Unit,
     onCancel: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    installResult: InstallResult? = null,
+    onConfirmInstall: () -> Unit = {},
 ) {
     Card(
         modifier = modifier.fillMaxWidth()
@@ -91,7 +93,9 @@ fun UpdateAvailableCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            when (downloadState) {
+            if (installResult.isInstalling) {
+                UpdateInstallProgress(installResult, onConfirmInstall)
+            } else when (downloadState) {
                 is DownloadState.Idle -> {
                     Button(
                         onClick = onDownload,
@@ -174,6 +178,27 @@ fun UpdateAvailableCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun UpdateInstallProgress(result: InstallResult?, onConfirm: () -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        if (result is InstallResult.UserActionRequired) {
+            Button(onClick = onConfirm, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.update_confirm_install))
+            }
+        } else {
+            val progress = when (result) {
+                is InstallResult.Preparing -> result.progress
+                is InstallResult.Installing -> result.progress
+                else -> 0f
+            }
+            if (progress > 0f) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+            else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(if (result is InstallResult.Preparing) R.string.update_preparing else R.string.update_installing))
         }
     }
 }
