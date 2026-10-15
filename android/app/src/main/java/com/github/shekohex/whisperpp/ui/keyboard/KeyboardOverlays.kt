@@ -45,7 +45,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -66,8 +71,9 @@ import com.github.shekohex.whisperpp.data.TRANSFORM_PRESETS
 
 @Composable
 internal fun LiveTranscriptCard(text: String) {
+    if (text.isBlank()) return
     val scroll = rememberScrollState()
-    val wordAlpha = remember { Animatable(1f) }
+    val wordAlpha = remember(text) { Animatable(0.3f) }
     var previousText by remember { mutableStateOf("") }
     val changeStart = remember(text) { liveTranscriptChangeStart(previousText, text) }
     val title = stringResource(R.string.keyboard_live_transcript_title)
@@ -75,11 +81,10 @@ internal fun LiveTranscriptCard(text: String) {
 
     LaunchedEffect(text) {
         previousText = text
-        wordAlpha.snapTo(0.45f)
-        wordAlpha.animateTo(1f, tween(180))
+        wordAlpha.animateTo(1f, tween(160))
     }
-    LaunchedEffect(text, scroll.maxValue) {
-        scroll.scrollTo(scroll.maxValue)
+    LaunchedEffect(scroll.maxValue) {
+        if (scroll.maxValue > 0) scroll.animateScrollTo(scroll.maxValue, tween(200))
     }
 
     Surface(
@@ -88,7 +93,23 @@ internal fun LiveTranscriptCard(text: String) {
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 4.dp,
     ) {
-        Box(modifier = Modifier.height(64.dp).verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 8.dp)) {
+        Box(
+            modifier = Modifier
+                .height(64.dp)
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    if (scroll.value > 0) {
+                        val fadeStop = (12.dp.toPx() / size.height).coerceAtMost(1f)
+                        drawRect(
+                            brush = Brush.verticalGradient(0f to Color.Transparent, fadeStop to Color.Black),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    }
+                }
+                .verticalScroll(scroll)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+        ) {
             Text(
                 text = buildAnnotatedString {
                     append(text.substring(0, changeStart))
